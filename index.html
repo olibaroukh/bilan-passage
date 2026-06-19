@@ -15,21 +15,21 @@
   --text:#F0EDE6;--muted:#888;--border:rgba(255,255,255,0.08);
   --green:#2d9e2d;--orange:#d4820a;
 }
-html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Barlow',sans-serif;font-size:15px;overflow-x:hidden}
+html,body{height:100%;background:linear-gradient(160deg,#1A1210 0%,#0D0D0D 40%,#111010 70%,#0A0A0A 100%);background-attachment:fixed;color:var(--text);font-family:'Barlow',sans-serif;font-size:15px;overflow-x:hidden}
 /* ── NAV ── */
-#app-header{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 16px;display:flex;align-items:center;height:52px;gap:10px;position:sticky;top:0;z-index:100}
-#app-header img{height:28px;width:auto}
+#app-header{background:rgba(10,8,8,0.92);border-bottom:1px solid rgba(204,23,25,0.25);backdrop-filter:blur(8px);padding:0 16px;display:flex;align-items:center;height:52px;gap:10px;position:sticky;top:0;z-index:100}
+#app-header img{height:28px;width:auto;mix-blend-mode:screen}
 #app-header .title{font-family:'Barlow Condensed',sans-serif;font-size:16px;font-weight:600;color:var(--text);letter-spacing:.5px;flex:1}
 #app-header .badge-passage{background:var(--red);color:#fff;font-size:11px;font-weight:600;padding:3px 8px;border-radius:4px}
 /* ── SCREENS ── */
 .screen{display:none;min-height:calc(100vh - 52px);flex-direction:column}
 .screen.active{display:flex}
 /* ── ÉCRAN 1 : SÉLECTION ── */
-#screen-select{padding:20px 16px;gap:16px}
+#screen-select{padding:20px 16px;gap:16px;background:transparent}
 .select-section{display:flex;flex-direction:column;gap:8px}
 .select-label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;font-weight:500}
-.select-box{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:12px 14px;font-size:14px;color:var(--text);width:100%;appearance:none;-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23888' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 14px center}
-.magasin-card{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:14px;display:none;flex-direction:column;gap:10px}
+.select-box{background:rgba(26,26,26,0.8);border:1px solid var(--border);border-radius:10px;padding:12px 14px;font-size:14px;color:var(--text);width:100%;appearance:none;-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23888' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 14px center}
+.magasin-card{background:rgba(20,16,16,0.85);border:1px solid var(--border);border-radius:12px;padding:14px;display:none;flex-direction:column;gap:10px}
 .magasin-card.visible{display:flex}
 .magasin-card-title{font-size:13px;font-weight:600;color:var(--text)}
 .magasin-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
@@ -42,10 +42,10 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Barlow
 .btn-secondary{background:transparent;color:var(--text);border:1px solid var(--border);border-radius:10px;padding:12px;font-size:14px;font-weight:500;font-family:'Barlow',sans-serif;width:100%;cursor:pointer}
 /* ── ÉCRAN 2 : SAISIE ── */
 #screen-saisie{padding-bottom:100px}
-.saisie-header{background:var(--red);padding:12px 16px;display:flex;align-items:center;justify-content:space-between}
+.saisie-header{background:linear-gradient(135deg,#A01215 0%,#CC1719 50%,#8B1012 100%);padding:12px 16px;display:flex;align-items:center;justify-content:space-between}
 .saisie-mag{font-family:'Barlow Condensed',sans-serif;font-size:18px;font-weight:700;color:#fff;letter-spacing:.5px}
 .saisie-date{font-size:12px;color:rgba(255,255,255,0.8)}
-.bloc-accordion{border-bottom:1px solid var(--border)}
+.bloc-accordion{border-bottom:1px solid var(--border);background:rgba(13,13,13,0.7)}
 .bloc-head{display:flex;align-items:center;padding:14px 16px;cursor:pointer;user-select:none;gap:10px}
 .bloc-head-icon{width:28px;height:28px;border-radius:8px;background:var(--red2);display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0}
 .bloc-head-label{flex:1;font-size:14px;font-weight:500;color:var(--text)}
@@ -98,7 +98,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Barlow
 /* Renta badge */
 .renta-badge{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:20px;font-size:13px;font-weight:600;margin-top:4px}
 /* Barre basse */
-#bottom-bar{position:fixed;bottom:0;left:0;right:0;background:var(--bg2);border-top:1px solid var(--border);padding:12px 16px;display:flex;gap:8px;z-index:100}
+#bottom-bar{position:fixed;bottom:0;left:0;right:0;background:rgba(10,8,8,0.95);border-top:1px solid rgba(204,23,25,0.2);backdrop-filter:blur(8px);padding:12px 16px;display:flex;gap:8px;z-index:100}
 /* ── ÉCRAN 3 : HISTORIQUE ── */
 #screen-history{padding:20px 16px;gap:12px}
 .history-header{display:flex;align-items:center;gap:10px}
@@ -122,7 +122,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Barlow
 .kpi-param-inputs input{background:var(--bg4);border:1px solid var(--border);border-radius:6px;padding:6px 8px;font-size:12px;color:var(--text);font-family:'Barlow',sans-serif;width:60px;text-align:center}
 .kpi-param-label{font-size:10px;color:var(--muted)}
 /* ── BOTTOM NAV ── */
-#bottom-nav{position:fixed;bottom:0;left:0;right:0;background:var(--bg2);border-top:1px solid var(--border);display:flex;z-index:200;height:56px}
+#bottom-nav{position:fixed;bottom:0;left:0;right:0;background:rgba(10,8,8,0.95);border-top:1px solid rgba(204,23,25,0.2);backdrop-filter:blur(8px);display:flex;z-index:200;height:56px}
 .nav-item{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;cursor:pointer;color:var(--muted);font-size:9px;font-weight:500;text-transform:uppercase;letter-spacing:.4px;border:none;background:transparent;font-family:'Barlow',sans-serif}
 .nav-item.active{color:var(--red)}
 .nav-item-icon{font-size:20px;line-height:1}
@@ -136,7 +136,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Barlow
 .modal-title{font-family:'Barlow Condensed',sans-serif;font-size:18px;font-weight:700;margin-bottom:16px}
 .modal-actions{display:flex;flex-direction:column;gap:8px;margin-top:16px}
 /* ── WATERMARK ── */
-.wm-logo{position:absolute;top:45%;left:50%;transform:translate(-50%,-50%);width:60vw;max-width:380px;opacity:0.15;pointer-events:none;z-index:0}
+.wm-logo{position:absolute;top:45%;left:50%;transform:translate(-50%,-50%);width:60vw;max-width:380px;opacity:0.18;pointer-events:none;z-index:0;mix-blend-mode:screen}
 #screen-select,#screen-saisie{position:relative;overflow:hidden}
 #screen-saisie .saisie-header{position:relative;z-index:2}
 #screen-saisie .bloc-accordion{position:relative;z-index:2;background:var(--bg)}
@@ -145,7 +145,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Barlow
 /* scrollbar */
 ::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--bg4);border-radius:2px}
 /* padding bottom pour nav */
-.screen{padding-bottom:80px}
+.screen{padding-bottom:80px;background:transparent}
 #screen-saisie{padding-bottom:150px}
 input[type=date]{color-scheme:dark}
 </style>
