@@ -1239,10 +1239,14 @@ async function generatePDF(data) {
 
   function drawBloc(x, yStart, w, title, content, titleColor) {
     const tColor = titleColor || [204,23,25];
+    // Calculer les lignes en dehors du if pour éviter ReferenceError sur Safari
+    const lines = content ? doc.splitTextToSize(content, w - 6) : [];
+    const lineCount = Math.min(lines.length, 8);
+    const blocH = 5.5 + (content ? lineCount * lineH + 3 : 7);
     doc.setFillColor(249,249,249);
     doc.rect(x, yStart, w, 5.5, 'F');
     doc.setDrawColor(220,220,220);
-    doc.rect(x, yStart, w, 5.5, 'S');
+    doc.rect(x, yStart, w, blocH, 'S');
     doc.setTextColor(...tColor);
     doc.setFont('helvetica','bold');
     doc.setFontSize(7);
@@ -1250,15 +1254,10 @@ async function generatePDF(data) {
     doc.setTextColor(60,60,60);
     doc.setFont('helvetica','normal');
     doc.setFontSize(7.5);
-    if (content) {
-      const lines = doc.splitTextToSize(content, w - 6);
-      lines.slice(0, 8).forEach((line, i) => {
-        doc.text(line, x + 3, yStart + 9 + i * lineH);
-      });
-    }
-    doc.setDrawColor(220,220,220);
-    doc.rect(x, yStart, w, 5.5 + (content ? Math.min(lines ? lines.length : 1, 8) * lineH + 2 : 6), 'S');
-    return yStart + 5.5 + (content ? Math.min(doc.splitTextToSize(content||'', w-6).length, 8) * lineH + 3 : 7);
+    lines.slice(0, 8).forEach((line, i) => {
+      doc.text(line, x + 3, yStart + 9 + i * lineH);
+    });
+    return yStart + blocH;
   }
 
   // Col 1
