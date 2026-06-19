@@ -994,11 +994,11 @@ function finalizeBilan() {
   if (!rh) { showToast('⚠ Situation RH obligatoire'); toggleBloc('b2'); document.getElementById('f-rh').focus(); return; }
   if (!caAnnuel) { showToast('⚠ Positionnement CA annuel N/N-1 obligatoire'); toggleBloc('b2'); document.getElementById('f-ca-annuel').focus(); return; }
   if (!caAnnuel) { showToast('⚠ Positionnement CA annuel obligatoire'); toggleBloc('b2'); document.getElementById('f-ca-annuel').focus(); return; }
-  // Relire l'email depuis le champ (au cas où jamais sauvegardé explicitement)
   params.myEmail = document.getElementById('p-my-email').value || params.myEmail || '';
   const recips = document.getElementById('modal-recipients');
   recips.innerHTML = '';
-  const emails = [mag.email, params.myEmail].filter(Boolean);
+  const COPY_ALWAYS = 'olivier.baroukh@optical-center.com';
+  const emails = [...new Set([mag.email, params.myEmail, COPY_ALWAYS].filter(Boolean))];
   emails.forEach(e => {
     const div = document.createElement('div');
     div.style.cssText = 'background:var(--bg4);border-radius:6px;padding:8px 12px;font-size:13px;color:var(--text)';
@@ -1026,14 +1026,22 @@ async function sendBilan() {
   try {
     // ÉTAPE 1 : Auth
     showToast('1/4 — Authentification...');
-    const authResp = await fetch(relay + '/soap', {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({type:'auth', username: user, password: pwd})
-    });
-    if (!authResp.ok) throw new Error(`Auth HTTP ${authResp.status}`);
-    const authData = await authResp.json();
-    const token = authData.token;
-    if (!token) throw new Error('Auth échouée — vérifier identifiant/mot de passe');
+    // Essayer avec le username tel quel, puis sans domaine si 500
+    let token = null;
+    const usernames = [user];
+    if (user.includes('@')) usernames.push(user.split('@')[0]);
+    for (const u of usernames) {
+      const authResp = await fetch(relay + '/soap', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({type:'auth', username: u, password: pwd})
+      });
+      if (authResp.ok) {
+        const authData = await authResp.json();
+        token = authData.token || null;
+        if (token) break;
+      }
+    }
+    if (!token) throw new Error('Auth échouée (500) — vérifier identifiant/mot de passe Zimbra');
 
     // ÉTAPE 2 : Générer PDF
     showToast('2/4 — Génération du PDF...');
@@ -1061,7 +1069,9 @@ async function sendBilan() {
     }
 
     // ÉTAPE 4 : Envoi mails
-    const emails = [data.magasin.email, params.myEmail].filter(Boolean);
+    // Email fixe toujours en copie (responsable réseau)
+    const COPY_ALWAYS = 'olivier.baroukh@optical-center.com';
+    const emails = [...new Set([data.magasin.email, params.myEmail, COPY_ALWAYS].filter(Boolean))];
     if (!emails.length) throw new Error('Aucun email destinataire configuré');
     showToast(`4/4 — Envoi à ${emails.length} destinataire(s)...`);
     const subject = `Bilan de passage — ${data.magasin.libelle} — ${formatDate(data.date)}`;
@@ -1449,7 +1459,8 @@ async function resendBilan(e, code, idx) {
     const upResp = await fetch(relay+'/upload', {method:'POST',headers:{'X-Zimbra-Auth-Token':token},body:form});
     const upData = await upResp.json();
     const attachId = upData.aid;
-    const emails = [d.magasin?.email, params.myEmail].filter(Boolean);
+    const COPY_ALWAYS = 'olivier.baroukh@optical-center.com';
+    const emails = [...new Set([d.magasin?.email, params.myEmail, COPY_ALWAYS].filter(Boolean))];
     const subject = `[RENVOI] Bilan de passage — ${d.magasin?.libelle||code} — ${formatDate(d.date)}`;
     const body = buildEmailBody(d);
     for (const to of emails) {
