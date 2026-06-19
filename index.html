@@ -419,7 +419,7 @@ input[type=date]{color-scheme:dark}
     <div class="field-group"><label>Renta salariale cible (%)</label>
       <input type="number" id="p-renta-target" placeholder="28" oninput="saveParams()"></div>
     <div class="field-group"><label>URL référentiel magasins (CSV ou JSON GitHub)</label>
-      <input type="text" id="p-json-url" placeholder="https://raw.githubusercontent.com/olibaroukh/bilan-AR/main/magasins.csv" oninput="saveParams()"></div>
+      <input type="text" id="p-json-url" placeholder="https://raw.githubusercontent.com/olibaroukh/bilan-passage/main/magasins.csv" oninput="saveParams()"></div>
     <button class="btn-primary" onclick="reloadMagasins()">🔄 Recharger le référentiel magasins</button>
   </div>
 </div>
@@ -570,19 +570,25 @@ function updateKpiObj(name, val) {
 }
 
 function parseCSV(text) {
-  const lines = text.trim().split('\n').map(l => l.trim()).filter(Boolean);
+  // Nettoyer BOM UTF-8 éventuel
+  text = text.replace(/^\uFEFF/, '');
+  const lines = text.trim().split(/\r?\n/).map(l => l.trim()).filter(Boolean);
   if (lines.length < 2) return [];
-  const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g,''));
-  return lines.slice(1).map(line => {
-    // Gérer les virgules dans les guillemets
-    const cols = [];
-    let cur = '', inQ = false;
+  // Détecter le séparateur (virgule ou point-virgule)
+  const sep = lines[0].includes(';') ? ';' : ',';
+  function splitLine(line) {
+    const cols = []; let cur = '', inQ = false;
     for (let i = 0; i < line.length; i++) {
       if (line[i] === '"') { inQ = !inQ; }
-      else if (line[i] === ',' && !inQ) { cols.push(cur.trim()); cur = ''; }
+      else if (line[i] === sep && !inQ) { cols.push(cur.trim()); cur = ''; }
       else { cur += line[i]; }
     }
     cols.push(cur.trim());
+    return cols;
+  }
+  const headers = splitLine(lines[0]).map(h => h.replace(/^"|"$/g,'').trim());
+  return lines.slice(1).map(line => {
+    const cols = splitLine(line);
     const obj = {};
     headers.forEach((h, i) => {
       const v = (cols[i] || '').replace(/^"|"$/g,'').trim();
@@ -593,12 +599,25 @@ function parseCSV(text) {
 }
 
 async function loadMagasins() {
-  const url = params.jsonUrl || 'https://raw.githubusercontent.com/olibaroukh/bilan-AR/main/magasins.csv';
+  const url = params.jsonUrl || 'https://raw.githubusercontent.com/olibaroukh/bilan-passage/main/magasins.csv';
   try {
     const r = await fetch(url);
     if (r.ok) {
-      const text = await r.text();
-      // Détecter CSV ou JSON
+      // Lire les bytes bruts pour gérer latin-1 / UTF-8 / UTF-8-BOM
+      const buf = await r.arrayBuffer();
+      const bytes = new Uint8Array(buf);
+      let text;
+      // Détecter UTF-8 BOM
+      if (bytes[0]===0xEF && bytes[1]===0xBB && bytes[2]===0xBF) {
+        text = new TextDecoder('utf-8').decode(buf);
+      } else {
+        // Essayer UTF-8, fallback latin-1
+        try {
+          text = new TextDecoder('utf-8', {fatal:true}).decode(buf);
+        } catch(e) {
+          text = new TextDecoder('iso-8859-1').decode(buf);
+        }
+      }
       const trimmed = text.trim();
       if (trimmed.startsWith('[') || trimmed.startsWith('{')) {
         magasins = JSON.parse(trimmed);
