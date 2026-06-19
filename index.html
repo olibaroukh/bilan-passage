@@ -1020,92 +1020,113 @@ async function sendBilan() {
   const relay = params.relay || 'https://zimbra-relay.oli-baroukh.workers.dev';
   const user = params.zimbraUser || '';
   if (!user) { showToast('⚠ Identifiant Zimbra non configuré dans Paramètres'); return; }
-
   closeModal();
 
-  try {
-    // ÉTAPE 1 : Auth
-    showToast('1/4 — Authentification...');
-    // Essayer avec le username tel quel, puis sans domaine si 500
-    let token = null;
-    const usernames = [user];
-    if (user.includes('@')) usernames.push(user.split('@')[0]);
-    for (const u of usernames) {
-      const authResp = await fetch(relay + '/soap', {
-        method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({type:'auth', username: u, password: pwd})
-      });
-      if (authResp.ok) {
-        const authData = await authResp.json();
-        token = authData.token || null;
-        if (token) break;
-      }
-    }
-    if (!token) throw new Error('Auth échouée (500) — vérifier identifiant/mot de passe Zimbra');
+  function soapEnv(body) {
+    return JSON.stringify({
+      Header: { context: { _jsns: 'urn:zimbra', format: { _content: 'js', type: 'js' } } },
+      Body: body
+    });
+  }
 
-    // ÉTAPE 2 : Générer PDF
+  try {
+    // 1. Auth SOAP
+    showToast('1/4 — Authentification...');
+    const authResp = await fetch(relay + '/soap', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: soapEnv({
+        AuthRequest: {
+          _jsns: 'urn:zimbraAccount',
+          account: { by: 'name', _content: user },
+          password: { _content: pwd }
+        }
+      })
+    });
+    const authText = await authResp.text();
+    let token = null;
+    try {
+      const authData = JSON.parse(authText);
+      token = authData?.Body?.AuthResponse?.authToken?.[0]?._content || null;
+    } catch(e) {}
+    if (!token) throw new Error('Auth échouée — vérifier identifiant/mot de passe Zimbra');
+
+    // 2. Générer PDF
     showToast('2/4 — Génération du PDF...');
     const pdfBytes = await generatePDF(data);
 
-    // ÉTAPE 3 : Upload PDF
-    showToast('3/4 — Upload PDF...');
-    const blob = new Blob([pdfBytes], {type:'application/pdf'});
+    // 3. Upload PDF
+    showToast('3/4 — Upload pièce jointe...');
+    const blob = new Blob([pdfBytes], { type: 'application/pdf' });
     const formData = new FormData();
-    const filename = `Bilan_${data.magasin.libelle}_${data.date||'sans-date'}.pdf`.replace(/[^a-zA-Z0-9_\-\.]/g,'_');
+    const filename = 'Bilan_' + (data.magasin.libelle || 'magasin') + '_' + (data.date || '') + '.pdf';
     formData.append('file', blob, filename);
     const upResp = await fetch(relay + '/upload', {
-      method:'POST', headers:{'X-Zimbra-Auth-Token': token}, body: formData
+      method: 'POST',
+      headers: { 'X-Zimbra-Auth-Token': token },
+      body: formData
     });
-    if (!upResp.ok) throw new Error(`Upload HTTP ${upResp.status}`);
     const upText = await upResp.text();
+    // Format Zimbra : 200,'clientToken','attachId'
     let attachId = null;
-    try {
-      const upData = JSON.parse(upText);
-      attachId = upData.aid || upData.id || null;
-    } catch(e) {
-      // Format texte Zimbra natif : 200,'token','aid'
-      const m = upText.match(/'([^']+)'\s*$/);
-      if (m) attachId = m[1];
+    const aidMatch = upText.match(/'([^']+)'\s*[,
+]*\s*$/);
+    if (aidMatch) attachId = aidMatch[1];
+    if (!attachId) {
+      try { attachId = JSON.parse(upText).aid || null; } catch(e) {}
     }
 
-    // ÉTAPE 4 : Envoi mails
-    // Email fixe toujours en copie (responsable réseau)
+    // 4. Envoi mails
     const COPY_ALWAYS = 'olivier.baroukh@optical-center.com';
     const emails = [...new Set([data.magasin.email, params.myEmail, COPY_ALWAYS].filter(Boolean))];
-    if (!emails.length) throw new Error('Aucun email destinataire configuré');
-    showToast(`4/4 — Envoi à ${emails.length} destinataire(s)...`);
-    const subject = `Bilan de passage — ${data.magasin.libelle} — ${formatDate(data.date)}`;
+    if (!emails.length) throw new Error('Aucun email destinataire');
+    showToast('4/4 — Envoi à ' + emails.length + ' destinataire(s)...');
+
+    const subject = 'Bilan de passage — ' + data.magasin.libelle + ' — ' + formatDate(data.date);
     const mailBody = buildEmailBody(data);
     const results = [];
+
     for (const to of emails) {
-      const payload = {type:'send', token, to, subject, body: mailBody};
-      if (attachId) payload.attachId = attachId;
+      const mp = { mp: [{ ct: 'text/plain', content: { _content: mailBody } }] };
+      if (attachId) mp.attach = { aid: attachId };
+      const sendBody = soapEnv({
+        SendMsgRequest: {
+          _jsns: 'urn:zimbraMail',
+          m: {
+            su: { _content: subject },
+            e: [{ t: 't', a: to }],
+            ...mp
+          }
+        }
+      });
       const sendResp = await fetch(relay + '/soap', {
-        method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify(payload)
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Zimbra-Auth-Token': token
+        },
+        body: sendBody
       });
       const sendText = await sendResp.text();
-      results.push({to, ok: sendResp.ok, status: sendResp.status, resp: sendText.slice(0,100)});
+      results.push({ to, ok: sendResp.ok, resp: sendText.slice(0, 150) });
     }
 
     const ok = results.filter(r => r.ok).length;
     const fail = results.filter(r => !r.ok);
 
-    // Sauvegarder dans l'historique même si envoi partiel
     saveToHistory(data, pdfBytes);
     if (draftKey) localStorage.removeItem(draftKey);
 
     if (fail.length === 0) {
-      showToast(`✓ Bilan envoyé à ${ok} destinataire(s)`);
+      showToast('✓ Bilan envoyé à ' + ok + ' destinataire(s)');
       setTimeout(() => goScreen('history'), 1500);
     } else {
-      const errDetail = fail.map(r => `${r.to} (${r.status}: ${r.resp})`).join(', ');
-      showToast(`⚠ ${ok} envoyé(s), ${fail.length} échec(s) : ${errDetail}`);
-      console.error('Échecs envoi:', fail);
+      console.error('Échecs:', fail);
+      showToast('⚠ ' + ok + ' ok, ' + fail.length + ' échec(s) — voir console');
     }
 
   } catch(e) {
-    console.error('sendBilan error:', e);
+    console.error('sendBilan:', e);
     showToast('✗ ' + e.message);
   }
 }
@@ -1440,31 +1461,74 @@ async function downloadHistoryPDF(e, code, idx) {
 async function resendBilan(e, code, idx) {
   e.stopPropagation();
   try {
-    const history = JSON.parse(localStorage.getItem(`bilan_history_${code}`) || '[]');
+    const history = JSON.parse(localStorage.getItem('bilan_history_' + code) || '[]');
     const d = history[idx];
     if (!d?.pdfB64) { showToast('PDF non disponible'); return; }
     const pwd = prompt('Mot de passe Zimbra pour renvoyer le bilan :');
     if (!pwd) return;
-    const relay = params.relay || 'https://zimbra-relay.oli-baroukh.workers.dev'; const user = params.zimbraUser || '';
+    const relay = params.relay || 'https://zimbra-relay.oli-baroukh.workers.dev';
+    const user = params.zimbraUser || '';
     if (!relay || !user) { showToast('Relay non configuré'); return; }
-    showToast('Renvoi en cours...');
+
+    function soapEnv(body) {
+      return JSON.stringify({
+        Header: { context: { _jsns: 'urn:zimbra', format: { _content: 'js', type: 'js' } } },
+        Body: body
+      });
+    }
+
+    showToast('Authentification...');
+    const authResp = await fetch(relay + '/soap', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: soapEnv({
+        AuthRequest: {
+          _jsns: 'urn:zimbraAccount',
+          account: { by: 'name', _content: user },
+          password: { _content: pwd }
+        }
+      })
+    });
+    const authData = JSON.parse(await authResp.text());
+    const token = authData?.Body?.AuthResponse?.authToken?.[0]?._content || null;
+    if (!token) throw new Error('Auth échouée');
+
+    showToast('Upload PDF...');
     const bytes = Uint8Array.from(atob(d.pdfB64), c => c.charCodeAt(0));
-    const blob = new Blob([bytes], {type:'application/pdf'});
-    const authResp = await fetch(relay+'/soap', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:'auth',username:user,password:pwd})});
-    const authData = await authResp.json();
-    const token = authData.token;
-    if (!token) throw new Error('Auth failed');
+    const blob = new Blob([bytes], { type: 'application/pdf' });
     const form = new FormData();
-    form.append('file', blob, `bilan_${code}_${d.date||''}.pdf`);
-    const upResp = await fetch(relay+'/upload', {method:'POST',headers:{'X-Zimbra-Auth-Token':token},body:form});
-    const upData = await upResp.json();
-    const attachId = upData.aid;
+    form.append('file', blob, 'Bilan_' + code + '_' + (d.date || '') + '.pdf');
+    const upResp = await fetch(relay + '/upload', {
+      method: 'POST',
+      headers: { 'X-Zimbra-Auth-Token': token },
+      body: form
+    });
+    const upText = await upResp.text();
+    let attachId = null;
+    const aidMatch = upText.match(/'([^']+)'\s*[,
+]*\s*$/);
+    if (aidMatch) attachId = aidMatch[1];
+    if (!attachId) { try { attachId = JSON.parse(upText).aid || null; } catch(e) {} }
+
     const COPY_ALWAYS = 'olivier.baroukh@optical-center.com';
     const emails = [...new Set([d.magasin?.email, params.myEmail, COPY_ALWAYS].filter(Boolean))];
-    const subject = `[RENVOI] Bilan de passage — ${d.magasin?.libelle||code} — ${formatDate(d.date)}`;
-    const body = buildEmailBody(d);
+    const subject = '[RENVOI] Bilan de passage — ' + (d.magasin?.libelle || code) + ' — ' + formatDate(d.date);
+    const mailBody = buildEmailBody(d);
+
+    showToast('Envoi à ' + emails.length + ' destinataire(s)...');
     for (const to of emails) {
-      await fetch(relay+'/soap', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:'send',token,to,subject,body,attachId})});
+      const mp = { mp: [{ ct: 'text/plain', content: { _content: mailBody } }] };
+      if (attachId) mp.attach = { aid: attachId };
+      await fetch(relay + '/soap', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Zimbra-Auth-Token': token },
+        body: soapEnv({
+          SendMsgRequest: {
+            _jsns: 'urn:zimbraMail',
+            m: { su: { _content: subject }, e: [{ t: 't', a: to }], ...mp }
+          }
+        })
+      });
     }
     showToast('Bilan renvoyé ✓');
   } catch(ex) { showToast('Erreur renvoi : ' + ex.message); }
