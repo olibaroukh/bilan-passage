@@ -1017,49 +1017,86 @@ async function sendBilan() {
   const pwd = document.getElementById('modal-pwd').value;
   if (!pwd) { showToast('Mot de passe requis'); return; }
   const data = collectData();
-  showToast('Génération du PDF...');
-  const pdfBytes = await generatePDF(data);
   const relay = params.relay || 'https://zimbra-relay.oli-baroukh.workers.dev';
   const user = params.zimbraUser || '';
-  if (!relay || !user) { showToast('Relay ou identifiant non configuré'); return; }
+  if (!user) { showToast('⚠ Identifiant Zimbra non configuré dans Paramètres'); return; }
+
   closeModal();
-  showToast('Envoi en cours...');
+
   try {
-    // Auth Zimbra
+    // ÉTAPE 1 : Auth
+    showToast('1/4 — Authentification...');
     const authResp = await fetch(relay + '/soap', {
       method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({type:'auth', username: user, password: pwd})
     });
+    if (!authResp.ok) throw new Error(`Auth HTTP ${authResp.status}`);
     const authData = await authResp.json();
     const token = authData.token;
-    if (!token) throw new Error('Auth failed');
-    // Upload PDF
+    if (!token) throw new Error('Auth échouée — vérifier identifiant/mot de passe');
+
+    // ÉTAPE 2 : Générer PDF
+    showToast('2/4 — Génération du PDF...');
+    const pdfBytes = await generatePDF(data);
+
+    // ÉTAPE 3 : Upload PDF
+    showToast('3/4 — Upload PDF...');
     const blob = new Blob([pdfBytes], {type:'application/pdf'});
     const formData = new FormData();
-    formData.append('file', blob, `bilan_${data.magasin.code}_${data.date||''}.pdf`);
+    const filename = `Bilan_${data.magasin.libelle}_${data.date||'sans-date'}.pdf`.replace(/[^a-zA-Z0-9_\-\.]/g,'_');
+    formData.append('file', blob, filename);
     const upResp = await fetch(relay + '/upload', {
       method:'POST', headers:{'X-Zimbra-Auth-Token': token}, body: formData
     });
-    const upData = await upResp.json();
-    const attachId = upData.aid;
-    // Envoi mail
-    const emails = [data.magasin.email, params.myEmail].filter(Boolean);
-    const subject = `Bilan de passage — ${data.magasin.libelle} — ${formatDate(data.date)}`;
-    const body = buildEmailBody(data);
-    for (const to of emails) {
-      await fetch(relay + '/soap', {
-        method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({type:'send', token, to, subject, body, attachId})
-      });
+    if (!upResp.ok) throw new Error(`Upload HTTP ${upResp.status}`);
+    const upText = await upResp.text();
+    let attachId = null;
+    try {
+      const upData = JSON.parse(upText);
+      attachId = upData.aid || upData.id || null;
+    } catch(e) {
+      // Format texte Zimbra natif : 200,'token','aid'
+      const m = upText.match(/'([^']+)'\s*$/);
+      if (m) attachId = m[1];
     }
-    // Sauvegarder dans l'historique
+
+    // ÉTAPE 4 : Envoi mails
+    const emails = [data.magasin.email, params.myEmail].filter(Boolean);
+    if (!emails.length) throw new Error('Aucun email destinataire configuré');
+    showToast(`4/4 — Envoi à ${emails.length} destinataire(s)...`);
+    const subject = `Bilan de passage — ${data.magasin.libelle} — ${formatDate(data.date)}`;
+    const mailBody = buildEmailBody(data);
+    const results = [];
+    for (const to of emails) {
+      const payload = {type:'send', token, to, subject, body: mailBody};
+      if (attachId) payload.attachId = attachId;
+      const sendResp = await fetch(relay + '/soap', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify(payload)
+      });
+      const sendText = await sendResp.text();
+      results.push({to, ok: sendResp.ok, status: sendResp.status, resp: sendText.slice(0,100)});
+    }
+
+    const ok = results.filter(r => r.ok).length;
+    const fail = results.filter(r => !r.ok);
+
+    // Sauvegarder dans l'historique même si envoi partiel
     saveToHistory(data, pdfBytes);
-    // Effacer le brouillon
     if (draftKey) localStorage.removeItem(draftKey);
-    showToast('Bilan envoyé avec succès ✓');
-    setTimeout(() => goScreen('history'), 1500);
+
+    if (fail.length === 0) {
+      showToast(`✓ Bilan envoyé à ${ok} destinataire(s)`);
+      setTimeout(() => goScreen('history'), 1500);
+    } else {
+      const errDetail = fail.map(r => `${r.to} (${r.status}: ${r.resp})`).join(', ');
+      showToast(`⚠ ${ok} envoyé(s), ${fail.length} échec(s) : ${errDetail}`);
+      console.error('Échecs envoi:', fail);
+    }
+
   } catch(e) {
-    showToast('Erreur : ' + e.message);
+    console.error('sendBilan error:', e);
+    showToast('✗ ' + e.message);
   }
 }
 
