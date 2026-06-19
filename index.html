@@ -418,8 +418,8 @@ input[type=date]{color-scheme:dark}
       <input type="text" id="p-zimbra-user" placeholder="prenom.nom@opticalcenter.fr" oninput="saveParams()"></div>
     <div class="field-group"><label>Renta salariale cible (%)</label>
       <input type="number" id="p-renta-target" placeholder="28" oninput="saveParams()"></div>
-    <div class="field-group"><label>URL référentiel magasins (JSON GitHub)</label>
-      <input type="text" id="p-json-url" placeholder="https://raw.githubusercontent.com/olibaroukh/bilan-AR/main/magasins.json" oninput="saveParams()"></div>
+    <div class="field-group"><label>URL référentiel magasins (CSV ou JSON GitHub)</label>
+      <input type="text" id="p-json-url" placeholder="https://raw.githubusercontent.com/olibaroukh/bilan-AR/main/magasins.csv" oninput="saveParams()"></div>
     <button class="btn-primary" onclick="reloadMagasins()">🔄 Recharger le référentiel magasins</button>
   </div>
 </div>
@@ -569,18 +569,48 @@ function updateKpiObj(name, val) {
   if (k) { k.obj = val ? parseFloat(val) : null; saveParams(); }
 }
 
+function parseCSV(text) {
+  const lines = text.trim().split('\n').map(l => l.trim()).filter(Boolean);
+  if (lines.length < 2) return [];
+  const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g,''));
+  return lines.slice(1).map(line => {
+    // Gérer les virgules dans les guillemets
+    const cols = [];
+    let cur = '', inQ = false;
+    for (let i = 0; i < line.length; i++) {
+      if (line[i] === '"') { inQ = !inQ; }
+      else if (line[i] === ',' && !inQ) { cols.push(cur.trim()); cur = ''; }
+      else { cur += line[i]; }
+    }
+    cols.push(cur.trim());
+    const obj = {};
+    headers.forEach((h, i) => {
+      const v = (cols[i] || '').replace(/^"|"$/g,'').trim();
+      obj[h] = ['eff_opt','eff_audio','eff_theo'].includes(h) ? (parseInt(v)||0) : v;
+    });
+    return obj;
+  }).filter(r => r.code);
+}
+
 async function loadMagasins() {
-  // Essai depuis JSON distant
-  const url = params.jsonUrl || 'https://raw.githubusercontent.com/olibaroukh/bilan-AR/main/magasins.json';
-  if (url) {
-    try {
-      const r = await fetch(url);
-      if (r.ok) {
-        magasins = await r.json();
+  const url = params.jsonUrl || 'https://raw.githubusercontent.com/olibaroukh/bilan-AR/main/magasins.csv';
+  try {
+    const r = await fetch(url);
+    if (r.ok) {
+      const text = await r.text();
+      // Détecter CSV ou JSON
+      const trimmed = text.trim();
+      if (trimmed.startsWith('[') || trimmed.startsWith('{')) {
+        magasins = JSON.parse(trimmed);
+      } else {
+        magasins = parseCSV(text);
+      }
+      if (magasins.length) {
         localStorage.setItem('bilan_magasins_cache', JSON.stringify(magasins));
       }
-    } catch(e) {}
-  }
+    }
+  } catch(e) { console.warn('Chargement magasins:', e); }
+
   // Fallback cache local
   if (!magasins.length) {
     try { magasins = JSON.parse(localStorage.getItem('bilan_magasins_cache') || '[]'); } catch(e) {}
@@ -601,7 +631,7 @@ async function loadMagasins() {
 async function reloadMagasins() {
   magasins = [];
   await loadMagasins();
-  showToast('Référentiel rechargé ✓');
+  showToast(`Référentiel rechargé — ${magasins.length} magasins ✓`);
 }
 
 function getARList() {
