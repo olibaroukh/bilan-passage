@@ -1069,8 +1069,7 @@ async function sendBilan() {
     const upText = await upResp.text();
     // Format Zimbra : 200,'clientToken','attachId'
     let attachId = null;
-    const aidMatch = upText.match(/'([^']+)'\s*[,
-]*\s*$/);
+    const aidMatch = upText.match(/'([^']+)'\s*$/m);
     if (aidMatch) attachId = aidMatch[1];
     if (!attachId) {
       try { attachId = JSON.parse(upText).aid || null; } catch(e) {}
@@ -1505,8 +1504,7 @@ async function resendBilan(e, code, idx) {
     });
     const upText = await upResp.text();
     let attachId = null;
-    const aidMatch = upText.match(/'([^']+)'\s*[,
-]*\s*$/);
+    const aidMatch = upText.match(/'([^']+)'\s*$/m);
     if (aidMatch) attachId = aidMatch[1];
     if (!attachId) { try { attachId = JSON.parse(upText).aid || null; } catch(e) {} }
 
