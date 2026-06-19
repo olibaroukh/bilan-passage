@@ -1,0 +1,120 @@
+code;libelle;email;manager;eff_opt;eff_audio;eff_theo;animateur
+1001;BOULOGNE - REINE;boulogne@optical-center.com;MARIANA CONICA FRANCESCHINI;;;;LESLIE NAKAM
+1003;CNIT-LA DÉFENSE;cnit@optical-center.com;Adrien TERRIS;;;;LESLIE NAKAM
+1004;LILLE;lille@optical-center.com;DENIS MINON;;;;DAVID BARRAULT
+1005;NANTES;nantes@optical-center.com;SAMUEL GUENET;;;;DAVID BARRAULT
+1007;ANGERS - CENTRE-VILLE;angers@optical-center.com;PIERRE BESSIERES;;;;DAVID BARRAULT
+1008;BORDEAUX - CENTRE-VILLE;bordeaux@optical-center.com;FABIENNE DAUCHE;;;;MICKAEL BENICHOU
+1009;LYON - BOURSE;lyon1@optical-center.com;JEREMY ABBOU;;;;CYRIL GAUTHIER
+1010;RENNES;rennes@optical-center.com;GAELLE GELEE;;;;DAVID BARRAULT
+1011;LYON - PART-DIEU;lyon2@optical-center.com;FRANCOIS GUILLON-COTTARD;;;;CYRIL GAUTHIER
+1012;TOULOUSE - CAPITOLE;toulouse@optical-center.com;SYLVAIN MEZAILLES;;;;MICKAEL BENICHOU
+1013;CRÉTEIL;creteil@optical-center.com;ARI FELLOUS;;;;AURELIE SUBRENAT
+1014;VILLENEUVE-D'ASCQ;v2@optical-center.com;ADRIEN DULAC;;;;DAVID BARRAULT
+1015;CERGY-PONTOISE;cergy@optical-center.com;ALEXANDRE BERTIN;;;;AURELIE SUBRENAT
+1016;NEUILLY-SUR-SEINE;neuilly2@optical-center.com;DAVID MAROSELLI;;;;LESLIE NAKAM
+1017;GRENOBLE;grenoble@optical-center.com;;;;;CYRIL GAUTHIER
+1018;MARSEILLE - ROME;marseille@optical-center.com;AGATHE KLEIN;;;;CYRIL GAUTHIER
+1019;FRANCONVILLE;franconville@optical-center.com;FLORENCE CHANTALAT;;;;AURELIE SUBRENAT
+1020;NATION - CHARONNE - 20ÈME;charonne@optical-center.com;ADI COHEN;;;;AURELIE SUBRENAT
+1021;GARE DE L'EST - FG SAINT-MARTIN - 10ÈME;gare-est@optical-center.com;ELIE BENSAID;;;;AGATHE CLERMONT
+1022;ÉCOLES - 5ÈME;ecoles@optical-center.com;REBECCA ALCABAS;;;;AGATHE CLERMONT
+1023;SAINT-DENIS;saint-denis@optical-center.com;NERGIZ GEZEN;;;;AURELIE SUBRENAT
+1024;SAINT-ÉTIENNE;saint-etienne@optical-center.com;CAROLINE LEMAITRE;;;;CYRIL GAUTHIER
+1025;VILLENAVE-D'ORNON;villenave@optical-center.com;PHONPHITHACK BOUNSINH;;;;MICKAEL BENICHOU
+1026;LECOURBE - 15ÈME;lecourbe@optical-center.com;YONI ATLANI;;;;AGATHE CLERMONT
+1028;BOULOGNE - JEAN-JAURÈS;boulogne2@optical-center.com;ETHAN BOUAZIZ;;;;LESLIE NAKAM
+1029;ORLY;orly@optical-center.com;MATHIEU BINGLER;;;;AURELIE SUBRENAT
+1030;VERSAILLES PAROISSE;versailles2@optical-center.com;MANON HANSEN;;;;LESLIE NAKAM
+1031;SAINT-GERMAIN-EN-LAYE;saint-germain@optical-center.com;NABIL KEDJAM;;;;LESLIE NAKAM
+1032;ANNECY;annecy@optical-center.com;MATHILDE SILVESTRIN;;;;CYRIL GAUTHIER
+1033;BATIGNOLLES - 17ÈME;batignolles@optical-center.com;STEVEN ALLALI;;;;LESLIE NAKAM
+1037;MÉRIGNAC;merignac@optical-center.com;IWONA ZAWADZKA;;;;MICKAEL BENICHOU
+1038;ANNEMASSE;annemasse@optical-center.com;LORIS DUMONT;;;;CYRIL GAUTHIER
+1040;STRASBOURG - HAUTEPIERRE;strasbourg-haut@optical-center.com;MOSHE ALON;;;;NIKOLA KOCEV
+1043;SAINT-HERBLAIN;saint-herblain@optical-center.com;ARNAUD PICAUT;;;;DAVID BARRAULT
+1044;STRASBOURG - CENTRE-VILLE;strasbourg-centre@optical-center.com;PATRICE JAZZY ETAME;;;;NIKOLA KOCEV
+1045;MARSEILLE - PRADO;marseille-prado@optical-center.com;SARAH HAMOUD;;;;CYRIL GAUTHIER
+1046;VICTOR HUGO - 16ÈME;victor-hugo@optical-center.com;LAURA SITRUK;;;;LESLIE NAKAM
+1047;VENDENHEIM;vendenheim@optical-center.com;MARION FORTUNATO;;;;NIKOLA KOCEV
+1048;TOULOUSE - PURPAN;toulouse-purpan@optical-center.com;THOMAS BERJAUD;;;;MICKAEL BENICHOU
+1049;LOMME;lomme@optical-center.com;FLORENT VURRO;;;;DAVID BARRAULT
+1050;ORVAULT;orvault@optical-center.com;MAXENCE BINET;;;;DAVID BARRAULT
+1051;CHANTEPIE;rennes-chantepie@optical-center.com;AUDREY BRARD;;;;DAVID BARRAULT
+1052;PONTAULT-COMBAULT;pontault-combault@optical-center.com;CAMILLE ROBILLARD;;;;AURELIE SUBRENAT
+1053;BONNEUIL-SUR-MARNE;bonneuil@optical-center.com;CLAUDIA SIDOLI;;;;AURELIE SUBRENAT
+1055;NANCY - CENTRE-VILLE;nancy-centre@optical-center.com;LEOPOLD FERRY;;;;NIKOLA KOCEV
+1056;NANCY - FROUARD;nancy-frouard@optical-center.com;ALBAN VIGNIER;;;;NIKOLA KOCEV
+1057;JOUY-AUX-ARCHES;jouy-aux-arches@optical-center.com;MURIEL SZROJT;;;;NIKOLA KOCEV
+1058;FLOIRAC;floirac@optical-center.com;BENJAMIN GRIZIAUX;;;;MICKAEL BENICHOU
+1060;MEYLAN;meylan@optical-center.com;GUILLAUME VINCENS DE TAPOL;;;;CYRIL GAUTHIER
+1061;REZÉ;reze@optical-center.com;AUDE KERISIT;;;;DAVID BARRAULT
+1062;VITROLLES;vitrolles@optical-center.com;JEAN THOMAS ANTOLINI;;;;CYRIL GAUTHIER
+1063;OSNY;osny@optical-center.com;SOPHIE DANGELSER;;;;AURELIE SUBRENAT
+1064;MARSEILLE - LA VALENTINE;marseille-lavalentine@optical-center.com;VIRGINIA ANDRE;;;;CYRIL GAUTHIER
+1065;COIGNIÈRES;coignieres@optical-center.com;SAMUEL POIDEVIN;;;;LESLIE NAKAM
+1066;CLAYE-SOUILLY;clayesouilly@optical-center.com;ALEXANDRA LEGAL;;;;AURELIE SUBRENAT
+1068;LYON - PERRACHE;lyon-perrache@optical-center.com;ARMELLE ROCHAT;;;;CYRIL GAUTHIER
+1069;STRASBOURG - LA MEINAU;strasbourg-lameinau@optical-center.com;DAVID UREK;;;;NIKOLA KOCEV
+1070;LABÈGE;labege@optical-center.com;CAROLINE RONCALLI;;;;MICKAEL BENICHOU
+1071;METZ - CENTRE-VILLE;metz-centre-ville@optical-center.com;MANON DUVAL;;;;NIKOLA KOCEV
+1073;LYON - FRÈRES LUMIÈRE;lyonlumiere@optical-center.com;GABRIELLE RIVIERE;;;;CYRIL GAUTHIER
+1074;SAINTE-EULALIE;sainte-eulalie@optical-center.com;NATHALIE MARTIN;;;;MICKAEL BENICHOU
+1075;THIONVILLE;thionville@optical-center.com;PIERRE ORLIK;;;;NIKOLA KOCEV
+1077;GRAND ÉPAGNY;grand-epagny@optical-center.com;SWANI VINCENS DE TAPOL;;;;CYRIL GAUTHIER
+1078;PLAISIR - LES CLAYES-SOUS-BOIS;lesclayessousbois@optical-center.com;MORGANE LASSAUZET;;;;LESLIE NAKAM
+1079;SAINT-BONNET-DE-MURE;stbonnetdemure@optical-center.com;BENJAMIN BERETVAS;;;;CYRIL GAUTHIER
+1080;TOULOUSE - BALMA;toulouse-balma@optical-center.com;LESLIE MOULIS;;;;MICKAEL BENICHOU
+1081;RENNES - SAINT-GRÉGOIRE;rennes-saintgregoire@optical-center.com;MAUD MARTIN;;;;DAVID BARRAULT
+1082;ANGERS - GRAND-MAINE;angersgrandmaine@optical-center.com;ANNE-SOPHIE TOURNE;;;;DAVID BARRAULT
+1083;SAINT-ÉTIENNE - MONTHIEU;st.etienne-monthieu@optical-center.com;MARION BONNIDAL;;;;CYRIL GAUTHIER
+1085;ESSEY-LÈS-NANCY;esseylesnancy@optical-center.com;FABIEN ALCARAZ;;;;NIKOLA KOCEV
+1086;NANTES - LA BEAUJOIRE;nantes-beaujoire@optical-center.com;OLIVIER MIGNOT;;;;DAVID BARRAULT
+1087;SHOPPING PARC - CARRÉ SÉNART;carre-senart@optical-center.com;EROL SULEYMAN;;;;AURELIE SUBRENAT
+1088;LESQUIN;lesquin@optical-center.com;MATHILDE LACROIX;;;;DAVID BARRAULT
+1089;LOMME - M.I.N;lomme-min@optical-center.com;LOUIS LEBRUN;;;;DAVID BARRAULT
+1090;SAINT-MARTIN-D'HÈRES;st-martin-dheres@optical-center.com;FRANCOISE PORTA;;;;CYRIL GAUTHIER
+1091;VANDOEUVRE-LÈS-NANCY;vandoeuvre@optical-center.com;JONATHAN PRASEUTH;;;;NIKOLA KOCEV
+1092;PESSAC;pessac@optical-center.com;CHLOE CELLIER;;;;MICKAEL BENICHOU
+1093;SEYSSINS;seyssins@optical-center.com;SYLVAIN ROBESSON;;;;CYRIL GAUTHIER
+1094;ASNIÈRES-SUR-SEINE;asnieres@optical-center.com;YOUNES BACHIR BEY;;;;LESLIE NAKAM
+1095;METZ - SEMÉCOURT;metz-semecourt@optical-center.com;ELODIE KLEIBER;;;;NIKOLA KOCEV
+1096;SAINT-SÉBASTIEN-SUR-LOIRE;st.sebastien-loire@optical-center.com;DAVID MARQUET;;;;DAVID BARRAULT
+1097;COLOMIERS;colomiers@optical-center.com;CESAR DELCAMBRE;;;;MICKAEL BENICHOU
+1098;VÉLIZY ;velizy@optical-center.com;MYRIAM DERAIN;;;;LESLIE NAKAM
+1099;SCHILTIGHEIM;schiltigheim@optical-center.com;;;;;NIKOLA KOCEV
+1100;RUEIL-MALMAISON;rueil@optical-center.com;LILIA MAZOUZ;;;;LESLIE NAKAM
+1101;DAUMESNIL - 12ÈME;daumesnil@optical-center.com;ELODIE BENHAMOU;;;;AURELIE SUBRENAT
+1103;VOLTAIRE - 11ÈME;voltaire@optical-center.com;BASTIEN BONNIN;;;;AURELIE SUBRENAT
+1104;PORTET-SUR-GARONNE;portetsurgaronne@optical-center.com;MARINE MEZAILLES;;;;MICKAEL BENICHOU
+1105;MAREUIL-LÈS-MEAUX;mareuil-les-meaux@optical-center.com;JULIEN TOULOUSE;;;;AURELIE SUBRENAT
+1106;WASQUEHAL;wasquehal@optical-center.com;MARIE CATEL;;;;DAVID BARRAULT
+1107;BORDEAUX - LAC;bordeaux-lac@optical-center.com;AUDREY BROUSTAUD;;;;MICKAEL BENICHOU
+1108;PEREIRE - NIEL - 17ÈME;pereire-niel@optical-center.com;FANNY LEVY;;;;LESLIE NAKAM
+1109;MAISON DE LA RADIO - 16ÈME;maisondelaradio@optical-center.com;TRECY MARQUES;;;;LESLIE NAKAM
+1110;ÉTOILE - GRANDE ARMÉE - 16ÈME;etoile-grandearmee@optical-center.com;CELIA RICARDO;;;;LESLIE NAKAM
+1111;LYON - RÉPUBLIQUE;lyon-republique@optical-center.com;JULIEN BOEUF;;;;CYRIL GAUTHIER
+1112;LEDRU ROLLIN - 12ÈME;ledru-rollin@optical-center.com;ALEX ESTEVES;;;;AURELIE SUBRENAT
+1113;GONESSE;gonesse@optical-center.com;SOPHIEN CHAMLONG;;;;AURELIE SUBRENAT
+1114;LE BLANC-MESNIL;leblancmesnil@optical-center.com;SOPHIEN CHAMLONG;;;;AURELIE SUBRENAT
+1115;JEAN JAURÈS - 19ÈME;jeanjaures@optical-center.com;LOUIS VILA REAL MARINHO;;;;AGATHE CLERMONT
+1116;OBERKAMPF - 11ÈME;oberkampf@optical-center.com;JOFFROY SOULA;;;;AURELIE SUBRENAT
+1117;BD SAINT-GERMAIN - 5ÈME;stgermain-jussieu@optical-center.com;ALEXANDRE LOISEAU;;;;AGATHE CLERMONT
+1118;SÉBASTOPOL - BEAUBOURG - 4ÈME;sebastopol-beaubourg@optical-center.com;AURORE CHAVEROT;;;;AGATHE CLERMONT
+1119;PLACE JEANNE D'ARC - 13ÈME;placejeannedarc@optical-center.com;BENJAMIN BERNARD;;;;AGATHE CLERMONT
+1120;PORTE DE SAINT-OUEN - 18ÈME;portedestouen@optical-center.com;MARY JEANJEAN;;;;AGATHE CLERMONT
+1121;GOBELINS - 13ÈME;gobelins@optical-center.com;NAHLA ISSA;;;;AGATHE CLERMONT
+1122;RAYMOND POINCARÉ - 16ÈME;raymondpoincare@optical-center.com;ANASTASIA HMELI;;;;LESLIE NAKAM
+1123;METZ - METZANINE;metz-metzanine@optical-center.com;MANON KNOBE;;;;NIKOLA KOCEV
+1124;SAINT-LAZARE - PÉPINIÈRE - 8ÈME;saintlazare-pepiniere@optical-center.com;LEA FENECH;;;;AGATHE CLERMONT
+1125;LA-GARENNE-COLOMBES;lagarennecolombes@optical-center.com;VICTORIA CHEKLY;;;;LESLIE NAKAM
+1126;NANTERRE - UNIVERSITÉ;nanterre-universite@optical-center.com;ELDINE MUINGIDI;;;;LESLIE NAKAM
+1128;PORTE DES LILAS - 19ÈME;leslilas@optical-center.com;MARILYN MSIKA;;;;AGATHE CLERMONT
+1129;NOISY-LE-SEC;noisylesec@optical-center.com;BAHIA CHETOUANE;;;;AURELIE SUBRENAT
+247001;MONTGERON;montgeron@optical-center.com;Daniela DEYAMBAT;;;;JULIEN PETITDIDIER
+247002;VITRY-SUR-SEINE;vitry@optical-center.com;Gabriel BENSADOUN;;;;JULIEN PETITDIDIER
+247003;QUINCY-SOUS-SÉNART;quincysoussenart@optical-center.com;Stephie MASSENGO;;;;JULIEN PETITDIDIER
+247004;FRESNES;fresnes@optical-center.com;Emma BAROUKH;;;;JULIEN PETITDIDIER
+257001;MONTROUGE;montrouge@optical-center.com;ELOHIM DA COSTA;;;;AGATHE CLERMONT
+257002;ANTONY;antony@optical-center.com;JOHNNY RUSZKIEWICZ;;;;AGATHE CLERMONT
+257003;SCEAUX;sceaux@optical-center.com;JOHNNY RUSZKIEWICZ;;;;AGATHE CLERMONT
