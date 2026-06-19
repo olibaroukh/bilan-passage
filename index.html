@@ -1076,28 +1076,22 @@ async function sendBilan() {
     const results = [];
 
     for (const to of emails) {
-      const mp = { mp: [{ ct: 'text/plain', content: { _content: mailBody } }] };
-      if (attachId) mp.attach = { aid: attachId };
+      const msgNode = {
+        su: { _content: subject },
+        e: [{ t: 't', a: to }],
+        mp: [{ ct: 'text/plain', content: { _content: mailBody } }]
+      };
+      if (attachId) msgNode.attach = { aid: attachId };
       const sendBody = soapEnv({
-        SendMsgRequest: {
-          _jsns: 'urn:zimbraMail',
-          m: {
-            su: { _content: subject },
-            e: [{ t: 't', a: to }],
-            ...mp
-          }
-        }
+        SendMsgRequest: { _jsns: 'urn:zimbraMail', m: msgNode }
       });
       const sendResp = await fetch(relay + '/soap', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Zimbra-Auth-Token': token
-        },
+        headers: { 'Content-Type': 'application/json', 'X-Zimbra-Auth-Token': token },
         body: sendBody
       });
       const sendText = await sendResp.text();
-      results.push({ to, ok: sendResp.ok, resp: sendText.slice(0, 150) });
+      results.push({ to, ok: sendResp.ok, status: sendResp.status, resp: sendText.slice(0, 300) });
     }
 
     const ok = results.filter(r => r.ok).length;
@@ -1110,8 +1104,9 @@ async function sendBilan() {
       showToast('✓ Bilan envoyé à ' + ok + ' destinataire(s)');
       setTimeout(() => goScreen('history'), 1500);
     } else {
-      console.error('Échecs:', fail);
-      showToast('⚠ ' + ok + ' ok, ' + fail.length + ' échec(s) — voir console');
+      // Afficher l'erreur directement dans l'interface (pas de console sur iPhone)
+      const errMsg = fail.map(r => r.to + ' [' + r.status + '] ' + r.resp).join(' | ');
+      showToastLong('⚠ Échec envoi : ' + errMsg);
     }
 
   } catch(e) {
@@ -1552,6 +1547,13 @@ function showToast(msg) {
   const t = document.getElementById('toast');
   t.textContent = msg; t.classList.add('show');
   setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+function showToastLong(msg) {
+  const t = document.getElementById('toast');
+  t.style.cssText = 'white-space:normal;max-width:90vw;font-size:11px;padding:10px 14px;word-break:break-all';
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(() => { t.classList.remove('show'); t.style.cssText = ''; }, 12000);
 }
 </script>
 </body>
