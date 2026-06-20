@@ -234,6 +234,9 @@ input[type=date]{color-scheme:dark}
       <div style="font-size:13px;font-weight:600;color:#fff" id="saisie-manager"></div>
     </div>
   </div>
+  <div style="text-align:right;padding:6px 0 0">
+    <button type="button" onclick="resetSaisie()" style="background:none;border:none;color:var(--muted);font-size:11px;text-decoration:underline;cursor:pointer;font-family:'Barlow',sans-serif;padding:4px">↺ Réinitialiser la saisie</button>
+  </div>
 
   <!-- Bloc 1 : En-tête -->
   <div class="bloc-accordion">
@@ -572,7 +575,7 @@ function loadLogo() {
 }
 
 // ── VERSION APP ── (incrémenter à chaque mise à jour notable, pour déclencher l'invite de rechargement)
-const APP_VERSION = '2026.06.20-1';
+const APP_VERSION = '2026.06.20-2';
 
 // ── ÉTAT ──
 let magasins = [];
@@ -745,6 +748,11 @@ async function applyUpdate() {
   const btn = document.querySelector('#update-banner button');
   if (btn) { btn.textContent = '⏳ Mise à jour...'; btn.disabled = true; }
 
+  // Marquer qu'une mise à jour vient d'être appliquée, pour ne pas réafficher
+  // le bandeau dès le premier chargement de la nouvelle page (avant même que
+  // celle-ci ait pu mémoriser sa propre version dans localStorage)
+  localStorage.setItem('bilan_update_pending', '1');
+
   // Désinscrire les anciens Service Workers pour repartir propre
   if ('serviceWorker' in navigator) {
     try {
@@ -761,15 +769,11 @@ async function applyUpdate() {
     } catch(e) {}
   }
 
-  // Marquer qu'une mise à jour vient d'être appliquée, pour ne pas réafficher
-  // le bandeau dès le premier chargement de la nouvelle page (avant même que
-  // celle-ci ait pu mémoriser sa propre version dans localStorage)
-  localStorage.setItem('bilan_update_pending', '1');
-
-  // Casser le cache HTML en ajoutant un paramètre unique à l'URL, puis recharger
-  const url = new URL(window.location.href);
-  url.searchParams.set('_v', Date.now());
-  window.location.href = url.toString();
+  // Rechargement simple : sur PWA iOS, manipuler l'URL (paramètres) peut faire
+  // sortir l'app de son contexte standalone. On recharge donc l'URL telle quelle ;
+  // la désinscription du Service Worker + le vidage de cache suffisent à garantir
+  // que le prochain chargement ira chercher la version fraîche sur le réseau.
+  window.location.reload();
 }
 
 function registerServiceWorker() {
@@ -1034,6 +1038,25 @@ function onMagChange() {
   document.getElementById('sec-passage').style.display = 'flex';
   document.getElementById('btn-start').style.display = 'block';
   document.getElementById('f-renta-obj').value = (params.rentaTarget || '28') + '%';
+}
+
+function resetSaisie() {
+  if (!confirm('Réinitialiser la saisie en cours ? Toutes les informations déjà saisies pour ce bilan seront effacées.')) return;
+  if (draftKey) localStorage.removeItem(draftKey);
+  actions = []; kpisAdded = []; photos = [null,null,null]; photoCaptions = ['','',''];
+  fortsList = []; diffList = [];
+  renderPoints('forts'); renderPoints('diff');
+  ['f-date','f-duree','f-presents','f-renta','f-rh','f-formation','f-manager-obs',
+   'f-kpi-comment','f-process','f-ca-mensuel','f-ca-annuel','f-ca-mensuel-detail',
+   'f-mot-intro','f-mot-conclusion','f-prochain-passage','f-remarque-libre'].forEach(function(id) {
+    var el = document.getElementById(id); if (el) el.value = '';
+  });
+  rituelsChecked = {};
+  renderRituels();
+  document.getElementById('renta-badge').style.display = 'none';
+  renderActions(); renderKpiChips();
+  setToday();
+  showToast('Saisie réinitialisée');
 }
 
 function startBilan() {
@@ -1795,29 +1818,30 @@ async function generatePDF(data) {
   const mar = 10, col1 = mar, photoCol = W - 58 - mar, gutter = 6, col2 = col1 + (photoCol - col1 - gutter) / 2 + gutter;
   const mag = data.magasin;
 
-  // Header rouge
+  // Header rouge — agrandi pour laisser respirer le logo complet (pictogramme + texte)
+  const headerH = 26;
   doc.setFillColor(204, 23, 25);
-  doc.rect(0, 0, W, 22, 'F');
+  doc.rect(0, 0, W, headerH, 'F');
 
   // Logo — fond noir sur toute la hauteur du bandeau, pictogramme + texte OPTICAL CENTER
   const logoBoxW = 26;
   doc.setFillColor(10, 10, 10);
-  doc.rect(0, 0, logoBoxW, 22, 'F');
+  doc.rect(0, 0, logoBoxW, headerH, 'F');
   try {
     const logoRatio = 780 / 635; // largeur/hauteur de l'image source
-    const logoH = 19; // occupe presque toute la hauteur du bandeau
-    const logoW = logoH * logoRatio;
-    doc.addImage(LOGO_FULL_OC, 'PNG', (logoBoxW - logoW) / 2, (22 - logoH) / 2, logoW, logoH);
+    const logoW = logoBoxW - 3; // presque toute la largeur de la zone noire, marge fine de chaque côté
+    const logoH = logoW / logoRatio;
+    doc.addImage(LOGO_FULL_OC, 'PNG', (logoBoxW - logoW) / 2, (headerH - logoH) / 2, logoW, logoH);
   } catch(e) {}
 
   // Titre
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(16);
   doc.setTextColor(255, 255, 255);
-  doc.text('BILAN DE PASSAGE', logoBoxW + 6, 11);
+  doc.text('BILAN DE PASSAGE', logoBoxW + 6, 13);
   doc.setFontSize(9);
   doc.setFont('helvetica', 'normal');
-  doc.text(`Passage n°${data.passage || '?'} · ${formatDate(data.date)}`, logoBoxW + 6, 17);
+  doc.text(`Passage n°${data.passage || '?'} · ${formatDate(data.date)}`, logoBoxW + 6, 19);
 
   // Infos droite header
   doc.setFont('helvetica', 'bold');
@@ -1829,9 +1853,9 @@ async function generatePDF(data) {
 
   // Sous-header gris
   doc.setFillColor(245, 245, 245);
-  doc.rect(0, 22, W, 12, 'F');
+  doc.rect(0, headerH, W, 12, 'F');
   doc.setDrawColor(220, 220, 220);
-  doc.line(0, 34, W, 34);
+  doc.line(0, headerH + 12, W, headerH + 12);
   doc.setTextColor(80, 80, 80);
   doc.setFontSize(7);
 
@@ -1870,33 +1894,42 @@ async function generatePDF(data) {
     if (gi > 0) {
       doc.setDrawColor(190,190,190);
       doc.setLineWidth(0.4);
-      doc.line(shX - 3, 24, shX - 3, 32);
+      doc.line(shX - 3, headerH + 2, shX - 3, headerH + 10);
       doc.setLineWidth(0.2);
     }
     group.items.forEach(([l, v, status]) => {
       doc.setTextColor(140,140,140);
       doc.setFont('helvetica','normal');
       doc.setFontSize(6.5);
-      doc.text(l, shX, 27);
+      doc.text(l, shX, headerH + 5);
       const color = status === 'ok' ? [42,158,42] : status === 'bad' ? [204,23,25] : [40,40,40];
       doc.setTextColor(...color);
       doc.setFont('helvetica','bold');
       doc.setFontSize(7.5);
-      doc.text(v, shX, 31, { maxWidth: shColW - 3 });
+      doc.text(v, shX, headerH + 9, { maxWidth: shColW - 3 });
       shX += shColW;
     });
   });
 
   // Zones de contenu — tailles augmentées pour mieux remplir la page
-  let y = 38;
+  let y = headerH + 16; // sous-header (12mm) + marge (4mm), suit la hauteur du bandeau rouge
   const lineH = 5.2;
   const colW = (photoCol - col1 - gutter) / 2;
 
-  function drawBloc(x, yStart, w, title, content, titleColor) {
+  function drawBloc(x, yStart, w, title, content, titleColor, bulletLines) {
     const tColor = titleColor || [204,23,25];
-    const lines = content ? doc.splitTextToSize(content, w - 6) : [];
+    let lines = [];
+    if (bulletLines && bulletLines.length) {
+      // Chaque entrée devient une puce, avec retour à la ligne géré indépendamment par puce
+      bulletLines.forEach(entry => {
+        const wrapped = doc.splitTextToSize('• ' + entry, w - 6);
+        wrapped.forEach((wl, i) => lines.push(i === 0 ? wl : '   ' + wl));
+      });
+    } else if (content) {
+      lines = doc.splitTextToSize(content, w - 6);
+    }
     const lineCount = lines.length;
-    const blocH = 6.5 + (content ? lineCount * lineH + 4 : 8);
+    const blocH = 6.5 + (lines.length ? lineCount * lineH + 4 : 8);
     doc.setFillColor(249,249,249);
     doc.rect(x, yStart, w, 6.5, 'F');
     doc.setDrawColor(220,220,220);
@@ -1916,20 +1949,22 @@ async function generatePDF(data) {
 
   // Col 1
   let yc1 = y;
-  const rhContentLines = [
+  function splitToLines(text) {
+    return (text || '').split('\n').map(s => s.trim()).filter(Boolean);
+  }
+  const rhBullets = [
     data.ca_mensuel_detail ? `Détail positionnement : ${data.ca_mensuel_detail}` : '',
-    data.rh || '',
-    data.formation ? `Formation : ${data.formation}` : ''
-  ].filter(Boolean).join('\n');
-  yc1 = drawBloc(col1, yc1, colW, 'RH & Équipe', rhContentLines);
+    ...splitToLines(data.rh),
+    ...splitToLines(data.formation).map(l => `Formation : ${l}`),
+  ].filter(Boolean);
+  yc1 = drawBloc(col1, yc1, colW, 'RH & Équipe', null, null, rhBullets);
   yc1 += 3;
 
-  const cbList = (data.rituels || []).map(r => '+ ' + r);
-  const mgrContent = [
-    cbList.length ? 'Rituels en place : ' + cbList.join(' · ') : '',
-    data.manager_obs ? 'Point d\'attention : ' + data.manager_obs : ''
-  ].filter(Boolean).join('\n');
-  yc1 = drawBloc(col1, yc1, colW, 'Suivi manager', mgrContent);
+  const mgrBullets = [
+    ...(data.rituels || []).map(r => `Rituel en place : ${r}`),
+    ...splitToLines(data.manager_obs).map(l => `Point d'attention : ${l}`),
+  ].filter(Boolean);
+  yc1 = drawBloc(col1, yc1, colW, 'Suivi manager', null, null, mgrBullets);
   yc1 += 3;
 
   if (data.process) { yc1 = drawBloc(col1, yc1, colW, 'Process & Nouveautés', data.process); yc1 += 3; }
@@ -2033,13 +2068,13 @@ async function generatePDF(data) {
   // ── PHOTOS — colonne droite, occupe aussi tout l'espace vertical disponible ──
   const photoW = 52;
   let py = y;
-  doc.setFillColor(245,245,245);
-  doc.rect(photoCol, py-3, photoW, 6.5, 'F');
-  doc.setDrawColor(200,200,200);
-  doc.rect(photoCol, py-3, photoW, 6.5, 'S');
-  doc.setTextColor(140,140,140); doc.setFont('helvetica','bold'); doc.setFontSize(7);
-  doc.text('PHOTOS', photoCol+3, py+1.2);
-  py += 5;
+  doc.setFillColor(249,249,249);
+  doc.rect(photoCol, py, photoW, 6.5, 'F');
+  doc.setDrawColor(220,220,220);
+  doc.rect(photoCol, py, photoW, 6.5, 'S');
+  doc.setTextColor(204,23,25); doc.setFont('helvetica','bold'); doc.setFontSize(8);
+  doc.text('PHOTOS', photoCol+3, py+4.5);
+  py += 6.5 + 2.5;
   const validPhotos = photos.filter(Boolean);
   const photoZoneBottom = footerY;
   if (validPhotos.length) {
@@ -2075,7 +2110,7 @@ async function generatePDF(data) {
   doc.setTextColor(150,150,150); doc.setFont('helvetica','normal'); doc.setFontSize(6.5);
   doc.text('Optical Center — Document confidentiel', mar, H-3);
   doc.text(`Généré le ${new Date().toLocaleDateString('fr-FR')}`, W/2, H-3, {align:'center'});
-  doc.text(`Prochain passage : ${mag.libelle}`, W-mar, H-3, {align:'right'});
+  doc.text(data.prochain_passage ? `Prochain passage : ${formatDate(data.prochain_passage)}` : 'Prochain passage : à définir', W-mar, H-3, {align:'right'});
 
   return doc.output('arraybuffer');
 }
