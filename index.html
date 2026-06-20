@@ -399,6 +399,23 @@ input[type=date]{color-scheme:dark}
     </div>
   </div>
 
+  <!-- Bloc 9 : Mot pour l'équipe -->
+  <div class="bloc-accordion">
+    <div class="bloc-head" onclick="toggleBloc('b9')">
+      <div class="bloc-head-icon">💬</div>
+      <span class="bloc-head-label">Mot pour l'équipe</span>
+      <span class="bloc-head-chevron" id="chev-b9">▼</span>
+    </div>
+    <div class="bloc-body" id="b9">
+      <div class="field-group"><label>Mot d'introduction (facultatif)</label>
+        <textarea id="f-mot-intro" rows="2" placeholder="Un message d'accroche en début de mail..."></textarea></div>
+      <div class="field-group"><label>Mot de conclusion (facultatif)</label>
+        <textarea id="f-mot-conclusion" rows="2" placeholder="Un message d'encouragement ou de cadrage en fin de mail..."></textarea></div>
+      <div class="field-group"><label>Date du prochain passage (facultatif)</label>
+        <input type="date" id="f-prochain-passage"></div>
+    </div>
+  </div>
+
   <!-- Barre basse saisie -->
   <div id="bottom-bar" style="display:none">
     <button class="btn-secondary" style="flex:1" onclick="saveDraft()">💾 Brouillon</button>
@@ -473,10 +490,18 @@ input[type=date]{color-scheme:dark}
 
 <!-- MODAL -->
 <div class="modal-overlay" id="modal-send" onclick="closeModal()">
-  <div class="modal-box" onclick="event.stopPropagation()">
+  <div class="modal-box" onclick="event.stopPropagation()" style="max-width:480px">
     <div class="modal-title">Envoyer le bilan</div>
     <div style="font-size:13px;color:var(--muted);margin-bottom:12px">Le PDF sera envoyé aux destinataires suivants :</div>
     <div id="modal-recipients" style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px"></div>
+    <div class="field-group">
+      <label style="display:flex;align-items:center;justify-content:space-between">
+        <span>Texte du mail</span>
+        <span id="mail-gen-status" style="font-size:11px;color:var(--muted);font-weight:400"></span>
+      </label>
+      <textarea id="modal-mailbody" rows="10" style="font-family:'Barlow',sans-serif;font-size:12.5px;line-height:1.5"></textarea>
+      <button type="button" class="btn-secondary" style="margin-top:6px;width:100%;font-size:12px;padding:8px" onclick="regenerateMailBody()">🔄 Régénérer le texte</button>
+    </div>
     <div class="field-group"><label>Mot de passe Zimbra</label>
       <input type="password" id="modal-pwd" placeholder="Mot de passe..."></div>
     <div class="modal-actions">
@@ -527,6 +552,7 @@ let photos = [null, null, null];
 let photoCaptions = ['', '', ''];
 let draftKey = null;
 let autoSaveInterval = null;
+let pendingBilanData = null;
 
 let KPI_DEFAULTS = [
   {name:'SOP', unit:'%', obj:40, dir:'gte'},
@@ -925,7 +951,8 @@ function startBilan() {
   document.getElementById('f-renta-obj').value = (params.rentaTarget || '28') + '%';
   actions = []; kpisAdded = []; photos = [null,null,null]; photoCaptions = ['','',''];
   ['f-date','f-duree','f-presents','f-renta','f-rh','f-formation','f-manager-obs',
-   'f-kpi-comment','f-process','f-forts','f-diff','f-ca-mensuel','f-ca-annuel','f-ca-mensuel-detail'].forEach(function(id) {
+   'f-kpi-comment','f-process','f-forts','f-diff','f-ca-mensuel','f-ca-annuel','f-ca-mensuel-detail',
+   'f-mot-intro','f-mot-conclusion','f-prochain-passage'].forEach(function(id) {
     var el = document.getElementById(id); if (el) el.value = '';
   });
   rituelsChecked = {};
@@ -1231,6 +1258,9 @@ function collectData() {
     actions,
     photos,
     photoCaptions,
+    mot_intro: document.getElementById('f-mot-intro').value,
+    mot_conclusion: document.getElementById('f-mot-conclusion').value,
+    prochain_passage: document.getElementById('f-prochain-passage').value,
     savedAt: new Date().toISOString(),
   };
 }
@@ -1276,6 +1306,9 @@ function loadDraft() {
       photos.forEach((p,i) => { if (p) renderPhotoSlot(i); });
     }
     if (d.photoCaptions) { photoCaptions = d.photoCaptions; renderCaptions(); }
+    if (d.mot_intro) document.getElementById('f-mot-intro').value = d.mot_intro;
+    if (d.mot_conclusion) document.getElementById('f-mot-conclusion').value = d.mot_conclusion;
+    if (d.prochain_passage) document.getElementById('f-prochain-passage').value = d.prochain_passage;
     showToast('Brouillon rechargé');
   } catch(e) {}
 }
@@ -1306,6 +1339,8 @@ function finalizeBilan() {
     recips.appendChild(div);
   });
   document.getElementById('modal-send').classList.add('open');
+  pendingBilanData = data;
+  generateMailBody(data);
 }
 
 function closeModal() {
@@ -1381,7 +1416,7 @@ async function sendBilan() {
     showToast('4/4 — Envoi à ' + emails.length + ' destinataire(s)...');
 
     const subject = 'Bilan de passage n°' + (data.passage || '?') + ' — ' + data.magasin.libelle + ' — ' + formatDate(data.date);
-    const mailBody = buildEmailBody(data);
+    const mailBody = document.getElementById('modal-mailbody').value || buildEmailBody(data);
 
     const msgNode = {
       su: { _content: subject },
@@ -1436,6 +1471,106 @@ function formatDuree(val) {
   return mins ? `${h}h${mins.toString().padStart(2,'0')}` : `${h}h`;
 }
 
+// ── GÉNÉRATION IA DU TEXTE DE MAIL ──
+function summarizeDataForPrompt(d) {
+  const mag = d.magasin;
+  const rentaLine = d.renta ? `Renta salariale : ${d.renta}% (objectif ${d.renta_obj}%)` : '';
+  const caLine = [
+    d.ca_annuel ? `Positionnement CA annuel : ${d.ca_annuel}%` : '',
+    d.ca_mensuel ? `Positionnement CA mensuel : ${d.ca_mensuel}%` : '',
+    d.ca_mensuel_detail ? `Détail CA : ${d.ca_mensuel_detail}` : '',
+  ].filter(Boolean).join(' · ');
+  const rituels = d.rituels || [];
+  const kpisLine = d.kpis.map(k => `${k.name} : ${k.val}${k.def?.unit || ''}`).join(' · ');
+  const actionsLines = d.actions.map(a => `- ${a.text}${a.comment ? ' : ' + a.comment : ''}${a.who ? ' (responsable : ' + a.who + ')' : ''}${a.date ? ' (échéance : ' + formatDate(a.date) + ')' : ''}`).join('\n');
+
+  return [
+    `Magasin : ${mag.libelle} (${mag.code})`,
+    `Manager : ${mag.manager}`,
+    `Animateur réseau (signataire) : ${d.ar || ''}`,
+    `Date de visite : ${formatDate(d.date)}`,
+    `Durée : ${formatDuree(d.duree)}`,
+    `Personnes présentes : ${d.presents || ''}`,
+    `Passage n° ${d.passage || '?'} dans l'année`,
+    d.prochain_passage ? `Date du prochain passage prévue : ${formatDate(d.prochain_passage)}` : '',
+    rentaLine || caLine ? `RH & Équipe : ${[rentaLine, caLine].filter(Boolean).join(' · ')}` : '',
+    d.rh ? `Situation RH : ${d.rh}` : '',
+    d.formation ? `Formation dispensée : ${d.formation}` : '',
+    rituels.length ? `Rituels managériaux en place : ${rituels.join(', ')}` : '',
+    d.manager_obs ? `Observation sur le management : ${d.manager_obs}` : '',
+    kpisLine ? `Indicateurs clés : ${kpisLine}` : '',
+    d.kpi_comment ? `Commentaire sur les indicateurs : ${d.kpi_comment}` : '',
+    d.process ? `Process & nouveautés : ${d.process}` : '',
+    d.forts ? `Points forts observés : ${d.forts}` : '',
+    d.diff ? `Difficultés observées : ${d.diff}` : '',
+    actionsLines ? `Actions attendues pour le prochain passage :\n${actionsLines}` : '',
+    d.mot_intro ? `Ton/intention souhaitée en introduction : ${d.mot_intro}` : '',
+    d.mot_conclusion ? `Ton/intention souhaitée en conclusion : ${d.mot_conclusion}` : '',
+  ].filter(Boolean).join('\n');
+}
+
+async function generateMailBody(data) {
+  const statusEl = document.getElementById('mail-gen-status');
+  const textarea = document.getElementById('modal-mailbody');
+  statusEl.textContent = '✨ Rédaction en cours...';
+  textarea.value = '';
+  textarea.placeholder = 'Génération du texte...';
+
+  const factsBlock = summarizeDataForPrompt(data);
+  const prompt = `Tu rédiges un email professionnel mais chaleureux et humain, au nom d'un animateur réseau Optical Center qui vient de visiter un magasin. Le destinataire est le manager du magasin et son équipe.
+
+CONSIGNES IMPORTANTES :
+- N'invente AUCUN fait, chiffre, nom ou donnée qui n'est pas explicitement dans les informations ci-dessous. Si une information n'est pas fournie, ne l'évoque pas.
+- Style : phrases complètes, paragraphes fluides, PAS de liste à puces, PAS de titres de section en majuscules, PAS de structure "Champ : valeur". Un vrai texte de lettre, comme on écrirait à une équipe qu'on connaît.
+- Reste concis : 150 à 250 mots maximum.
+- Mentionne les points forts avec enthousiasme sincère, les difficultés avec bienveillance mais clarté, et les actions attendues de façon claire et engageante (qui fait quoi, pour quand).
+- Si une date de prochain passage est fournie, termine sur une phrase de clôture naturelle qui la mentionne.
+- N'invente pas de formule de politesse finale du type "bisous" ou de signature complète : termine simplement le corps du texte, sans "Bonjour" en ouverture ni "Cordialement / Signature" en fermeture — ces éléments sont ajoutés automatiquement autour de ton texte.
+- Réponds uniquement avec le texte du mail, sans préambule, sans guillemets, sans markdown.
+
+INFORMATIONS DU BILAN :
+${factsBlock}`;
+
+  try {
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-6",
+        max_tokens: 1000,
+        messages: [{ role: "user", content: prompt }]
+      })
+    });
+    if (!response.ok) throw new Error('HTTP ' + response.status);
+    const responseData = await response.json();
+    const generatedText = responseData.content
+      .map(item => (item.type === "text" ? item.text : ""))
+      .filter(Boolean)
+      .join('\n')
+      .trim();
+    if (!generatedText) throw new Error('Réponse vide');
+
+    const mag = data.magasin;
+    const fullBody = `Bonjour,
+
+${generatedText}
+
+Bien cordialement,
+${data.ar || 'Votre animateur réseau'}
+Optical Center`;
+    textarea.value = fullBody;
+    statusEl.textContent = '✓ généré';
+  } catch (e) {
+    console.warn('Génération IA échouée, repli sur format structuré:', e);
+    textarea.value = buildEmailBody(data);
+    statusEl.textContent = '⚠ génération indisponible — format standard utilisé';
+  }
+}
+
+function regenerateMailBody() {
+  if (pendingBilanData) generateMailBody(pendingBilanData);
+}
+
 function buildEmailBody(d) {
   const mag = d.magasin;
   const rentaLine = d.renta ? `Renta salariale : ${d.renta}% (objectif ${d.renta_obj}%)` : '';
@@ -1447,16 +1582,28 @@ function buildEmailBody(d) {
   const rituels = d.rituels || [];
   const kpisLine = d.kpis.map(k => `${k.name} : ${k.val}${k.def?.unit || ''}`).join(' · ');
   const actionsLines = d.actions.map(a => `• ${a.text}${a.comment ? ' : ' + a.comment : ''}${a.who ? ' (' + a.who + ')' : ''}${a.date ? ' — ' + formatDate(a.date) : ''}`).join('\n');
+
+  // Section "à retenir" remontée en avant : ce qui est actionnable pour le manager
+  const pointsAttentionParts = [];
+  if (actionsLines) pointsAttentionParts.push('━━━ ACTIONS ATTENDUES POUR LE PROCHAIN PASSAGE ━━━\n' + actionsLines);
+  if (d.forts) pointsAttentionParts.push('━━━ POINTS FORTS ━━━\n' + d.forts);
+  if (d.diff) pointsAttentionParts.push('━━━ POINTS DE VIGILANCE ━━━\n' + d.diff);
+  const pointsAttention = pointsAttentionParts.join('\n\n');
+
+  const introBlock = d.mot_intro ? `${d.mot_intro}\n` : '';
+  const conclusionBlock = d.mot_conclusion ? `\n${d.mot_conclusion}\n` : '';
+
   return `Bonjour,
 
 Veuillez trouver ci-joint le bilan de ma visite au magasin ${mag.libelle} (${mag.code}) du ${formatDate(d.date)}.
-
+${introBlock}
 ━━━ INFORMATIONS GÉNÉRALES ━━━
 Animateur réseau : ${d.ar || ''}
 Manager : ${mag.manager}
 Durée de visite : ${formatDuree(d.duree)}
 Personnes présentes : ${d.presents || ''}
 Passage n° : ${d.passage || '?'} dans l'année
+${pointsAttention ? '\n' + pointsAttention : ''}
 ${(rentaLine||caLine) ? '\n━━━ RH & ÉQUIPE ━━━\n' + [rentaLine, caLine].filter(Boolean).join('\n') : ''}
 ${d.rh || ''}
 ${d.formation ? 'Formation dispensée : ' + d.formation : ''}
@@ -1465,10 +1612,7 @@ ${d.manager_obs || ''}
 ${kpisLine ? '\n━━━ INDICATEURS ━━━\n' + kpisLine : ''}
 ${d.kpi_comment || ''}
 ${d.process ? '\n━━━ PROCESS & NOUVEAUTÉS ━━━\n' + d.process : ''}
-${d.forts ? '\n━━━ POINTS FORTS ━━━\n' + d.forts : ''}
-${d.diff ? '\n━━━ DIFFICULTÉS ━━━\n' + d.diff : ''}
-${actionsLines ? '\n━━━ ACTIONS ATTENDUES ━━━\n' + actionsLines : ''}
-
+${conclusionBlock}
 Bien cordialement,
 ${d.ar || 'Votre animateur réseau'}
 Optical Center`;
