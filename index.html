@@ -1874,7 +1874,10 @@ async function generatePDF(data) {
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({orientation:'landscape', unit:'mm', format:'a4'});
   const W = 297, H = 210;
-  const mar = 10, col1 = mar, photoCol = W - 58 - mar, gutter = 6, col2 = col1 + (photoCol - col1 - gutter) / 2 + gutter;
+  const mar = 10, col1 = mar, gutter = 6, photoColW = 52;
+  const photoCol = W - photoColW - mar; // position réelle de la colonne photo
+  const contentRight = photoCol - gutter; // limite droite du contenu de gauche (Actions, RH, etc.), avec un vrai espace tampon avant les photos
+  const col2 = col1 + (contentRight - col1 - gutter) / 2 + gutter;
   const mag = data.magasin;
 
   // Header rouge — agrandi pour laisser respirer le logo complet (pictogramme + texte)
@@ -1973,7 +1976,7 @@ async function generatePDF(data) {
   // Zones de contenu — tailles augmentées pour mieux remplir la page
   let y = headerH + 16; // sous-header (12mm) + marge (4mm), suit la hauteur du bandeau rouge
   const lineH = 5.2;
-  const colW = (photoCol - col1 - gutter) / 2;
+  const colW = (contentRight - col1 - gutter) / 2;
 
   function drawBloc(x, yStart, w, title, content, titleColor, bulletLines) {
     const tColor = titleColor || [204,23,25];
@@ -2098,18 +2101,18 @@ async function generatePDF(data) {
   const actBodyH = actTotalH - actHeaderH;
 
   doc.setFillColor(204, 23, 25);
-  doc.rect(col1, actY, photoCol - col1, actHeaderH, 'F');
+  doc.rect(col1, actY, contentRight - col1, actHeaderH, 'F');
   doc.setTextColor(255,255,255); doc.setFont('helvetica','bold'); doc.setFontSize(8.5);
   doc.text('ACTIONS ATTENDUES — PROCHAIN PASSAGE', col1+3, actY+5);
   doc.setFillColor(255,255,255);
-  doc.rect(col1, actY+actHeaderH, photoCol-col1, actBodyH, 'F');
+  doc.rect(col1, actY+actHeaderH, contentRight-col1, actBodyH, 'F');
   doc.setDrawColor(204,23,25);
   doc.setLineWidth(0.5);
-  doc.rect(col1, actY, photoCol-col1, actTotalH, 'S');
+  doc.rect(col1, actY, contentRight-col1, actTotalH, 'S');
   doc.setLineWidth(0.2);
 
   if (data.actions.length) {
-    const aColW = (photoCol-col1-8) / 2;
+    const aColW = (contentRight-col1-8) / 2;
     const hasComments = data.actions.some(a => a.comment);
     const actRowH = Math.min(18, Math.max(hasComments ? 12 : 9, actBodyH / (Math.ceil(data.actions.length/2) + 0.3)));
     let ax = col1+4, ay = actY+actHeaderH+actRowH*0.55;
@@ -2134,7 +2137,7 @@ async function generatePDF(data) {
   }
 
   // ── PHOTOS — colonne droite, occupe aussi tout l'espace vertical disponible ──
-  const photoW = 52;
+  const photoW = photoColW;
   let py = y;
   doc.setFillColor(249,249,249);
   doc.rect(photoCol, py, photoW, 6.5, 'F');
