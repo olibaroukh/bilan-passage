@@ -2,6 +2,9 @@
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Bilan de passage — Optical Center</title>
 <link rel="apple-touch-icon" href="https://raw.githubusercontent.com/olibaroukh/bilan-passage/main/logo_oc.png">
@@ -167,6 +170,12 @@ input[type=date]{color-scheme:dark}
 </style>
 </head>
 <body>
+
+<!-- BANDEAU MISE À JOUR DISPONIBLE -->
+<div id="update-banner" style="display:none;position:fixed;top:0;left:0;right:0;z-index:9999;background:#0D0D0D;border-bottom:2px solid var(--red);padding:10px 16px;display:flex;align-items:center;gap:10px;font-family:'Barlow',sans-serif">
+  <span style="flex:1;color:#F0EDE6;font-size:13px">🔄 Nouvelle version de l'application disponible</span>
+  <button onclick="applyUpdate()" style="background:var(--red);color:#fff;border:none;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:600;font-family:'Barlow',sans-serif;cursor:pointer;white-space:nowrap">Mettre à jour</button>
+</div>
 
 <!-- HEADER -->
 <div id="app-header">
@@ -562,6 +571,9 @@ function loadLogo() {
   });
 }
 
+// ── VERSION APP ── (incrémenter à chaque mise à jour notable, pour déclencher l'invite de rechargement)
+const APP_VERSION = '2026.06.20-1';
+
 // ── ÉTAT ──
 let magasins = [];
 let params = {};
@@ -710,8 +722,52 @@ function removeRituelCustom(id) {
   renderRituels();
 }
 
+// ── MISE À JOUR AUTOMATIQUE ──
+function checkForUpdate() {
+  const storedVersion = localStorage.getItem('bilan_app_version');
+  if (storedVersion && storedVersion !== APP_VERSION) {
+    document.getElementById('update-banner').style.display = 'flex';
+  } else if (!storedVersion) {
+    // Premier lancement : on mémorise la version sans rien afficher
+    localStorage.setItem('bilan_app_version', APP_VERSION);
+  }
+}
+
+function applyUpdate() {
+  localStorage.setItem('bilan_app_version', APP_VERSION);
+  // Force le rechargement en contournant le cache navigateur
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.getRegistrations().then(regs => {
+      regs.forEach(reg => reg.update());
+    });
+  }
+  window.location.reload(true);
+}
+
+function registerServiceWorker() {
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('sw.js').then(reg => {
+      // Vérifier régulièrement si une nouvelle version du Service Worker est disponible
+      reg.addEventListener('updatefound', () => {
+        const newWorker = reg.installing;
+        if (newWorker) {
+          newWorker.addEventListener('statechange', () => {
+            if (newWorker.state === 'activated') {
+              checkForUpdate();
+            }
+          });
+        }
+      });
+      // Vérification périodique (toutes les 5 minutes si l'app reste ouverte)
+      setInterval(() => reg.update(), 5 * 60 * 1000);
+    }).catch(err => console.warn('Service Worker non enregistré:', err));
+  }
+}
+
 // ── INIT ──
 window.addEventListener('load', async () => {
+  registerServiceWorker();
+  checkForUpdate();
   loadParams();
   loadLogo();
   loadRituelsCustom();
