@@ -1012,11 +1012,10 @@ async function sendBilan() {
   if (!user) { showToast('⚠ Identifiant Zimbra non configuré dans Paramètres'); return; }
   closeModal();
 
-  function soapEnv(body) {
-    return JSON.stringify({
-      Header: { context: { _jsns: 'urn:zimbra', format: { _content: 'js', type: 'js' } } },
-      Body: body
-    });
+  function soapEnv(body, authToken) {
+    const context = { _jsns: 'urn:zimbra', format: { _content: 'js', type: 'js' } };
+    if (authToken) context.authToken = [{ _content: authToken }];
+    return JSON.stringify({ Header: { context }, Body: body });
   }
 
   try {
@@ -1084,7 +1083,7 @@ async function sendBilan() {
       if (attachId) msgNode.attach = { aid: attachId };
       const sendBody = soapEnv({
         SendMsgRequest: { _jsns: 'urn:zimbraMail', m: msgNode }
-      });
+      }, token);
       const sendResp = await fetch(relay + '/soap', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-Zimbra-Auth-Token': token },
@@ -1467,11 +1466,10 @@ async function resendBilan(e, code, idx) {
     const user = params.zimbraUser || '';
     if (!relay || !user) { showToast('Relay non configuré'); return; }
 
-    function soapEnv(body) {
-      return JSON.stringify({
-        Header: { context: { _jsns: 'urn:zimbra', format: { _content: 'js', type: 'js' } } },
-        Body: body
-      });
+    function soapEnv(body, authToken) {
+      const context = { _jsns: 'urn:zimbra', format: { _content: 'js', type: 'js' } };
+      if (authToken) context.authToken = [{ _content: authToken }];
+      return JSON.stringify({ Header: { context }, Body: body });
     }
 
     showToast('Authentification...');
@@ -1523,7 +1521,7 @@ async function resendBilan(e, code, idx) {
             _jsns: 'urn:zimbraMail',
             m: { su: { _content: subject }, e: [{ t: 't', a: to }], ...mp }
           }
-        })
+        }, token)
       });
     }
     showToast('Bilan renvoyé ✓');
