@@ -2,16 +2,16 @@ name;unit;obj;dir
 SOP;%;40;gte
 TC;%;95;gte
 PC %;%;50;gte
-PC €;€;80;gte
-Panier Moyen;€;450;gte
+PC ‚Ç¨;‚Ç¨;80;gte
+Panier Moyen;‚Ç¨;450;gte
 NDV;;50;gte
 MdC/Intemporelle;%;66;gte
 Lukkas;%;12;gte
-PM Paire 1;€;130;gte
+PM Paire 1;‚Ç¨;130;gte
 Lyleoo;;6;gte
 Retour Verres;%;5;lte
 Audio d√©pistage;%;30;gte
 Vente add;%;12;gte
-PM Prothèse;€;1200;gte
-PM Vente Audio;€;2500;gte
-Nb de Prothèse;;25;gte
+PM Proth√®se;‚Ç¨;1200;gte
+PM Vente Audio;‚Ç¨;2500;gte
+Nb de Proth√®se;;25;gte

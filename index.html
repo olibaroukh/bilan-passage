@@ -435,6 +435,9 @@ input[type=date]{color-scheme:dark}
     <div class="field-group"><label>URL référentiel magasins (CSV ou JSON GitHub)</label>
       <input type="text" id="p-json-url" placeholder="https://raw.githubusercontent.com/olibaroukh/bilan-passage/main/magasins.csv" oninput="saveParams()"></div>
     <button class="btn-primary" onclick="reloadMagasins()">🔄 Recharger le référentiel magasins</button>
+    <div class="field-group" style="margin-top:10px"><label>URL référentiel KPI (CSV ou JSON GitHub)</label>
+      <input type="text" id="p-kpi-url" placeholder="https://raw.githubusercontent.com/olibaroukh/bilan-passage/main/kpis.csv" oninput="saveParams()"></div>
+    <button class="btn-primary" onclick="reloadKpiDefaults()">🔄 Recharger le référentiel KPI</button>
   </div>
 </div>
 
@@ -503,8 +506,55 @@ let KPI_DEFAULTS = [
   {name:'CA N/N-1', unit:'%', obj:100, dir:'gte'},
 ];
 
-function loadKpiDefaults() {
-  // 1. Charger les KPI custom locaux (ajouts personnels non encore synchronisés)
+function parseKpiCSV(text) {
+  text = text.replace(/^\uFEFF/, '');
+  const lines = text.trim().split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  if (lines.length < 2) return [];
+  const sep = lines[0].includes(';') ? ';' : ',';
+  const headers = lines[0].split(sep).map(h => h.trim());
+  return lines.slice(1).map(line => {
+    const cols = line.split(sep).map(c => c.trim());
+    const obj = {};
+    headers.forEach((h, i) => { obj[h] = (cols[i] || '').trim(); });
+    return {
+      name: obj.name,
+      unit: obj.unit || '',
+      obj: obj.obj ? parseFloat(obj.obj) : null,
+      dir: obj.dir || null
+    };
+  }).filter(k => k.name);
+}
+
+async function loadKpiDefaults() {
+  // 1. Charger le référentiel KPI partagé depuis GitHub (CSV ou JSON)
+  const url = params.kpiUrl || 'https://raw.githubusercontent.com/olibaroukh/bilan-passage/main/kpis.csv';
+  try {
+    const r = await fetch(url);
+    if (r.ok) {
+      const buf = await r.arrayBuffer();
+      const bytes = new Uint8Array(buf);
+      let text;
+      if (bytes[0]===0xEF && bytes[1]===0xBB && bytes[2]===0xBF) {
+        text = new TextDecoder('utf-8').decode(buf);
+      } else {
+        try { text = new TextDecoder('utf-8', {fatal:true}).decode(buf); }
+        catch(e) { text = new TextDecoder('iso-8859-1').decode(buf); }
+      }
+      const trimmed = text.trim();
+      const remote = trimmed.startsWith('[') ? JSON.parse(trimmed) : parseKpiCSV(text);
+      if (remote.length) {
+        KPI_DEFAULTS = remote;
+        localStorage.setItem('bilan_kpi_cache', JSON.stringify(remote));
+      }
+    }
+  } catch(e) { console.warn('Chargement KPI:', e); }
+
+  // 2. Fallback cache local si le fetch a échoué
+  if (!KPI_DEFAULTS.length) {
+    try { KPI_DEFAULTS = JSON.parse(localStorage.getItem('bilan_kpi_cache') || '[]'); } catch(e) {}
+  }
+
+  // 3. Réintégrer les KPI custom locaux (ajouts personnels non encore synchronisés)
   try {
     const localCustom = JSON.parse(localStorage.getItem('bilan_kpi_custom') || '[]');
     localCustom.forEach(k => {
@@ -577,11 +627,9 @@ function removeRituelCustom(id) {
 }
 
 // ── INIT ──
-window.addEventListener('load', () => {
+window.addEventListener('load', async () => {
   loadParams();
-  loadKpiDefaults();
   loadLogo();
-  loadMagasins();
   loadRituelsCustom();
   // Mise à jour watermark à chaque saisie
   document.getElementById('screen-saisie').addEventListener('input', updateWatermark);
@@ -592,9 +640,11 @@ window.addEventListener('load', () => {
       if (el && LOGO_OC) el.src = LOGO_OC;
     });
   }, 100);
+  await loadKpiDefaults();
   initKpiSelect();
   initParamsUI();
   setToday();
+  loadMagasins();
 });
 
 function setToday() {
@@ -609,6 +659,7 @@ function loadParams() {
   if (params.zimbraUser) document.getElementById('p-zimbra-user').value = params.zimbraUser;
   if (params.rentaTarget) document.getElementById('p-renta-target').value = params.rentaTarget;
   if (params.jsonUrl) document.getElementById('p-json-url').value = params.jsonUrl;
+  if (params.kpiUrl) document.getElementById('p-kpi-url').value = params.kpiUrl;
   if (params.kpiObjectives) {
     KPI_DEFAULTS.forEach(k => {
       if (params.kpiObjectives[k.name] !== undefined) k.obj = params.kpiObjectives[k.name];
@@ -622,6 +673,7 @@ function saveParams() {
   params.zimbraUser = document.getElementById('p-zimbra-user').value;
   params.rentaTarget = document.getElementById('p-renta-target').value || '28';
   params.jsonUrl = document.getElementById('p-json-url').value;
+  params.kpiUrl = document.getElementById('p-kpi-url').value;
   params.kpiObjectives = {};
   KPI_DEFAULTS.forEach(k => { params.kpiObjectives[k.name] = k.obj; });
   localStorage.setItem('bilan_params', JSON.stringify(params));
@@ -747,6 +799,13 @@ async function reloadMagasins() {
   magasins = [];
   await loadMagasins();
   showToast(`Référentiel rechargé — ${magasins.length} magasins ✓`);
+}
+
+async function reloadKpiDefaults() {
+  await loadKpiDefaults();
+  initKpiSelect();
+  initParamsUI();
+  showToast(`Référentiel KPI rechargé — ${KPI_DEFAULTS.length} indicateurs ✓`);
 }
 
 function getARList() {
