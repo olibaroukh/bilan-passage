@@ -724,24 +724,52 @@ function removeRituelCustom(id) {
 
 // ── MISE À JOUR AUTOMATIQUE ──
 function checkForUpdate() {
+  const updatePending = localStorage.getItem('bilan_update_pending');
+  if (updatePending) {
+    // On vient de recharger suite à un clic sur "Mettre à jour" : on consomme le flag
+    // et on resynchronise la version sans réafficher le bandeau.
+    localStorage.removeItem('bilan_update_pending');
+    localStorage.setItem('bilan_app_version', APP_VERSION);
+    return;
+  }
   const storedVersion = localStorage.getItem('bilan_app_version');
   if (storedVersion && storedVersion !== APP_VERSION) {
     document.getElementById('update-banner').style.display = 'flex';
-  } else if (!storedVersion) {
-    // Premier lancement : on mémorise la version sans rien afficher
+  } else {
+    // Version à jour (ou premier lancement) : on mémorise la version courante
     localStorage.setItem('bilan_app_version', APP_VERSION);
   }
 }
 
-function applyUpdate() {
-  localStorage.setItem('bilan_app_version', APP_VERSION);
-  // Force le rechargement en contournant le cache navigateur
+async function applyUpdate() {
+  const btn = document.querySelector('#update-banner button');
+  if (btn) { btn.textContent = '⏳ Mise à jour...'; btn.disabled = true; }
+
+  // Désinscrire les anciens Service Workers pour repartir propre
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.getRegistrations().then(regs => {
-      regs.forEach(reg => reg.update());
-    });
+    try {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(regs.map(reg => reg.unregister()));
+    } catch(e) {}
   }
-  window.location.reload(true);
+
+  // Vider les caches éventuels du navigateur liés à ce site
+  if ('caches' in window) {
+    try {
+      const keys = await caches.keys();
+      await Promise.all(keys.map(key => caches.delete(key)));
+    } catch(e) {}
+  }
+
+  // Marquer qu'une mise à jour vient d'être appliquée, pour ne pas réafficher
+  // le bandeau dès le premier chargement de la nouvelle page (avant même que
+  // celle-ci ait pu mémoriser sa propre version dans localStorage)
+  localStorage.setItem('bilan_update_pending', '1');
+
+  // Casser le cache HTML en ajoutant un paramètre unique à l'URL, puis recharger
+  const url = new URL(window.location.href);
+  url.searchParams.set('_v', Date.now());
+  window.location.href = url.toString();
 }
 
 function registerServiceWorker() {
@@ -1635,11 +1663,8 @@ function buildEmailBody(d) {
   if (d.mot_intro) opener += ` ${d.mot_intro}`;
   paragraphs.push(opener);
 
-  // Paragraphe contexte de la visite (durée, présents, passage)
-  const contextParts = [];
-  if (d.duree) contextParts.push(`Nous nous sommes vus pendant ${formatDuree(d.duree)}`);
-  if (d.presents) contextParts.push(`en présence de ${d.presents}`);
-  let contextSentence = contextParts.length ? contextParts.join(', ') + '.' : '';
+  // Paragraphe contexte de la visite (présents, passage)
+  let contextSentence = d.presents ? `Nous nous sommes vus en présence de ${d.presents}.` : '';
   if (d.passage) contextSentence += (contextSentence ? ' ' : '') + `Il s'agissait du passage n°${d.passage} de l'année.`;
   if (contextSentence) paragraphs.push(contextSentence);
 
@@ -1679,32 +1704,33 @@ function buildEmailBody(d) {
   // Paragraphe points forts / difficultés
   function stripFinalDot(s) { return s.trim().replace(/\.+$/, ''); }
   function capitalize(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
+  function lowerFirst(s) { return s.charAt(0).toLowerCase() + s.slice(1); }
   const fortsArr = Array.isArray(d.forts) ? d.forts : (d.forts ? [d.forts] : []);
   const diffArr = Array.isArray(d.diff) ? d.diff : (d.diff ? [d.diff] : []);
   const ptsSentences = [];
   if (fortsArr.length) {
-    const joined = fortsArr.map(t => stripFinalDot(t)).join(', ');
-    ptsSentences.push(capitalize(`côté points forts, ${joined.charAt(0).toLowerCase() + joined.slice(1)}`) + '.');
+    const joined = fortsArr.map(t => lowerFirst(stripFinalDot(t))).join(', ');
+    ptsSentences.push(capitalize(`côté points forts, ${joined}`) + '.');
   }
   if (diffArr.length) {
-    const joined = diffArr.map(t => stripFinalDot(t)).join(', ');
-    ptsSentences.push(capitalize(`en revanche, ${joined.charAt(0).toLowerCase() + joined.slice(1)}`) + '.');
+    const joined = diffArr.map(t => lowerFirst(stripFinalDot(t))).join(', ');
+    ptsSentences.push(capitalize(`en revanche, ${joined}`) + '.');
   }
   if (ptsSentences.length) paragraphs.push(ptsSentences.join(' '));
 
-  // Paragraphe actions attendues
+  // Bloc actions attendues — phrase d'intro + liste à puces (avec sous-puce pour le commentaire)
   if (d.actions.length) {
-    const actionSentences = d.actions.map(a => {
-      let s = a.text;
-      if (a.comment) s += ` (${a.comment})`;
-      if (a.who) s += ` — à la charge de ${a.who}`;
-      if (a.date) s += ` pour le ${formatDate(a.date)}`;
-      return s;
-    });
     const intro = d.actions.length > 1
-      ? `Pour le prochain passage, plusieurs points sont à traiter : ${actionSentences.join(' ; ')}.`
-      : `Pour le prochain passage, le point à traiter est le suivant : ${actionSentences[0]}.`;
-    paragraphs.push(intro);
+      ? `Pour le prochain passage, voici les points à traiter :`
+      : `Pour le prochain passage, voici le point à traiter :`;
+    const actionLines = d.actions.map(a => {
+      let line = '• ' + a.text;
+      if (a.who) line += ` (${a.who})`;
+      if (a.date) line += ` — pour le ${formatDate(a.date)}`;
+      if (a.comment) line += `\n   ↳ ${a.comment}`;
+      return line;
+    });
+    paragraphs.push(intro + '\n' + actionLines.join('\n'));
   }
 
   // Remarque libre
