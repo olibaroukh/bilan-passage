@@ -41,7 +41,7 @@ html,body{height:100%;background:linear-gradient(160deg,#1A1210 0%,#0D0D0D 40%,#
 .btn-primary:active{opacity:.85}
 .btn-secondary{background:transparent;color:var(--text);border:1px solid var(--border);border-radius:10px;padding:12px;font-size:14px;font-weight:500;font-family:'Barlow',sans-serif;width:100%;cursor:pointer}
 /* ── ÉCRAN 2 : SAISIE ── */
-#screen-saisie{padding-bottom:100px}
+#screen-saisie{padding-bottom:170px}
 .saisie-header{background:linear-gradient(135deg,#A01215 0%,#CC1719 50%,#8B1012 100%);padding:12px 16px;display:flex;align-items:center;justify-content:space-between}
 .saisie-mag{font-family:'Barlow Condensed',sans-serif;font-size:18px;font-weight:700;color:#fff;letter-spacing:.5px}
 .saisie-date{font-size:12px;color:rgba(255,255,255,0.8)}
@@ -98,7 +98,7 @@ html,body{height:100%;background:linear-gradient(160deg,#1A1210 0%,#0D0D0D 40%,#
 /* Renta badge */
 .renta-badge{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:20px;font-size:13px;font-weight:600;margin-top:4px}
 /* Barre basse */
-#bottom-bar{position:fixed;bottom:0;left:0;right:0;background:rgba(10,8,8,0.95);border-top:1px solid rgba(204,23,25,0.2);backdrop-filter:blur(8px);padding:12px 16px;display:flex;gap:8px;z-index:100}
+#bottom-bar{position:fixed;bottom:56px;left:0;right:0;background:rgba(10,8,8,0.95);border-top:1px solid rgba(204,23,25,0.2);backdrop-filter:blur(8px);padding:12px 16px;display:flex;gap:8px;z-index:150}
 /* ── ÉCRAN 3 : HISTORIQUE ── */
 #screen-history{padding:20px 16px;gap:12px}
 .history-header{display:flex;align-items:center;gap:10px}
@@ -148,6 +148,9 @@ html,body{height:100%;background:linear-gradient(160deg,#1A1210 0%,#0D0D0D 40%,#
 .screen{padding-bottom:80px;background:transparent}
 #screen-saisie{padding-bottom:150px}
 input[type=date]{color-scheme:dark}
+.field-row{min-width:0}
+.field-row > .field-group{min-width:0;overflow:hidden}
+.field-group input[type=date]{width:100%;min-width:0;box-sizing:border-box;font-size:13px;padding:10px 8px}
 </style>
 </head>
 <body>
@@ -181,10 +184,10 @@ input[type=date]{color-scheme:dark}
     <div class="magasin-grid">
       <div class="magasin-field"><label>Manager</label><input type="text" id="fi-manager" placeholder="Nom du manager"></div>
       <div class="magasin-field"><label>Email magasin</label><input type="email" id="fi-email" placeholder="email@opticalcenter.fr"></div>
-      <div class="magasin-field"><label>Effectif optique</label><input type="number" id="fi-eff-opt" placeholder="0"></div>
-      <div class="magasin-field"><label>Effectif audio</label><input type="number" id="fi-eff-audio" placeholder="0"></div>
-      <div class="magasin-field"><label>Effectif théorique</label><input type="number" id="fi-eff-theo" placeholder="0"></div>
-      <div class="magasin-field"><label>Effectif présent</label><input type="number" id="fi-eff-present" placeholder="0"></div>
+      <div class="magasin-field"><label>Effectif optique</label><input type="number" inputmode="numeric" id="fi-eff-opt" placeholder="0"></div>
+      <div class="magasin-field"><label>Effectif audio</label><input type="number" inputmode="numeric" id="fi-eff-audio" placeholder="0"></div>
+      <div class="magasin-field"><label>Effectif théorique</label><input type="number" inputmode="numeric" id="fi-eff-theo" placeholder="0"></div>
+      <div class="magasin-field"><label>Effectif présent</label><input type="number" inputmode="numeric" id="fi-eff-present" placeholder="0"></div>
     </div>
     <span class="magasin-note">Ces données sont pré-remplies depuis le référentiel. Modifie-les ici si elles ne sont pas à jour — la modification reste locale.</span>
   </div>
@@ -237,7 +240,7 @@ input[type=date]{color-scheme:dark}
       <div style="font-size:10px;color:var(--red);font-weight:500;margin-bottom:2px">⚠ Champs obligatoires</div>
       <div class="field-row">
         <div class="field-group"><label>Renta salariale actuelle *</label>
-          <input type="text" id="f-renta" placeholder="ex: 31%" oninput="updateRentaBadge()" required>
+          <input type="text" inputmode="decimal" id="f-renta" placeholder="ex: 31" oninput="updateRentaBadge()" required>
           <div id="renta-badge" class="renta-badge" style="display:none"></div>
         </div>
         <div class="field-group"><label>Objectif renta (paramétré)</label>
@@ -245,15 +248,15 @@ input[type=date]{color-scheme:dark}
         </div>
       </div>
       <div class="field-row">
-        <div class="field-group"><label>Positionnement CA mensuel N/N-1 *</label>
-          <input type="text" id="f-ca-mensuel" placeholder="ex: +5%" required>
+        <div class="field-group"><label>Positionnement CA mensuel (%) *</label>
+          <input type="text" inputmode="decimal" id="f-ca-mensuel" placeholder="ex: 105" required>
         </div>
-        <div class="field-group"><label>Positionnement CA annuel N/N-1 *</label>
-          <input type="text" id="f-ca-annuel" placeholder="ex: +3%">
+        <div class="field-group"><label>Positionnement CA annuel (%) *</label>
+          <input type="text" inputmode="decimal" id="f-ca-annuel" placeholder="ex: 98">
         </div>
       </div>
-      <div class="field-group"><label>Positionnement CA mensuel détail (facultatif)</label>
-        <input type="text" id="f-ca-mensuel-detail" placeholder="ex: CA optique +8%, audio -2%...">
+      <div class="field-group"><label>Détail positionnement (facultatif)</label>
+        <input type="text" id="f-ca-mensuel-detail" placeholder="ex: optique 108%, audio 92%...">
       </div>
       <div class="field-group"><label>Situation RH (recrutement, mutations, licenciements...)</label>
         <textarea id="f-rh" rows="3" placeholder="Décris la situation RH actuelle..."></textarea></div>
@@ -271,11 +274,10 @@ input[type=date]{color-scheme:dark}
     </div>
     <div class="bloc-body" id="b3">
       <div class="field-group"><label>Rituels managériaux observés</label>
-        <div style="display:flex;flex-direction:column;gap:6px;margin-top:2px">
-          <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text)"><input type="checkbox" id="cb-lj" style="width:auto;accent-color:var(--red)"> Lancement de journée systématique</label>
-          <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text)"><input type="checkbox" id="cb-pi" style="width:auto;accent-color:var(--red)"> Points individuels réguliers</label>
-          <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text)"><input type="checkbox" id="cb-brief" style="width:auto;accent-color:var(--red)"> Briefs équipe hebdomadaires</label>
-          <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text)"><input type="checkbox" id="cb-obj" style="width:auto;accent-color:var(--red)"> Suivi des objectifs en équipe</label>
+        <div id="rituels-list" style="display:flex;flex-direction:column;gap:6px;margin-top:2px"></div>
+        <div style="display:flex;gap:6px;margin-top:8px">
+          <input type="text" id="rituel-new" placeholder="Ajouter un rituel personnalisé..." style="flex:1;background:var(--bg4);border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:13px;color:var(--text);font-family:'Barlow',sans-serif">
+          <button class="btn-add" onclick="addRituel()">+ Ajouter</button>
         </div>
       </div>
       <div class="field-group"><label>Observations sur le management</label>
@@ -295,7 +297,7 @@ input[type=date]{color-scheme:dark}
         <select class="select-box" id="kpi-select" style="flex:1">
           <option value="">Choisir un indicateur...</option>
         </select>
-        <input type="text" id="kpi-val" placeholder="Valeur" style="background:var(--bg4);border:1px solid var(--border);border-radius:8px;padding:10px 12px;font-size:14px;color:var(--text);font-family:'Barlow',sans-serif;width:90px">
+        <input type="text" inputmode="decimal" id="kpi-val" placeholder="Valeur" style="background:var(--bg4);border:1px solid var(--border);border-radius:8px;padding:10px 12px;font-size:14px;color:var(--text);font-family:'Barlow',sans-serif;width:90px">
         <button class="btn-add" onclick="addKpi()">+ Ajouter</button>
       </div>
       <div class="kpi-chips" id="kpi-chips"></div>
@@ -407,6 +409,18 @@ input[type=date]{color-scheme:dark}
     <div class="params-section-title">Objectifs KPI</div>
     <div id="kpi-params-list"></div>
     <span style="font-size:10px;color:var(--muted)">Vert = objectif atteint · Orange = proche · Rouge = éloigné</span>
+    <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
+      <div style="font-size:11px;color:var(--muted);margin-bottom:6px">Ajouter un nouvel indicateur</div>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <input type="text" id="new-kpi-name" placeholder="Nom de l'indicateur" style="background:var(--bg4);border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:13px;color:var(--text);font-family:'Barlow',sans-serif">
+        <div style="display:flex;gap:6px">
+          <input type="number" id="new-kpi-obj" placeholder="Objectif (optionnel)" style="flex:1;background:var(--bg4);border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:13px;color:var(--text);font-family:'Barlow',sans-serif">
+          <input type="text" id="new-kpi-unit" placeholder="Unité (%, €, vide...)" style="width:120px;background:var(--bg4);border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:13px;color:var(--text);font-family:'Barlow',sans-serif">
+        </div>
+        <button class="btn-add" style="width:100%;text-align:center" onclick="addNewKpi()">+ Ajouter l'indicateur</button>
+      </div>
+      <span style="font-size:10px;color:var(--muted);display:block;margin-top:6px">Cet indicateur reste local à ton téléphone. Pour le rendre commun à tous les AR, transmets-le à Olivier pour intégration au référentiel partagé.</span>
+    </div>
   </div>
   <div class="params-section">
     <div class="params-section-title">Email</div>
@@ -477,7 +491,7 @@ let photos = [null, null, null];
 let photoCaptions = ['', '', ''];
 let draftKey = null;
 
-const KPI_DEFAULTS = [
+let KPI_DEFAULTS = [
   {name:'SOP', unit:'%', obj:40, dir:'gte'},
   {name:'NDV', unit:'', obj:null, dir:null},
   {name:'MdC/Intemporelle', unit:'%', obj:70, dir:'gte'},
@@ -489,11 +503,86 @@ const KPI_DEFAULTS = [
   {name:'CA N/N-1', unit:'%', obj:100, dir:'gte'},
 ];
 
+function loadKpiDefaults() {
+  // 1. Charger les KPI custom locaux (ajouts personnels non encore synchronisés)
+  try {
+    const localCustom = JSON.parse(localStorage.getItem('bilan_kpi_custom') || '[]');
+    localCustom.forEach(k => {
+      if (!KPI_DEFAULTS.some(d => d.name === k.name)) KPI_DEFAULTS.push(k);
+    });
+  } catch(e) {}
+}
+
+function saveKpiCustom(kpi) {
+  let localCustom = [];
+  try { localCustom = JSON.parse(localStorage.getItem('bilan_kpi_custom') || '[]'); } catch(e) {}
+  localCustom.push(kpi);
+  localStorage.setItem('bilan_kpi_custom', JSON.stringify(localCustom));
+}
+
+// ── RITUELS MANAGER ──
+const RITUELS_DEFAULTS = [
+  {id:'lj', label:'Lancement de journée systématique'},
+  {id:'pi', label:'Points individuels réguliers'},
+  {id:'brief', label:'Briefs équipe hebdomadaires'},
+  {id:'obj', label:'Suivi des objectifs en équipe'},
+];
+let rituelsCustom = [];
+let rituelsChecked = {};
+
+function loadRituelsCustom() {
+  try { rituelsCustom = JSON.parse(localStorage.getItem('bilan_rituels_custom') || '[]'); } catch(e) { rituelsCustom = []; }
+}
+
+function saveRituelsCustom() {
+  localStorage.setItem('bilan_rituels_custom', JSON.stringify(rituelsCustom));
+}
+
+function getAllRituels() {
+  return [...RITUELS_DEFAULTS, ...rituelsCustom];
+}
+
+function renderRituels() {
+  const list = document.getElementById('rituels-list');
+  if (!list) return;
+  list.innerHTML = '';
+  getAllRituels().forEach(r => {
+    const row = document.createElement('label');
+    row.style.cssText = 'display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text)';
+    const isCustom = rituelsCustom.some(c => c.id === r.id);
+    row.innerHTML = `<input type="checkbox" data-rituel-id="${r.id}" ${rituelsChecked[r.id] ? 'checked' : ''} style="width:auto;accent-color:var(--red)" onchange="rituelsChecked['${r.id}']=this.checked">
+      <span style="flex:1">${r.label}</span>
+      ${isCustom ? `<span style="cursor:pointer;color:var(--muted);font-size:12px" onclick="removeRituelCustom('${r.id}')">✕</span>` : ''}`;
+    list.appendChild(row);
+  });
+}
+
+function addRituel() {
+  const input = document.getElementById('rituel-new');
+  const label = input.value.trim();
+  if (!label) return;
+  const id = 'custom_' + Date.now();
+  rituelsCustom.push({id, label});
+  saveRituelsCustom();
+  rituelsChecked[id] = true;
+  input.value = '';
+  renderRituels();
+}
+
+function removeRituelCustom(id) {
+  rituelsCustom = rituelsCustom.filter(r => r.id !== id);
+  delete rituelsChecked[id];
+  saveRituelsCustom();
+  renderRituels();
+}
+
 // ── INIT ──
 window.addEventListener('load', () => {
   loadParams();
+  loadKpiDefaults();
   loadLogo();
   loadMagasins();
+  loadRituelsCustom();
   // Mise à jour watermark à chaque saisie
   document.getElementById('screen-saisie').addEventListener('input', updateWatermark);
   // Injecter logo dans watermarks dès que disponible
@@ -557,6 +646,23 @@ function initParamsUI() {
 function updateKpiObj(name, val) {
   const k = KPI_DEFAULTS.find(x => x.name === name);
   if (k) { k.obj = val ? parseFloat(val) : null; saveParams(); }
+}
+
+function addNewKpi() {
+  const name = document.getElementById('new-kpi-name').value.trim();
+  const objVal = document.getElementById('new-kpi-obj').value;
+  const unit = document.getElementById('new-kpi-unit').value.trim();
+  if (!name) { showToast('Indique un nom pour l\'indicateur'); return; }
+  if (KPI_DEFAULTS.some(k => k.name === name)) { showToast('Cet indicateur existe déjà'); return; }
+  const newKpi = { name, unit, obj: objVal ? parseFloat(objVal) : null, dir: objVal ? 'gte' : null };
+  KPI_DEFAULTS.push(newKpi);
+  saveKpiCustom(newKpi);
+  document.getElementById('new-kpi-name').value = '';
+  document.getElementById('new-kpi-obj').value = '';
+  document.getElementById('new-kpi-unit').value = '';
+  initParamsUI();
+  initKpiSelect();
+  showToast('Indicateur "' + name + '" ajouté ✓');
 }
 
 function parseCSV(text) {
@@ -721,9 +827,8 @@ function startBilan() {
    'f-kpi-comment','f-process','f-forts','f-diff','f-ca-mensuel','f-ca-annuel','f-ca-mensuel-detail'].forEach(function(id) {
     var el = document.getElementById(id); if (el) el.value = '';
   });
-  ['cb-lj','cb-pi','cb-brief','cb-obj'].forEach(function(id) {
-    var el = document.getElementById(id); if (el) el.checked = false;
-  });
+  rituelsChecked = {};
+  renderRituels();
   document.getElementById('renta-badge').style.display = 'none';
   ['f-date','f-duree','f-presents','f-renta','f-rh','f-formation','f-manager-obs',
    'f-kpi-comment','f-process','f-forts','f-diff','f-ca-mensuel','f-ca-annuel','f-ca-mensuel-detail'].forEach(id => {
@@ -756,9 +861,10 @@ function updateWatermark() {
 // ── KPI ──
 function initKpiSelect() {
   const sel = document.getElementById('kpi-select');
+  sel.innerHTML = '<option value="">Choisir un indicateur...</option>';
   KPI_DEFAULTS.forEach(k => {
     const opt = document.createElement('option');
-    opt.value = k.name; opt.textContent = k.name;
+    opt.value = k.name; opt.textContent = k.name + (k.unit ? ' (' + k.unit + ')' : '');
     sel.appendChild(opt);
   });
 }
@@ -789,9 +895,10 @@ function renderKpiChips() {
   c.innerHTML = '';
   kpisAdded.forEach((k, i) => {
     const cls = kpiClass(k.val, k.def);
+    const unit = k.def?.unit || '';
     const chip = document.createElement('div');
     chip.className = `kpi-chip ${cls}`;
-    chip.innerHTML = `${k.name}: <strong>${k.val}</strong> <span class="kpi-chip-del" onclick="removeKpi(${i})">✕</span>`;
+    chip.innerHTML = `${k.name}: <strong>${k.val}${unit}</strong> <span class="kpi-chip-del" onclick="removeKpi(${i})">✕</span>`;
     c.appendChild(chip);
   });
 }
@@ -913,10 +1020,7 @@ function collectData() {
     renta_obj: params.rentaTarget || '28',
     rh: document.getElementById('f-rh').value,
     formation: document.getElementById('f-formation').value,
-    cb_lj: document.getElementById('cb-lj').checked,
-    cb_pi: document.getElementById('cb-pi').checked,
-    cb_brief: document.getElementById('cb-brief').checked,
-    cb_obj: document.getElementById('cb-obj').checked,
+    rituels: getAllRituels().filter(r => rituelsChecked[r.id]).map(r => r.label),
     manager_obs: document.getElementById('f-manager-obs').value,
     kpis: kpisAdded,
     kpi_comment: document.getElementById('f-kpi-comment').value,
@@ -950,10 +1054,11 @@ function loadDraft() {
     if (d.ca_mensuel_detail) document.getElementById('f-ca-mensuel-detail').value = d.ca_mensuel_detail;
     if (d.rh) document.getElementById('f-rh').value = d.rh;
     if (d.formation) document.getElementById('f-formation').value = d.formation;
-    document.getElementById('cb-lj').checked = d.cb_lj || false;
-    document.getElementById('cb-pi').checked = d.cb_pi || false;
-    document.getElementById('cb-brief').checked = d.cb_brief || false;
-    document.getElementById('cb-obj').checked = d.cb_obj || false;
+    if (d.rituels) {
+      rituelsChecked = {};
+      getAllRituels().forEach(r => { if (d.rituels.includes(r.label)) rituelsChecked[r.id] = true; });
+      renderRituels();
+    }
     if (d.manager_obs) document.getElementById('f-manager-obs').value = d.manager_obs;
     if (d.kpis) { kpisAdded = d.kpis; renderKpiChips(); }
     if (d.kpi_comment) document.getElementById('f-kpi-comment').value = d.kpi_comment;
@@ -1120,12 +1225,12 @@ function buildEmailBody(d) {
   const mag = d.magasin;
   const rentaLine = d.renta ? `Renta salariale : ${d.renta}% (objectif ${d.renta_obj}%)` : '';
   const caLine = [
-    d.ca_annuel ? `CA annuel N/N-1 : ${d.ca_annuel}` : '',
-    d.ca_mensuel ? `CA mensuel N/N-1 : ${d.ca_mensuel}` : '',
+    d.ca_annuel ? `Positionnement CA annuel : ${d.ca_annuel}%` : '',
+    d.ca_mensuel ? `Positionnement CA mensuel : ${d.ca_mensuel}%` : '',
     d.ca_mensuel_detail ? `Détail : ${d.ca_mensuel_detail}` : '',
   ].filter(Boolean).join(' · ');
-  const rituels = [d.cb_lj && 'Lancement journée', d.cb_pi && 'Points individuels', d.cb_brief && 'Briefs hebdo', d.cb_obj && 'Suivi objectifs'].filter(Boolean);
-  const kpisLine = d.kpis.map(k => `${k.name} : ${k.val}`).join(' · ');
+  const rituels = d.rituels || [];
+  const kpisLine = d.kpis.map(k => `${k.name} : ${k.val}${k.def?.unit || ''}`).join(' · ');
   const actionsLines = d.actions.map(a => `• ${a.text}${a.who ? ' (' + a.who + ')' : ''}${a.date ? ' — ' + formatDate(a.date) : ''}`).join('\n');
   return `Bonjour,
 
@@ -1202,32 +1307,41 @@ async function generatePDF(data) {
 
   // Sous-header gris
   doc.setFillColor(245, 245, 245);
-  doc.rect(0, 22, W, 10, 'F');
+  doc.rect(0, 22, W, 12, 'F');
   doc.setDrawColor(220, 220, 220);
-  doc.line(0, 32, W, 32);
+  doc.line(0, 34, W, 34);
   doc.setTextColor(80, 80, 80);
-  doc.setFontSize(7.5);
+  doc.setFontSize(7);
+
+  function truncateForSh(text, maxChars) {
+    if (!text) return '—';
+    return text.length > maxChars ? text.slice(0, maxChars - 1) + '…' : text;
+  }
+
   const sh = [
-    ['Effectif présent', `${mag.eff_present || '—'} / ${mag.eff_theo || '—'}`],
-    ['Opt. / Audio', `${mag.eff_opt || '—'} / ${mag.eff_audio || '—'}`],
-    ['Renta salariale', data.renta ? data.renta + '%' : '—'],
-    ['Objectif renta', (data.renta_obj || '28') + '%'],
-    ['Présents', data.presents || '—'],
+    ['Effectif', `${mag.eff_present || '—'}/${mag.eff_theo || '—'}`],
+    ['Opt./Audio', `${mag.eff_opt || '—'}/${mag.eff_audio || '—'}`],
+    ['Renta sal.', data.renta ? data.renta + '%' : '—', data.renta && parseFloat(data.renta) <= parseFloat(data.renta_obj||28) ? 'ok' : 'bad'],
+    ['Obj. renta', (data.renta_obj || '28') + '%'],
+    ['CA mensuel', data.ca_mensuel ? data.ca_mensuel + '%' : '—'],
+    ['CA annuel', data.ca_annuel ? data.ca_annuel + '%' : '—'],
+    ['Présents', truncateForSh(data.presents, 22)],
   ];
-  let shX = mar;
-  sh.forEach(([l, v]) => {
-    doc.setTextColor(140,140,140); doc.text(l, shX, 26.5);
-    const color = (l === 'Renta salariale' && data.renta) ?
-      (parseFloat(data.renta) <= parseFloat(data.renta_obj||28) ? [42,158,42] : [204,23,25]) : [40,40,40];
+  const shColW = (photoCol - mar) / sh.length;
+  sh.forEach(([l, v, status], i) => {
+    const shX = mar + i * shColW;
+    doc.setTextColor(140,140,140);
+    doc.setFont('helvetica','normal');
+    doc.text(l, shX, 27);
+    const color = status === 'ok' ? [42,158,42] : status === 'bad' ? [204,23,25] : [40,40,40];
     doc.setTextColor(...color);
     doc.setFont('helvetica','bold');
-    doc.text(v, shX, 30.5);
+    doc.text(v, shX, 31, { maxWidth: shColW - 3 });
     doc.setFont('helvetica','normal');
-    shX += 52;
   });
 
   // Zones de contenu
-  let y = 35;
+  let y = 37;
   const lineH = 4.5;
   const colW = (photoCol - col1 - 6) / 2;
 
@@ -1258,8 +1372,8 @@ async function generatePDF(data) {
   let yc1 = y;
   // RH
   const caLines = [
-    data.ca_annuel ? `CA annuel N/N-1 : ${data.ca_annuel}` : '',
-    data.ca_mensuel ? `CA mensuel N/N-1 : ${data.ca_mensuel}` : '',
+    data.ca_annuel ? `Positionnement CA annuel : ${data.ca_annuel}%` : '',
+    data.ca_mensuel ? `Positionnement CA mensuel : ${data.ca_mensuel}%` : '',
     data.ca_mensuel_detail ? data.ca_mensuel_detail : '',
   ].filter(Boolean).join(' · ');
   const rhContent = [
@@ -1271,7 +1385,7 @@ async function generatePDF(data) {
   yc1 = drawBloc(col1, yc1, colW, 'RH & Équipe', rhContent);
   yc1 += 2;
   // Manager
-  const cbList = [data.cb_lj&&'✓ Lancement journée', data.cb_pi&&'✓ Points individuels', data.cb_brief&&'✓ Briefs hebdo', data.cb_obj&&'✓ Suivi objectifs'].filter(Boolean);
+  const cbList = (data.rituels || []).map(r => '✓ ' + r);
   const mgrContent = [cbList.join(' · '), data.manager_obs||''].filter(Boolean).join('\n');
   yc1 = drawBloc(col1, yc1, colW, 'Suivi manager', mgrContent);
   yc1 += 2;
@@ -1291,9 +1405,10 @@ async function generatePDF(data) {
     let kx = col2+3; let ky = yc2+8;
     data.kpis.forEach(k => {
       const cls = kpiClass(k.val, k.def);
+      const unit = k.def?.unit || '';
       const clr = cls==='ok'?[42,158,42]:cls==='bad'?[204,23,25]:cls==='warn'?[180,110,10]:[80,80,80];
       doc.setTextColor(...clr); doc.setFont('helvetica','bold'); doc.setFontSize(8);
-      doc.text(k.val, kx+14, ky, {align:'right'});
+      doc.text(k.val + unit, kx+14, ky, {align:'right'});
       doc.setTextColor(100,100,100); doc.setFont('helvetica','normal'); doc.setFontSize(6.5);
       doc.text(k.name, kx, ky);
       kx += 38; if (kx > col2+colW-10) { kx=col2+3; ky+=7; }
