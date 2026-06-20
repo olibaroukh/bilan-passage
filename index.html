@@ -451,6 +451,25 @@ input[type=date]{color-scheme:dark}
     </div>
   </div>
 
+  <!-- Bloc 11 : Entretiens individuels -->
+  <div class="bloc-accordion">
+    <div class="bloc-head" onclick="toggleBloc('b11')">
+      <div class="bloc-head-icon">🗣️</div>
+      <span class="bloc-head-label">Entretiens individuels</span>
+      <span class="bloc-head-chevron" id="chev-b11">▼</span>
+    </div>
+    <div class="bloc-body" id="b11">
+      <div class="action-list" id="entretien-list"></div>
+      <div class="action-add-form">
+        <input type="text" id="ent-prenom" placeholder="Prénom du collaborateur">
+        <input type="text" id="ent-sujet" placeholder="Sujet abordé (facultatif, peut rester confidentiel)">
+        <div class="action-add-row">
+          <button class="btn-add" onclick="addEntretien()" style="flex:1">+ Ajouter</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Barre basse saisie -->
   <div id="bottom-bar" style="display:none">
     <button class="btn-secondary" style="flex:1" onclick="saveDraft()">💾 Brouillon</button>
@@ -575,7 +594,7 @@ function loadLogo() {
 }
 
 // ── VERSION APP ── (incrémenter à chaque mise à jour notable, pour déclencher l'invite de rechargement)
-const APP_VERSION = '2026.06.20-3';
+const APP_VERSION = '2026.06.20-4';
 
 // ── ÉTAT ──
 let magasins = [];
@@ -585,6 +604,7 @@ let currentAR = null;
 let actions = [];
 let fortsList = [];
 let diffList = [];
+let entretiens = [];
 let kpisAdded = [];
 let photos = [null, null, null];
 let photoCaptions = ['', '', ''];
@@ -1044,8 +1064,8 @@ function resetSaisie() {
   if (!confirm('Réinitialiser la saisie en cours ? Toutes les informations déjà saisies pour ce bilan seront effacées.')) return;
   if (draftKey) localStorage.removeItem(draftKey);
   actions = []; kpisAdded = []; photos = [null,null,null]; photoCaptions = ['','',''];
-  fortsList = []; diffList = [];
-  renderPoints('forts'); renderPoints('diff');
+  fortsList = []; diffList = []; entretiens = [];
+  renderPoints('forts'); renderPoints('diff'); renderEntretiens();
   ['f-date','f-duree','f-presents','f-renta','f-rh','f-formation','f-manager-obs',
    'f-kpi-comment','f-process','f-ca-mensuel','f-ca-annuel','f-ca-mensuel-detail',
    'f-mot-intro','f-mot-conclusion','f-prochain-passage','f-remarque-libre'].forEach(function(id) {
@@ -1080,8 +1100,8 @@ function startBilan() {
   document.getElementById('header-passage').style.display = 'block';
   document.getElementById('f-renta-obj').value = (params.rentaTarget || '28') + '%';
   actions = []; kpisAdded = []; photos = [null,null,null]; photoCaptions = ['','',''];
-  fortsList = []; diffList = [];
-  renderPoints('forts'); renderPoints('diff');
+  fortsList = []; diffList = []; entretiens = [];
+  renderPoints('forts'); renderPoints('diff'); renderEntretiens();
   ['f-date','f-duree','f-presents','f-renta','f-rh','f-formation','f-manager-obs',
    'f-kpi-comment','f-process','f-ca-mensuel','f-ca-annuel','f-ca-mensuel-detail',
    'f-mot-intro','f-mot-conclusion','f-prochain-passage','f-remarque-libre'].forEach(function(id) {
@@ -1182,6 +1202,34 @@ function updateRentaBadge() {
 }
 
 // ── ACTIONS ──
+function addEntretien() {
+  const prenom = document.getElementById('ent-prenom').value.trim();
+  const sujet = document.getElementById('ent-sujet').value.trim();
+  if (!prenom) { showToast('Le prénom du collaborateur est requis'); return; }
+  entretiens.push({prenom, sujet});
+  document.getElementById('ent-prenom').value = '';
+  document.getElementById('ent-sujet').value = '';
+  renderEntretiens();
+}
+
+function removeEntretien(i) { entretiens.splice(i,1); renderEntretiens(); }
+
+function renderEntretiens() {
+  const list = document.getElementById('entretien-list');
+  list.innerHTML = '';
+  entretiens.forEach((e, i) => {
+    const row = document.createElement('div');
+    row.className = 'action-item-row';
+    row.innerHTML = `<div class="action-item-dot"></div>
+      <div class="action-item-content">
+        <div class="action-item-text">${e.prenom}</div>
+        ${e.sujet ? `<div class="action-item-comment" style="font-size:11px;color:var(--muted);margin-top:2px">${e.sujet}</div>` : `<div class="action-item-comment" style="font-size:11px;color:var(--muted);margin-top:2px;font-style:italic">Sujet confidentiel</div>`}
+      </div>
+      <span class="action-item-del" onclick="removeEntretien(${i})">✕</span>`;
+    list.appendChild(row);
+  });
+}
+
 function addAction() {
   const text = document.getElementById('act-text').value.trim();
   const comment = document.getElementById('act-comment').value.trim();
@@ -1423,6 +1471,7 @@ function collectData() {
     mot_conclusion: document.getElementById('f-mot-conclusion').value,
     prochain_passage: document.getElementById('f-prochain-passage').value,
     remarque_libre: document.getElementById('f-remarque-libre').value,
+    entretiens,
     savedAt: new Date().toISOString(),
   };
 }
@@ -1472,6 +1521,7 @@ function loadDraft() {
     if (d.mot_conclusion) document.getElementById('f-mot-conclusion').value = d.mot_conclusion;
     if (d.prochain_passage) document.getElementById('f-prochain-passage').value = d.prochain_passage;
     if (d.remarque_libre) document.getElementById('f-remarque-libre').value = d.remarque_libre;
+    if (d.entretiens) { entretiens = d.entretiens; renderEntretiens(); }
     showToast('Brouillon rechargé');
   } catch(e) {}
 }
@@ -1712,6 +1762,15 @@ function buildEmailBody(d) {
   if (rituels.length) mgrSentences.push(`Côté management, ${rituels.join(', ').toLowerCase()} sont bien en place.`);
   if (d.manager_obs) mgrSentences.push(d.manager_obs);
   if (mgrSentences.length) paragraphs.push(mgrSentences.join(' '));
+
+  // Entretiens individuels — mentionnés seulement s'il y en a eu (pas de mention si vide, pour rester naturel)
+  if (d.entretiens && d.entretiens.length) {
+    const entLines = d.entretiens.map(e => `• ${e.prenom}${e.sujet ? ' : ' + e.sujet : ' (sujet confidentiel)'}`);
+    const intro = d.entretiens.length > 1
+      ? `Des entretiens individuels ont également été menés avec :`
+      : `Un entretien individuel a également été mené avec :`;
+    paragraphs.push(intro + '\n' + entLines.join('\n'));
+  }
 
   // Paragraphe indicateurs
   if (d.kpis.length) {
@@ -1968,6 +2027,15 @@ async function generatePDF(data) {
   yc1 += 3;
 
   if (data.process) { yc1 = drawBloc(col1, yc1, colW, 'Process & Nouveautés', data.process); yc1 += 3; }
+
+  const entretiensArr = data.entretiens || [];
+  if (entretiensArr.length) {
+    const entBullets = entretiensArr.map(e => `${e.prenom}${e.sujet ? ' : ' + e.sujet : ' (sujet confidentiel)'}`);
+    yc1 = drawBloc(col1, yc1, colW, 'Entretiens individuels', null, null, entBullets);
+  } else {
+    yc1 = drawBloc(col1, yc1, colW, 'Entretiens individuels', 'Pas d\'entretien individuel lors de ce passage.');
+  }
+  yc1 += 3;
 
   // Col 2
   let yc2 = y;
