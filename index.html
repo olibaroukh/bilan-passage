@@ -1056,29 +1056,26 @@ async function sendBilan() {
       body: formData
     });
     const upText = await upResp.text();
-    // Format Zimbra natif : 200,'clientId','[{"aid":"xxx","ct":"...","filename":"...","s":123}]'
+    // Format Zimbra natif : 200,'clientId','attachId'  (CSV brut entre apostrophes)
     let attachId = null;
-    // 1. Chercher directement un champ "aid":"..." dans la réponse
-    const aidFieldMatch = upText.match(/"aid"\s*:\s*"([^"]+)"/);
-    if (aidFieldMatch) attachId = aidFieldMatch[1];
-    // 2. Sinon essayer de parser comme JSON pur
-    if (!attachId) {
+    // 1. Cas standard : 200,'xxx','yyy' -> on prend la dernière valeur entre quotes
+    const allQuoted = [...upText.matchAll(/'([^']*)'/g)].map(m => m[1]);
+    if (allQuoted.length) {
+      attachId = allQuoted[allQuoted.length - 1];
+    }
+    // 2. Fallback : champ "aid":"..." (au cas où le format change un jour)
+    if (!attachId || attachId === 'null') {
+      const aidFieldMatch = upText.match(/"aid"\s*:\s*"([^"]+)"/);
+      if (aidFieldMatch) attachId = aidFieldMatch[1];
+    }
+    // 3. Fallback JSON pur
+    if (!attachId || attachId === 'null') {
       try {
         const parsed = JSON.parse(upText);
         attachId = parsed.aid || (Array.isArray(parsed) && parsed[0]?.aid) || null;
       } catch(e) {}
     }
-    // 3. Sinon essayer d'extraire le JSON imbriqué entre guillemets simples (format Zimbra brut)
-    if (!attachId) {
-      const innerMatch = upText.match(/'(\[.*\])'/);
-      if (innerMatch) {
-        try {
-          const inner = JSON.parse(innerMatch[1]);
-          attachId = inner[0]?.aid || null;
-        } catch(e) {}
-      }
-    }
-    if (!attachId) throw new Error('Échec upload — aucun attachId trouvé dans : ' + upText.slice(0,200));
+    if (!attachId || attachId === 'null') throw new Error('Échec upload — aucun attachId trouvé dans : ' + upText.slice(0,200));
 
     // 4. Envoi mails
     const COPY_ALWAYS = 'olivier.baroukh@optical-center.com';
@@ -1516,21 +1513,19 @@ async function resendBilan(e, code, idx) {
     });
     const upText = await upResp.text();
     let attachId = null;
-    const aidFieldMatch = upText.match(/"aid"\s*:\s*"([^"]+)"/);
-    if (aidFieldMatch) attachId = aidFieldMatch[1];
-    if (!attachId) {
+    const allQuoted = [...upText.matchAll(/'([^']*)'/g)].map(m => m[1]);
+    if (allQuoted.length) attachId = allQuoted[allQuoted.length - 1];
+    if (!attachId || attachId === 'null') {
+      const aidFieldMatch = upText.match(/"aid"\s*:\s*"([^"]+)"/);
+      if (aidFieldMatch) attachId = aidFieldMatch[1];
+    }
+    if (!attachId || attachId === 'null') {
       try {
         const parsed = JSON.parse(upText);
         attachId = parsed.aid || (Array.isArray(parsed) && parsed[0]?.aid) || null;
       } catch(e) {}
     }
-    if (!attachId) {
-      const innerMatch = upText.match(/'(\[.*\])'/);
-      if (innerMatch) {
-        try { const inner = JSON.parse(innerMatch[1]); attachId = inner[0]?.aid || null; } catch(e) {}
-      }
-    }
-    if (!attachId) throw new Error('Échec upload : ' + upText.slice(0,200));
+    if (!attachId || attachId === 'null') throw new Error('Échec upload : ' + upText.slice(0,200));
 
     const COPY_ALWAYS = 'olivier.baroukh@optical-center.com';
     const emails = [...new Set([d.magasin?.email, params.myEmail, COPY_ALWAYS].filter(Boolean))];
