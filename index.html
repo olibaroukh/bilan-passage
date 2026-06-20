@@ -118,7 +118,7 @@ html,body{height:100%;background:linear-gradient(160deg,#1A1210 0%,#0D0D0D 40%,#
 .history-item-actions{display:flex;gap:6px}
 .icon-btn{background:var(--bg4);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:16px;cursor:pointer;padding:8px;line-height:1}
 /* ── ÉCRAN 4 : PARAMÈTRES ── */
-#screen-params{padding:20px 16px;gap:16px;overflow-y:auto}
+#screen-params{padding:20px 16px 90px;gap:16px;overflow-y:auto}
 .params-section{display:flex;flex-direction:column;gap:10px}
 .params-section-title{font-family:'Barlow Condensed',sans-serif;font-size:16px;font-weight:700;color:var(--red);text-transform:uppercase;letter-spacing:.5px;padding-bottom:6px;border-bottom:1px solid var(--border)}
 .kpi-param-row{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;display:flex;align-items:center;gap:10px}
@@ -388,7 +388,8 @@ input[type=date]{color-scheme:dark}
     <div class="bloc-body" id="b8">
       <div class="action-list" id="action-list"></div>
       <div class="action-add-form">
-        <input type="text" id="act-text" placeholder="Description de l'action...">
+        <input type="text" id="act-text" placeholder="Titre de l'action...">
+        <input type="text" id="act-comment" placeholder="Commentaire / détail (facultatif)">
         <div class="action-add-row">
           <input type="text" id="act-who" placeholder="Responsable">
           <input type="date" id="act-date">
@@ -781,7 +782,7 @@ function parseCSV(text) {
     const obj = {};
     headers.forEach((h, i) => {
       const v = (cols[i] || '').replace(/^"|"$/g,'').trim();
-      obj[h] = ['eff_opt','eff_audio','eff_theo'].includes(h) ? (parseInt(v)||0) : v;
+      obj[h] = ['eff_opt','eff_audio','eff_theo'].includes(h) ? (parseFloat(v.replace(',','.'))||0) : v;
     });
     return obj;
   }).filter(r => r.code);
@@ -1024,11 +1025,13 @@ function updateRentaBadge() {
 // ── ACTIONS ──
 function addAction() {
   const text = document.getElementById('act-text').value.trim();
+  const comment = document.getElementById('act-comment').value.trim();
   const who = document.getElementById('act-who').value.trim();
   const date = document.getElementById('act-date').value;
   if (!text) { showToast('Décris l\'action'); return; }
-  actions.push({text, who, date});
+  actions.push({text, comment, who, date});
   document.getElementById('act-text').value = '';
+  document.getElementById('act-comment').value = '';
   document.getElementById('act-who').value = '';
   document.getElementById('act-date').value = '';
   renderActions();
@@ -1046,6 +1049,7 @@ function renderActions() {
     row.innerHTML = `<div class="action-item-dot"></div>
       <div class="action-item-content">
         <div class="action-item-text">${a.text}</div>
+        ${a.comment ? `<div class="action-item-comment" style="font-size:11px;color:var(--muted);margin-top:2px">${a.comment}</div>` : ''}
         <div class="action-item-meta">${a.who ? `<span>${a.who}</span>` : ''}<span style="color:var(--red)">${dateStr}</span></div>
       </div>
       <span class="action-item-del" onclick="removeAction(${i})">✕</span>`;
@@ -1075,23 +1079,27 @@ function openCropModal(dataUrl, slotIndex) {
   img.onload = () => {
     cropState.img = img;
     cropState.slotIndex = slotIndex;
-    const stage = document.getElementById('crop-stage');
-    const canvas = document.getElementById('crop-canvas');
-    const rect = stage.getBoundingClientRect();
-    canvas.width = rect.width;
-    canvas.height = rect.height;
-    // Échelle minimale : l'image doit couvrir tout le cadre (cover)
-    const scaleX = canvas.width / img.width;
-    const scaleY = canvas.height / img.height;
-    cropState.minScale = Math.max(scaleX, scaleY);
-    cropState.scale = cropState.minScale;
-    cropState.offsetX = (canvas.width - img.width * cropState.scale) / 2;
-    cropState.offsetY = (canvas.height - img.height * cropState.scale) / 2;
-    document.getElementById('crop-zoom').value = 100;
-    drawCrop();
+    // Ouvrir la modale D'ABORD pour que le conteneur ait une vraie taille mesurable
     document.getElementById('modal-crop').classList.add('open');
-    setupCropDrag();
+    // Attendre le prochain frame pour que le layout soit calculé
+    requestAnimationFrame(() => {
+      const stage = document.getElementById('crop-stage');
+      const canvas = document.getElementById('crop-canvas');
+      const rect = stage.getBoundingClientRect();
+      canvas.width = rect.width || 320;
+      canvas.height = rect.height || 240;
+      const scaleX = canvas.width / img.width;
+      const scaleY = canvas.height / img.height;
+      cropState.minScale = Math.max(scaleX, scaleY);
+      cropState.scale = cropState.minScale;
+      cropState.offsetX = (canvas.width - img.width * cropState.scale) / 2;
+      cropState.offsetY = (canvas.height - img.height * cropState.scale) / 2;
+      document.getElementById('crop-zoom').value = 100;
+      drawCrop();
+      setupCropDrag();
+    });
   };
+  img.onerror = () => showToast('Erreur de chargement de la photo');
   img.src = dataUrl;
 }
 
@@ -1372,7 +1380,7 @@ async function sendBilan() {
     if (!emails.length) throw new Error('Aucun email destinataire');
     showToast('4/4 — Envoi à ' + emails.length + ' destinataire(s)...');
 
-    const subject = 'Bilan de passage — ' + data.magasin.libelle + ' — ' + formatDate(data.date);
+    const subject = 'Bilan de passage n°' + (data.passage || '?') + ' — ' + data.magasin.libelle + ' — ' + formatDate(data.date);
     const mailBody = buildEmailBody(data);
 
     const msgNode = {
@@ -1438,7 +1446,7 @@ function buildEmailBody(d) {
   ].filter(Boolean).join(' · ');
   const rituels = d.rituels || [];
   const kpisLine = d.kpis.map(k => `${k.name} : ${k.val}${k.def?.unit || ''}`).join(' · ');
-  const actionsLines = d.actions.map(a => `• ${a.text}${a.who ? ' (' + a.who + ')' : ''}${a.date ? ' — ' + formatDate(a.date) : ''}`).join('\n');
+  const actionsLines = d.actions.map(a => `• ${a.text}${a.comment ? ' : ' + a.comment : ''}${a.who ? ' (' + a.who + ')' : ''}${a.date ? ' — ' + formatDate(a.date) : ''}`).join('\n');
   return `Bonjour,
 
 Veuillez trouver ci-joint le bilan de ma visite au magasin ${mag.libelle} (${mag.code}) du ${formatDate(d.date)}.
@@ -1478,19 +1486,23 @@ async function generatePDF(data) {
   doc.setFillColor(204, 23, 25);
   doc.rect(0, 0, W, 22, 'F');
 
-  // Logo — pictogramme pré-recadré (fond transparent), ratio 780x440 ≈ 1.77:1
+  // Logo — fond noir sur toute la hauteur du bandeau pour faire ressortir le pictogramme
+  const logoBoxW = 22;
+  doc.setFillColor(10, 10, 10);
+  doc.rect(0, 0, logoBoxW, 22, 'F');
   try {
-    doc.addImage(LOGO_PICTO_OC, 'PNG', mar, 2, 18, 18 / (780/440));
+    const logoH = 18 / (780/440);
+    doc.addImage(LOGO_PICTO_OC, 'PNG', (logoBoxW - 18) / 2, (22 - logoH) / 2, 18, logoH);
   } catch(e) {}
 
   // Titre
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(16);
   doc.setTextColor(255, 255, 255);
-  doc.text('BILAN DE PASSAGE', mar + 22, 11);
+  doc.text('BILAN DE PASSAGE', logoBoxW + 6, 11);
   doc.setFontSize(9);
   doc.setFont('helvetica', 'normal');
-  doc.text(`Passage n°${data.passage || '?'} · ${formatDate(data.date)}`, mar + 22, 17);
+  doc.text(`Passage n°${data.passage || '?'} · ${formatDate(data.date)}`, logoBoxW + 6, 17);
 
   // Infos droite header
   doc.setFont('helvetica', 'bold');
@@ -1513,167 +1525,201 @@ async function generatePDF(data) {
     return text.length > maxChars ? text.slice(0, maxChars - 1) + '…' : text;
   }
 
-  const sh = [
-    ['Effectif', `${mag.eff_present || '—'}/${mag.eff_theo || '—'}`],
-    ['Opt./Audio', `${mag.eff_opt || '—'}/${mag.eff_audio || '—'}`],
-    ['Renta sal.', data.renta ? data.renta + '%' : '—', data.renta && parseFloat(data.renta) <= parseFloat(data.renta_obj||28) ? 'ok' : 'bad'],
-    ['Obj. renta', (data.renta_obj || '28') + '%'],
-    ['CA mensuel', data.ca_mensuel ? data.ca_mensuel + '%' : '—'],
-    ['CA annuel', data.ca_annuel ? data.ca_annuel + '%' : '—'],
+  // Groupes séparés par des traits verticaux : Effectif | Renta | Positionnement
+  const shGroups = [
+    {
+      items: [
+        ['Effectif réel', `${mag.eff_present || '—'}`],
+        ['Effectif théo.', `${mag.eff_theo || '—'}`],
+        ['Opt./Audio', `${mag.eff_opt || '—'}/${mag.eff_audio || '—'}`],
+      ]
+    },
+    {
+      items: [
+        ['Renta salariale', data.renta ? data.renta + '%' : '—', data.renta && parseFloat(data.renta) <= parseFloat(data.renta_obj||28) ? 'ok' : 'bad'],
+        ['Objectif renta', (data.renta_obj || '28') + '%'],
+      ]
+    },
+    {
+      items: [
+        ['Positionnement mensuel', data.ca_mensuel ? data.ca_mensuel + '%' : '—'],
+        ['Positionnement annuel', data.ca_annuel ? data.ca_annuel + '%' : '—'],
+      ]
+    },
   ];
   const shZoneW = photoCol - mar - 5;
-  const shColW = shZoneW / sh.length;
-  sh.forEach(([l, v, status], i) => {
-    const shX = mar + i * shColW;
-    doc.setTextColor(140,140,140);
-    doc.setFont('helvetica','normal');
-    doc.text(l, shX, 27);
-    const color = status === 'ok' ? [42,158,42] : status === 'bad' ? [204,23,25] : [40,40,40];
-    doc.setTextColor(...color);
-    doc.setFont('helvetica','bold');
-    doc.text(v, shX, 31, { maxWidth: shColW - 3 });
-    doc.setFont('helvetica','normal');
+  const totalItems = shGroups.reduce((s,g) => s + g.items.length, 0);
+  const shColW = shZoneW / totalItems;
+  let shX = mar;
+  shGroups.forEach((group, gi) => {
+    if (gi > 0) {
+      doc.setDrawColor(190,190,190);
+      doc.setLineWidth(0.4);
+      doc.line(shX - 3, 24, shX - 3, 32);
+      doc.setLineWidth(0.2);
+    }
+    group.items.forEach(([l, v, status]) => {
+      doc.setTextColor(140,140,140);
+      doc.setFont('helvetica','normal');
+      doc.setFontSize(6.5);
+      doc.text(l, shX, 27);
+      const color = status === 'ok' ? [42,158,42] : status === 'bad' ? [204,23,25] : [40,40,40];
+      doc.setTextColor(...color);
+      doc.setFont('helvetica','bold');
+      doc.setFontSize(7.5);
+      doc.text(v, shX, 31, { maxWidth: shColW - 3 });
+      shX += shColW;
+    });
   });
 
-  // Zones de contenu
-  let y = 37;
-  const lineH = 4.5;
+  // Zones de contenu — tailles augmentées pour mieux remplir la page
+  let y = 38;
+  const lineH = 5.2;
   const colW = (photoCol - col1 - gutter) / 2;
 
   function drawBloc(x, yStart, w, title, content, titleColor) {
     const tColor = titleColor || [204,23,25];
-    // Calculer les lignes en dehors du if pour éviter ReferenceError sur Safari
     const lines = content ? doc.splitTextToSize(content, w - 6) : [];
-    const lineCount = Math.min(lines.length, 8);
-    const blocH = 5.5 + (content ? lineCount * lineH + 3 : 7);
+    const lineCount = lines.length;
+    const blocH = 6.5 + (content ? lineCount * lineH + 4 : 8);
     doc.setFillColor(249,249,249);
-    doc.rect(x, yStart, w, 5.5, 'F');
+    doc.rect(x, yStart, w, 6.5, 'F');
     doc.setDrawColor(220,220,220);
     doc.rect(x, yStart, w, blocH, 'S');
     doc.setTextColor(...tColor);
     doc.setFont('helvetica','bold');
-    doc.setFontSize(7);
-    doc.text(title.toUpperCase(), x + 3, yStart + 3.8);
-    doc.setTextColor(60,60,60);
+    doc.setFontSize(8);
+    doc.text(title.toUpperCase(), x + 3, yStart + 4.5);
+    doc.setTextColor(55,55,55);
     doc.setFont('helvetica','normal');
-    doc.setFontSize(7.5);
-    lines.slice(0, 8).forEach((line, i) => {
-      doc.text(line, x + 3, yStart + 9 + i * lineH);
+    doc.setFontSize(8.5);
+    lines.forEach((line, i) => {
+      doc.text(line, x + 3, yStart + 11 + i * lineH);
     });
     return yStart + blocH;
   }
 
   // Col 1
   let yc1 = y;
-  // RH
-  const caLines = [
+  const rhContentLines = [
+    data.renta ? `Renta salariale : ${data.renta}% (obj. ${data.renta_obj||28}%)` : '',
     data.ca_annuel ? `Positionnement CA annuel : ${data.ca_annuel}%` : '',
     data.ca_mensuel ? `Positionnement CA mensuel : ${data.ca_mensuel}%` : '',
-    data.ca_mensuel_detail ? data.ca_mensuel_detail : '',
-  ].filter(Boolean).join(' · ');
-  const rhContent = [
-    data.renta ? `Renta salariale : ${data.renta}% (obj. ${data.renta_obj||28}%)` : '',
-    caLines,
+    data.ca_mensuel_detail || '',
     data.rh || '',
     data.formation ? `Formation : ${data.formation}` : ''
   ].filter(Boolean).join('\n');
-  yc1 = drawBloc(col1, yc1, colW, 'RH & Équipe', rhContent);
-  yc1 += 2;
-  // Manager
+  yc1 = drawBloc(col1, yc1, colW, 'RH & Équipe', rhContentLines);
+  yc1 += 3;
+
   const cbList = (data.rituels || []).map(r => '+ ' + r);
   const mgrContent = [cbList.join(' · '), data.manager_obs||''].filter(Boolean).join('\n');
   yc1 = drawBloc(col1, yc1, colW, 'Suivi manager', mgrContent);
-  yc1 += 2;
-  // Process
-  if (data.process) yc1 = drawBloc(col1, yc1, colW, 'Process & Nouveautés', data.process);
+  yc1 += 3;
+
+  if (data.process) { yc1 = drawBloc(col1, yc1, colW, 'Process & Nouveautés', data.process); yc1 += 3; }
 
   // Col 2
   let yc2 = y;
-  // KPIs
   if (data.kpis.length) {
     const kpiCols = 3;
     const kpiCellW = (colW - 6) / kpiCols;
     const kpiRows = Math.ceil(data.kpis.length / kpiCols);
-    const kpiRowH = 11;
-    const kpiBlocH = 6 + kpiRows * kpiRowH + 3;
+    const kpiRowH = 13;
+    const kpiBlocH = 7 + kpiRows * kpiRowH + 3;
 
     doc.setDrawColor(220,220,220);
     doc.rect(col2, yc2, colW, kpiBlocH, 'S');
     doc.setFillColor(249,249,249);
-    doc.rect(col2, yc2, colW, 5.5, 'F');
+    doc.rect(col2, yc2, colW, 6.5, 'F');
     doc.setDrawColor(220,220,220);
-    doc.rect(col2, yc2, colW, 5.5, 'S');
-    doc.setTextColor(204,23,25); doc.setFont('helvetica','bold'); doc.setFontSize(7);
-    doc.text('INDICATEURS CLÉS', col2+3, yc2+3.8);
+    doc.rect(col2, yc2, colW, 6.5, 'S');
+    doc.setTextColor(204,23,25); doc.setFont('helvetica','bold'); doc.setFontSize(8);
+    doc.text('INDICATEURS CLÉS', col2+3, yc2+4.5);
 
     data.kpis.forEach((k, i) => {
       const row = Math.floor(i / kpiCols);
       const col = i % kpiCols;
       const cx = col2 + 3 + col * kpiCellW;
-      const cy = yc2 + 6 + row * kpiRowH;
+      const cy = yc2 + 7 + row * kpiRowH;
       const cls = kpiClass(k.val, k.def);
       const unit = k.def?.unit || '';
       const clr = cls==='ok'?[42,158,42]:cls==='bad'?[204,23,25]:cls==='warn'?[180,110,10]:[80,80,80];
-      doc.setTextColor(100,100,100); doc.setFont('helvetica','normal'); doc.setFontSize(6.3);
-      doc.text(doc.splitTextToSize(k.name, kpiCellW - 4)[0], cx, cy + 4);
-      doc.setTextColor(...clr); doc.setFont('helvetica','bold'); doc.setFontSize(9);
-      doc.text(k.val + unit, cx, cy + 9);
+      doc.setTextColor(100,100,100); doc.setFont('helvetica','normal'); doc.setFontSize(7);
+      doc.text(doc.splitTextToSize(k.name, kpiCellW - 4)[0], cx, cy + 4.5);
+      doc.setTextColor(...clr); doc.setFont('helvetica','bold'); doc.setFontSize(11);
+      doc.text(k.val + unit, cx, cy + 11);
     });
 
-    yc2 = yc2 + kpiBlocH + 2;
-    if (data.kpi_comment) yc2 = drawBloc(col2, yc2, colW, 'Commentaire indicateurs', data.kpi_comment);
-    yc2 += 2;
+    yc2 = yc2 + kpiBlocH + 3;
+    if (data.kpi_comment) { yc2 = drawBloc(col2, yc2, colW, 'Commentaire indicateurs', data.kpi_comment); yc2 += 3; }
   }
-  // Points forts / Difficultés
+
   if (data.forts || data.diff) {
     const pfdContent = [(data.forts?'(+) '+data.forts:''),(data.diff?'(-) '+data.diff:'')].filter(Boolean).join('\n');
     yc2 = drawBloc(col2, yc2, colW, 'Points forts & Difficultés', pfdContent);
+    yc2 += 3;
   }
 
-  // Actions (pleine largeur, juste au-dessus du bas)
-  const contentBottom = Math.max(yc1, yc2) + 6;
-  const actY = Math.min(contentBottom, H - 51); // suit le contenu, plafonné pour garder 42mm + marge avant footer
-  const actRows = Math.ceil(data.actions.length / 2) || 1;
-  const actBodyH = Math.max(16, actRows * 8 + 4);
-  const actTotalH = 6 + actBodyH;
+  // ── ACTIONS ATTENDUES — occupe tout l'espace restant jusqu'au footer ──
+  const footerY = H - 9;
+  const contentBottom = Math.max(yc1, yc2) + 2;
+  const actY = Math.min(contentBottom, footerY - 24); // garde au moins 24mm pour les actions
+  const actTotalH = footerY - actY;
+  const actHeaderH = 7;
+  const actBodyH = actTotalH - actHeaderH;
+
   doc.setFillColor(204, 23, 25);
-  doc.rect(col1, actY, photoCol - col1, 6, 'F');
-  doc.setTextColor(255,255,255); doc.setFont('helvetica','bold'); doc.setFontSize(7.5);
-  doc.text('ACTIONS ATTENDUES — PROCHAIN PASSAGE', col1+3, actY+4.2);
+  doc.rect(col1, actY, photoCol - col1, actHeaderH, 'F');
+  doc.setTextColor(255,255,255); doc.setFont('helvetica','bold'); doc.setFontSize(8.5);
+  doc.text('ACTIONS ATTENDUES — PROCHAIN PASSAGE', col1+3, actY+5);
   doc.setFillColor(255,255,255);
-  doc.rect(col1, actY+6, photoCol-col1, actBodyH, 'F');
+  doc.rect(col1, actY+actHeaderH, photoCol-col1, actBodyH, 'F');
   doc.setDrawColor(204,23,25);
+  doc.setLineWidth(0.5);
   doc.rect(col1, actY, photoCol-col1, actTotalH, 'S');
+  doc.setLineWidth(0.2);
+
   if (data.actions.length) {
-    let ax = col1+3, ay = actY+10;
-    const aColW = (photoCol-col1-6) / 2;
+    const aColW = (photoCol-col1-8) / 2;
+    const hasComments = data.actions.some(a => a.comment);
+    const actRowH = Math.min(18, Math.max(hasComments ? 12 : 9, actBodyH / (Math.ceil(data.actions.length/2) + 0.3)));
+    let ax = col1+4, ay = actY+actHeaderH+actRowH*0.55;
     data.actions.forEach((a, i) => {
-      if (i === Math.ceil(data.actions.length/2)) { ax = col1+3+aColW+3; ay = actY+10; }
-      doc.setFillColor(204,23,25); doc.ellipse(ax+1.5, ay-1, 1.5, 1.5, 'F');
-      doc.setTextColor(50,50,50); doc.setFont('helvetica','normal'); doc.setFontSize(7.5);
-      doc.text(a.text, ax+5, ay);
-      if (a.who) { doc.setTextColor(130,130,130); doc.setFontSize(6.5); doc.text(a.who, ax+5, ay+3.5); }
-      if (a.date) { doc.setTextColor(204,23,25); doc.text(formatDate(a.date), ax+aColW-10, ay); }
-      ay += 8;
+      if (i === Math.ceil(data.actions.length/2)) { ax = col1+4+aColW+4; ay = actY+actHeaderH+actRowH*0.55; }
+      doc.setFillColor(204,23,25); doc.ellipse(ax+1.5, ay-1.3, 1.7, 1.7, 'F');
+      doc.setTextColor(45,45,45); doc.setFont('helvetica','bold'); doc.setFontSize(8.5);
+      doc.text(doc.splitTextToSize(a.text, aColW - 22)[0], ax+6, ay);
+      let ayOffset = 4;
+      if (a.comment) {
+        doc.setTextColor(90,90,90); doc.setFont('helvetica','normal'); doc.setFontSize(7);
+        doc.text(doc.splitTextToSize(a.comment, aColW - 22)[0], ax+6, ay+ayOffset);
+        ayOffset += 3.5;
+      }
+      if (a.who) { doc.setTextColor(130,130,130); doc.setFont('helvetica','normal'); doc.setFontSize(7); doc.text(a.who, ax+6, ay+ayOffset); }
+      if (a.date) { doc.setTextColor(204,23,25); doc.setFont('helvetica','bold'); doc.setFontSize(7.5); doc.text(formatDate(a.date), ax+aColW-2, ay, {align:'right'}); }
+      ay += actRowH;
     });
   } else {
-    doc.setTextColor(180,180,180); doc.setFont('helvetica','italic'); doc.setFontSize(8);
-    doc.text('Aucune action renseignée', col1+3, actY+14);
+    doc.setTextColor(180,180,180); doc.setFont('helvetica','italic'); doc.setFontSize(9);
+    doc.text('Aucune action renseignée', col1+4, actY+actHeaderH+10);
   }
 
-  // Photos — colonne droite
+  // ── PHOTOS — colonne droite, occupe aussi tout l'espace vertical disponible ──
   const photoW = 52;
   let py = y;
   doc.setFillColor(245,245,245);
-  doc.rect(photoCol, py-2, photoW, 5, 'F');
+  doc.rect(photoCol, py-3, photoW, 6.5, 'F');
   doc.setDrawColor(200,200,200);
-  doc.rect(photoCol, py-2, photoW, 5, 'S');
-  doc.setTextColor(140,140,140); doc.setFont('helvetica','bold'); doc.setFontSize(6);
-  doc.text('PHOTOS', photoCol+3, py+1.5);
+  doc.rect(photoCol, py-3, photoW, 6.5, 'S');
+  doc.setTextColor(140,140,140); doc.setFont('helvetica','bold'); doc.setFontSize(7);
+  doc.text('PHOTOS', photoCol+3, py+1.2);
   py += 5;
   const validPhotos = photos.filter(Boolean);
+  const photoZoneBottom = footerY;
   if (validPhotos.length) {
-    const phH = Math.min(45, (actY - py - 6) / validPhotos.length - 4);
+    const phGap = 5;
+    const phH = Math.min(60, (photoZoneBottom - py - (validPhotos.length * phGap)) / validPhotos.length);
     photos.forEach((p, i) => {
       if (!p) return;
       try {
@@ -1681,14 +1727,14 @@ async function generatePDF(data) {
         doc.setDrawColor(200,200,200);
         doc.rect(photoCol+2, py, photoW-4, phH, 'S');
         if (photoCaptions[i]) {
-          doc.setTextColor(80,80,80); doc.setFont('helvetica','italic'); doc.setFontSize(6);
-          doc.text(photoCaptions[i], photoCol+3, py+phH+3);
-          py += phH + 7;
-        } else { py += phH + 4; }
-      } catch(e) { py += phH + 4; }
+          doc.setTextColor(80,80,80); doc.setFont('helvetica','italic'); doc.setFontSize(6.5);
+          doc.text(photoCaptions[i], photoCol+3, py+phH+3.5);
+        }
+        py += phH + phGap;
+      } catch(e) { py += phH + phGap; }
     });
   } else {
-    doc.setTextColor(180,180,180); doc.setFont('helvetica','italic'); doc.setFontSize(7);
+    doc.setTextColor(180,180,180); doc.setFont('helvetica','italic'); doc.setFontSize(7.5);
     doc.text('Aucune photo', photoCol+3, py+8);
   }
 
@@ -1827,7 +1873,7 @@ async function resendBilan(e, code, idx) {
 
     const COPY_ALWAYS = 'olivier.baroukh@optical-center.com';
     const emails = [...new Set([d.magasin?.email, params.myEmail, COPY_ALWAYS].filter(Boolean))];
-    const subject = '[RENVOI] Bilan de passage — ' + (d.magasin?.libelle || code) + ' — ' + formatDate(d.date);
+    const subject = '[RENVOI] Bilan de passage n°' + (d.passage || '?') + ' — ' + (d.magasin?.libelle || code) + ' — ' + formatDate(d.date);
     const mailBody = buildEmailBody(d);
 
     showToast('Envoi à ' + emails.length + ' destinataire(s)...');
