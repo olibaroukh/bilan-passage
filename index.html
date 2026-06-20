@@ -1014,7 +1014,7 @@ async function sendBilan() {
 
   function soapEnv(body, authToken) {
     const context = { _jsns: 'urn:zimbra', format: { _content: 'js', type: 'js' } };
-    if (authToken) context.authToken = { _content: authToken };
+    if (authToken) context.authToken = [{ _content: authToken }];
     return JSON.stringify({ Header: { context }, Body: body });
   }
 
@@ -1056,19 +1056,15 @@ async function sendBilan() {
       body: formData
     });
     const upText = await upResp.text();
-    // DEBUG temporaire : afficher la réponse brute d'upload avant tout traitement
-    showToastLong('UPLOAD BRUT [' + upResp.status + '] : ' + upText.slice(0,300));
-    await new Promise(r => setTimeout(r, 4000));
     // Format Zimbra natif : 200,'client_token','server_token' — server_token (3e groupe) = attachId
     const upMatch = upText.match(/^\s*(\d+)\s*,\s*'([^']*)'\s*,\s*'([^']*)'/);
     if (!upMatch || upMatch[1] !== '200') {
       throw new Error('Échec upload : ' + upText.slice(0,200));
     }
     const attachId = upMatch[3];
-    showToastLong('attachId extrait : ' + attachId);
-    await new Promise(r => setTimeout(r, 3000));
 
-    // 4. Envoi mails
+    // 4. Envoi mails — un seul SendMsgRequest avec plusieurs destinataires
+    // (l'attachId uploadé une fois ne doit être référencé que dans UN SEUL envoi)
     const COPY_ALWAYS = 'olivier.baroukh@optical-center.com';
     const emails = [...new Set([data.magasin.email, params.myEmail, COPY_ALWAYS].filter(Boolean))];
     if (!emails.length) throw new Error('Aucun email destinataire');
@@ -1076,40 +1072,36 @@ async function sendBilan() {
 
     const subject = 'Bilan de passage — ' + data.magasin.libelle + ' — ' + formatDate(data.date);
     const mailBody = buildEmailBody(data);
-    const results = [];
 
-    for (const to of emails) {
-      const msgNode = {
-        su: { _content: subject },
-        e: [{ t: 't', a: to }],
-        mp: { ct: 'text/plain', content: { _content: mailBody } }
-      };
-      if (attachId) msgNode.attach = { aid: attachId };
-      const sendBody = soapEnv({
-        SendMsgRequest: { _jsns: 'urn:zimbraMail', m: msgNode }
-      }, token);
-      const sendResp = await fetch(relay + '/soap', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Zimbra-Auth-Token': token },
-        body: sendBody
-      });
-      const sendText = await sendResp.text();
-      results.push({ to, ok: sendResp.ok, status: sendResp.status, resp: sendText.slice(0, 300) });
-    }
-
-    const ok = results.filter(r => r.ok).length;
-    const fail = results.filter(r => !r.ok);
+    const msgNode = {
+      su: { _content: subject },
+      e: emails.map(to => ({ t: 't', a: to })),
+      mp: { ct: 'text/plain', content: { _content: mailBody } }
+    };
+    if (attachId) msgNode.attach = { aid: attachId };
+    const sendBody = soapEnv({
+      SendMsgRequest: { _jsns: 'urn:zimbraMail', m: msgNode }
+    }, token);
+    const sendResp = await fetch(relay + '/soap', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Zimbra-Auth-Token': token },
+      body: sendBody
+    });
+    const sendText = await sendResp.text();
+    let sendOk = sendResp.ok;
+    try {
+      const sendData = JSON.parse(sendText);
+      if (sendData?.Body?.Fault) sendOk = false;
+    } catch(e) {}
 
     saveToHistory(data, pdfBytes);
     if (draftKey) localStorage.removeItem(draftKey);
 
-    if (fail.length === 0) {
-      showToast('✓ Bilan envoyé à ' + ok + ' destinataire(s)');
+    if (sendOk) {
+      showToast('✓ Bilan envoyé à ' + emails.length + ' destinataire(s)');
       setTimeout(() => goScreen('history'), 1500);
     } else {
-      // Afficher l'erreur directement dans l'interface (pas de console sur iPhone)
-      const errMsg = fail.map(r => r.to + ' [' + r.status + '] ' + r.resp).join(' | ');
-      showToastLong('⚠ Échec envoi : ' + errMsg);
+      showToastLong('⚠ Échec envoi [' + sendResp.status + '] ' + sendText.slice(0, 300));
     }
 
   } catch(e) {
@@ -1472,7 +1464,7 @@ async function resendBilan(e, code, idx) {
 
     function soapEnv(body, authToken) {
       const context = { _jsns: 'urn:zimbra', format: { _content: 'js', type: 'js' } };
-      if (authToken) context.authToken = { _content: authToken };
+      if (authToken) context.authToken = [{ _content: authToken }];
       return JSON.stringify({ Header: { context }, Body: body });
     }
 
