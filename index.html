@@ -1056,12 +1056,17 @@ async function sendBilan() {
       body: formData
     });
     const upText = await upResp.text();
+    // DEBUG temporaire : afficher la réponse brute d'upload avant tout traitement
+    showToastLong('UPLOAD BRUT [' + upResp.status + '] : ' + upText.slice(0,300));
+    await new Promise(r => setTimeout(r, 4000));
     // Format Zimbra natif : 200,'client_token','server_token' — server_token (3e groupe) = attachId
     const upMatch = upText.match(/^\s*(\d+)\s*,\s*'([^']*)'\s*,\s*'([^']*)'/);
     if (!upMatch || upMatch[1] !== '200') {
       throw new Error('Échec upload : ' + upText.slice(0,200));
     }
     const attachId = upMatch[3];
+    showToastLong('attachId extrait : ' + attachId);
+    await new Promise(r => setTimeout(r, 3000));
 
     // 4. Envoi mails
     const COPY_ALWAYS = 'olivier.baroukh@optical-center.com';
