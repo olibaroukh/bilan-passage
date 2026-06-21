@@ -15,3 +15,5 @@ Vente add;%;12;gte
 PM Prothèse;€;1200;gte
 PM Vente Audio;€;2500;gte
 Nb de Prothèse;;25;gte
+Nb d'avis Google;;500;gte
+Note Google;;4,5;gte
