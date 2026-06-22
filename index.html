@@ -616,7 +616,7 @@ function loadLogo() {
 }
 
 // ── VERSION APP ── (incrémenter à chaque mise à jour notable, pour déclencher l'invite de rechargement)
-const APP_VERSION = '2026.06.22-3';
+const APP_VERSION = '2026.06.22-5';
 
 // ── ÉTAT ──
 let magasins = [];
@@ -2035,311 +2035,105 @@ async function generatePDF(data) {
     });
   });
 
-// Humeur du passage — zone vide à droite du bandeau gris
-  // Rendu : smiley vectoriel | barre arc-en-ciel + curseur | mot coloré
+// Humeur du passage — rendu via canvas HTML (identique à l'écran de saisie)
   const humeurV = parseInt(data.humeur ?? 2);
   const humeurLabels = ['Difficile','Mitigé','Correct','Bien','Top !'];
-  const humeurFgRgb = [[163,45,45],[133,79,11],[59,109,17],[15,110,86],[24,95,165]];
+  const humeurFgColors = ['#A32D2D','#854F0B','#3B6D11','#0F6E56','#185FA5'];
+  const humeurSmileySrc = ['😣','😕','😐','🙂','😄'];
   const humeurLabel = humeurLabels[humeurV] || 'Correct';
-  const humeurFg = humeurFgRgb[humeurV] || humeurFgRgb[2];
+  const humeurColor = humeurFgColors[humeurV] || humeurFgColors[2];
 
-  const hmX = photoCol - mar - 5 + mar + 5;
+  const hmX = photoCol - mar - 5 + mar + 4;
   const hmW = W - hmX - mar;
   const hmY = headerH + 0.5;
   const hmH = 11;
 
-  // Label "Humeur du passage" en haut centré
+  // Label "Humeur du passage" centré en haut
   doc.setTextColor(140,140,140);
   doc.setFont('helvetica','normal');
   doc.setFontSize(5.5);
   doc.text('Humeur du passage', hmX + hmW/2, hmY + 2.2, {align:'center'});
 
-  // ── Smiley vectoriel à gauche ──
-  const smX = hmX + 4;
-  const smY = hmY + 7;
-  const smR = 3.2;
-  const smFaceColor = humeurFg; // couleur du visage = couleur de l'humeur
+  // Génération du slider comme image via canvas HTML
+  try {
+    const sliderImgDataUrl = await new Promise((resolve) => {
+      // Dimensions canvas (px) — ratio 3x pour netteté
+      const W_px = 340, H_px = 28, dpr = 3;
+      const cw = W_px * dpr, ch = H_px * dpr;
+      const canvas = document.createElement('canvas');
+      canvas.width = cw; canvas.height = ch;
+      const ctx = canvas.getContext('2d');
+      ctx.scale(dpr, dpr);
 
-  // Cercle visage
-  doc.setFillColor(...smFaceColor);
-  doc.setDrawColor(...smFaceColor);
-  doc.setLineWidth(0.4);
-  doc.circle(smX, smY, smR, 'D');
-
-  // Yeux (deux petits points)
-  doc.setFillColor(255,255,255);
-  doc.circle(smX - 1.1, smY - 0.9, 0.55, 'F');
-  doc.circle(smX + 1.1, smY - 0.9, 0.55, 'F');
-
-  // Bouche selon humeur (0=triste, 1=légèrement triste, 2=neutre, 3=légèrement souriant, 4=grand sourire)
-  doc.setDrawColor(255,255,255);
-  doc.setLineWidth(0.5);
-  if (humeurV === 0) {
-    // Arc triste (vers le bas → dessiné comme arc convexe vers le haut en coords PDF)
-    doc.lines([[0.8, -0.6],[0.8, 0.6]], smX - 1.4, smY + 1.6, [1,1], 'S', false);
-  } else if (humeurV === 1) {
-    // Légèrement triste
-    doc.lines([[0.7, -0.3],[0.7, 0.3]], smX - 1.2, smY + 1.5, [1,1], 'S', false);
-  } else if (humeurV === 2) {
-    // Neutre : ligne droite
-    doc.line(smX - 1.2, smY + 1.4, smX + 1.2, smY + 1.4);
-  } else if (humeurV === 3) {
-    // Légèrement souriant
-    doc.lines([[0.7, 0.3],[0.7, -0.3]], smX - 1.2, smY + 1.2, [1,1], 'S', false);
-  } else {
-    // Grand sourire
-    doc.lines([[0.8, 0.6],[0.8, -0.6]], smX - 1.4, smY + 1.0, [1,1], 'S', false);
-  }
-  doc.setLineWidth(0.2);
-  doc.setDrawColor(220,220,220);
-
-  // ── Barre arc-en-ciel ──
-  const barX = smX + smR + 2.5;
-  const barXEnd = hmX + hmW - 18;
-  const barW = barXEnd - barX;
-  const barY = hmY + 5.5;
-  const barH = 3;
-
-  const gradColors = [
-    [226,75,74],[239,159,39],[99,153,34],[29,158,117],[55,138,221]
-  ];
-  const segW = barW / gradColors.length;
-  gradColors.forEach((c, i) => {
-    doc.setFillColor(...c);
-    doc.rect(barX + i * segW, barY, segW, barH, 'F');
-  });
-  // Arrondi gauche
-  doc.setFillColor(...gradColors[0]);
-  doc.roundedRect(barX, barY, segW * 0.7, barH, 1.4, 1.4, 'F');
-  doc.rect(barX + 1.4, barY, segW * 0.7 - 1.4, barH, 'F');
-  // Arrondi droit
-  doc.setFillColor(...gradColors[4]);
-  doc.roundedRect(barX + barW - segW * 0.7, barY, segW * 0.7, barH, 1.4, 1.4, 'F');
-  doc.rect(barX + barW - segW * 0.7, barY, segW * 0.7 - 1.4, barH, 'F');
-
-  // Curseur blanc à la position de l'humeur
-  const cursorX = barX + (humeurV / 4) * barW;
-  doc.setFillColor(255,255,255);
-  doc.setDrawColor(204,23,25);
-  doc.setLineWidth(0.6);
-  doc.circle(cursorX, barY + barH/2, 2.5, 'FD');
-  doc.setLineWidth(0.2);
-
-  // ── Mot à droite ──
-  doc.setFont('helvetica','bold');
-  doc.setFontSize(7.5);
-  doc.setTextColor(...humeurFg);
-  doc.text(humeurLabel, hmX + hmW - 1, hmY + 8.2, {align:'right'});
-
-  // Zones de contenu — tailles augmentées pour mieux remplir la page
-  let y = headerH + 16; // sous-header (12mm) + marge (4mm), suit la hauteur du bandeau rouge
-  const lineH = 5.2;
-  const totalColW = contentRight - col1 - gutter; // largeur totale pour les 2 colonnes
-  const colW  = totalColW * 0.53; // col1 (RH, Manager, Process) : légèrement plus large
-  const colW2 = totalColW * 0.47; // col2 (Indicateurs, Points forts) : légèrement plus étroite
-  const col2Adjusted = col1 + colW + gutter; // position réelle de col2
-
-  function drawBloc(x, yStart, w, title, content, titleColor, bulletLines) {
-    const tColor = titleColor || [204,23,25];
-    let lines = [];
-    if (bulletLines && bulletLines.length) {
-      // Chaque entrée devient une puce, avec retour à la ligne géré indépendamment par puce
-      bulletLines.forEach(entry => {
-        const wrapped = doc.splitTextToSize('• ' + entry, w - 12);
-        wrapped.forEach((wl, i) => lines.push(i === 0 ? wl : '     ' + wl));
-      });
-    } else if (content) {
-      lines = doc.splitTextToSize(content, w - 12);
-    }
-    const lineCount = lines.length;
-    const blocH = 6.5 + (lines.length ? lineCount * lineH + 4 : 8);
-    doc.setFillColor(249,249,249);
-    doc.rect(x, yStart, w, 6.5, 'F');
-    doc.setDrawColor(220,220,220);
-    doc.rect(x, yStart, w, blocH, 'S');
-    doc.setTextColor(...tColor);
-    doc.setFont('helvetica','bold');
-    doc.setFontSize(8);
-    doc.text(title.toUpperCase(), x + 3, yStart + 4.5);
-    doc.setTextColor(55,55,55);
-    doc.setFont('helvetica','normal');
-    doc.setFontSize(8.5);
-    lines.forEach((line, i) => {
-      doc.text(line, x + 3, yStart + 11 + i * lineH);
-    });
-    return yStart + blocH;
-  }
-
-  // Col 1
-  let yc1 = y;
-  function splitToLines(text) {
-    return (text || '').split('\n').map(s => s.trim()).filter(Boolean);
-  }
-  const rhBullets = [
-    data.ca_mensuel_detail ? `Détail positionnement : ${data.ca_mensuel_detail}` : '',
-    ...splitToLines(data.rh),
-    ...splitToLines(data.formation).map(l => `Formation : ${l}`),
-  ].filter(Boolean);
-  yc1 = drawBloc(col1, yc1, colW, 'RH & Équipe', null, null, rhBullets);
-  yc1 += 3;
-
-  const mgrBullets = [
-    ...(data.rituels || []).map(r => `Rituel en place : ${r}`),
-    ...splitToLines(data.manager_obs).map(l => `Point d'attention : ${l}`),
-  ].filter(Boolean);
-  yc1 = drawBloc(col1, yc1, colW, 'Suivi manager', null, null, mgrBullets);
-  yc1 += 3;
-
-  if (data.process) { yc1 = drawBloc(col1, yc1, colW, 'Process & Nouveautés', data.process); yc1 += 3; }
-
-  const entretiensArr = data.entretiens || [];
-  if (entretiensArr.length) {
-    const entBullets = entretiensArr.map(e => `${e.prenom}${e.sujet ? ' : ' + e.sujet : ' (sujet confidentiel)'}`);
-    yc1 = drawBloc(col1, yc1, colW, 'Entretiens individuels', null, null, entBullets);
-  } else {
-    yc1 = drawBloc(col1, yc1, colW, 'Entretiens individuels', 'Pas d\'entretien individuel lors de ce passage.');
-  }
-  yc1 += 3;
-
-  // Col 2
-  let yc2 = y;
-  const col2Pos = col2Adjusted; // alias pour la lisibilité
-  if (data.kpis.length) {
-    const kpiCols = 3;
-    const kpiCellW = (colW2 - 6) / kpiCols;
-    const kpiRows = Math.ceil(data.kpis.length / kpiCols);
-    const kpiRowH = 13;
-    const kpiBlocH = 7 + kpiRows * kpiRowH + 3;
-
-    doc.setDrawColor(220,220,220);
-    doc.rect(col2Pos, yc2, colW2, kpiBlocH, 'S');
-    doc.setFillColor(249,249,249);
-    doc.rect(col2Pos, yc2, colW2, 6.5, 'F');
-    doc.setDrawColor(220,220,220);
-    doc.rect(col2Pos, yc2, colW2, 6.5, 'S');
-    doc.setTextColor(204,23,25); doc.setFont('helvetica','bold'); doc.setFontSize(8);
-    doc.text('INDICATEURS CLÉS', col2Pos+3, yc2+4.5);
-
-    data.kpis.forEach((k, i) => {
-      const row = Math.floor(i / kpiCols);
-      const col = i % kpiCols;
-      const cx = col2Pos + 3 + col * kpiCellW;
-      const cy = yc2 + 7 + row * kpiRowH;
-      const cls = kpiClass(k.val, k.def);
-      const unit = k.def?.unit || '';
-      const clr = cls==='ok'?[42,158,42]:cls==='bad'?[204,23,25]:cls==='warn'?[180,110,10]:[80,80,80];
-      doc.setTextColor(100,100,100); doc.setFont('helvetica','normal'); doc.setFontSize(7);
-      doc.text(doc.splitTextToSize(k.name, kpiCellW - 4)[0], cx, cy + 4.5);
-      doc.setTextColor(...clr); doc.setFont('helvetica','bold'); doc.setFontSize(11);
-      doc.text(k.val + unit, cx, cy + 11);
-    });
-
-    yc2 = yc2 + kpiBlocH + 3;
-    if (data.kpi_comment) { yc2 = drawBloc(col2Pos, yc2, colW2, 'Commentaire indicateurs', data.kpi_comment); yc2 += 3; }
-  }
-
-  const fortsArr = Array.isArray(data.forts) ? data.forts : (data.forts ? [data.forts] : []);
-  const diffArr = Array.isArray(data.diff) ? data.diff : (data.diff ? [data.diff] : []);
-  if (fortsArr.length || diffArr.length) {
-    const pfdContent = [
-      ...fortsArr.map(t => '(+) ' + t),
-      ...diffArr.map(t => '(-) ' + t),
-    ].join('\n');
-    yc2 = drawBloc(col2Pos, yc2, colW2, 'Points forts & Difficultés', pfdContent);
-    yc2 += 3;
-  }
-
-  if (data.remarque_libre) {
-    yc2 = drawBloc(col2Pos, yc2, colW2, 'Remarque libre', data.remarque_libre);
-    yc2 += 3;
-  }
-
-  // ── ACTIONS ATTENDUES — occupe tout l'espace restant jusqu'au footer ──
-  const footerY = H - 9;
-  const contentBottom = Math.max(yc1, yc2) + 2;
-  const actY = Math.min(contentBottom, footerY - 24); // garde au moins 24mm pour les actions
-  const actTotalH = footerY - actY;
-  const actHeaderH = 7;
-  const actBodyH = actTotalH - actHeaderH;
-
-  doc.setFillColor(204, 23, 25);
-  doc.rect(col1, actY, contentRight - col1, actHeaderH, 'F');
-  doc.setTextColor(255,255,255); doc.setFont('helvetica','bold'); doc.setFontSize(8.5);
-  doc.text('ACTIONS ATTENDUES — PROCHAIN PASSAGE', col1+3, actY+5);
-  doc.setFillColor(255,255,255);
-  doc.rect(col1, actY+actHeaderH, contentRight-col1, actBodyH, 'F');
-  doc.setDrawColor(204,23,25);
-  doc.setLineWidth(0.5);
-  doc.rect(col1, actY, contentRight-col1, actTotalH, 'S');
-  doc.setLineWidth(0.2);
-
-  if (data.actions.length) {
-    const aColW = (contentRight-col1-8) / 2;
-    const hasComments = data.actions.some(a => a.comment);
-    const actRowH = Math.min(18, Math.max(hasComments ? 12 : 9, actBodyH / (Math.ceil(data.actions.length/2) + 0.3)));
-    let ax = col1+4, ay = actY+actHeaderH+actRowH*0.55;
-    data.actions.forEach((a, i) => {
-      if (i === Math.ceil(data.actions.length/2)) { ax = col1+4+aColW+4; ay = actY+actHeaderH+actRowH*0.55; }
-      doc.setFillColor(204,23,25); doc.ellipse(ax+1.5, ay-1.3, 1.7, 1.7, 'F');
-      doc.setTextColor(45,45,45); doc.setFont('helvetica','bold'); doc.setFontSize(8.5);
-      doc.text(doc.splitTextToSize(a.text, aColW - 22)[0], ax+6, ay);
-      let ayOffset = 4;
-      if (a.comment) {
-        doc.setTextColor(90,90,90); doc.setFont('helvetica','normal'); doc.setFontSize(7);
-        doc.text(doc.splitTextToSize(a.comment, aColW - 22)[0], ax+6, ay+ayOffset);
-        ayOffset += 3.5;
+      // --- Smiley à gauche ---
+      const smR = 9, smX = smR + 2, smY = H_px / 2;
+      ctx.beginPath();
+      ctx.arc(smX, smY, smR, 0, Math.PI * 2);
+      ctx.fillStyle = humeurColor;
+      ctx.fill();
+      // Yeux
+      ctx.fillStyle = '#fff';
+      ctx.beginPath(); ctx.arc(smX - 3.2, smY - 2.5, 1.5, 0, Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(smX + 3.2, smY - 2.5, 1.5, 0, Math.PI*2); ctx.fill();
+      // Bouche
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 1.5;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      if (humeurV <= 1) {
+        ctx.arc(smX, smY + 4, 3.5, Math.PI * 0.15, Math.PI * 0.85, true);
+      } else if (humeurV === 2) {
+        ctx.moveTo(smX - 3.5, smY + 3.5); ctx.lineTo(smX + 3.5, smY + 3.5);
+      } else {
+        ctx.arc(smX, smY + 1.5, 3.5, Math.PI * 0.1, Math.PI * 0.9);
       }
-      if (a.who) { doc.setTextColor(130,130,130); doc.setFont('helvetica','normal'); doc.setFontSize(7); doc.text(a.who, ax+6, ay+ayOffset); }
-      if (a.date) { doc.setTextColor(204,23,25); doc.setFont('helvetica','bold'); doc.setFontSize(7.5); doc.text(formatDate(a.date), ax+aColW-2, ay, {align:'right'}); }
-      ay += actRowH;
-    });
-  } else {
-    doc.setTextColor(180,180,180); doc.setFont('helvetica','italic'); doc.setFontSize(9);
-    doc.text('Aucune action renseignée', col1+4, actY+actHeaderH+10);
-  }
+      ctx.stroke();
 
-  // ── PHOTOS — colonne droite, occupe aussi tout l'espace vertical disponible ──
-  const photoW = photoColW;
-  let py = y;
-  doc.setFillColor(249,249,249);
-  doc.rect(photoCol, py, photoW, 6.5, 'F');
-  doc.setDrawColor(220,220,220);
-  doc.rect(photoCol, py, photoW, 6.5, 'S');
-  doc.setTextColor(204,23,25); doc.setFont('helvetica','bold'); doc.setFontSize(8);
-  doc.text('PHOTOS', photoCol+3, py+4.5);
-  py += 6.5 + 4.5; // espace supplémentaire entre le titre PHOTOS et la première photo
-  const validPhotos = photos.filter(Boolean);
-  const photoZoneBottom = footerY;
-  if (validPhotos.length) {
-    const n = validPhotos.length;
-    const captionH = 4.5; // hauteur réservée pour la légende sous chaque photo
-    const phGap = 4; // espace entre photos
-    // La légende de la dernière photo doit tomber exactement à footerY
-    // Zone totale = n * phH + n * captionH + (n-1) * phGap = photoZoneBottom - py
-    const totalAvail = photoZoneBottom - py;
-    const phH = Math.min(58, (totalAvail - n * captionH - (n - 1) * phGap) / n);
-    const phW = photoW - 4;
-    let photoIdx = 0;
-    for (let i = 0; i < photos.length; i++) {
-      const p = photos[i];
-      if (!p) continue;
-      const isLast = (photoIdx === n - 1);
-      try {
-        const coveredDataUrl = await coverCropToRatio(p, phW / phH);
-        doc.addImage(coveredDataUrl, 'JPEG', photoCol+2, py, phW, phH);
-        doc.setDrawColor(200,200,200);
-        doc.rect(photoCol+2, py, phW, phH, 'S');
-        if (photoCaptions[i]) {
-          doc.setTextColor(80,80,80); doc.setFont('helvetica','italic'); doc.setFontSize(6.5);
-          doc.text(photoCaptions[i], photoCol+2 + phW/2, py+phH+3.2, {align:'center'});
-        }
-        py += phH + captionH + (isLast ? 0 : phGap);
-      } catch(e) { py += phH + captionH + (isLast ? 0 : phGap); }
-      photoIdx++;
-    }
-  } else {
-    doc.setTextColor(180,180,180); doc.setFont('helvetica','italic'); doc.setFontSize(7.5);
-    doc.text('Aucune photo', photoCol+3, py+8);
+      // --- Barre dégradé ---
+      const barX = smX + smR + 6, barY = H_px/2 - 3.5, barH2 = 7, barW2 = W_px - barX - 55;
+      const grad = ctx.createLinearGradient(barX, 0, barX + barW2, 0);
+      grad.addColorStop(0,    '#E24B4A');
+      grad.addColorStop(0.25, '#EF9F27');
+      grad.addColorStop(0.5,  '#639922');
+      grad.addColorStop(0.75, '#1D9E75');
+      grad.addColorStop(1,    '#378ADD');
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      const rr = barH2 / 2;
+      ctx.roundRect(barX, barY, barW2, barH2, rr);
+      ctx.fill();
+
+      // --- Curseur blanc à bord rouge ---
+      const curX = barX + (humeurV / 4) * barW2;
+      const curR = 9;
+      ctx.beginPath();
+      ctx.arc(curX, H_px/2, curR, 0, Math.PI*2);
+      ctx.fillStyle = '#fff';
+      ctx.fill();
+      ctx.strokeStyle = '#CC1719';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      // --- Mot à droite ---
+      ctx.font = 'bold 13px Arial, sans-serif';
+      ctx.fillStyle = humeurColor;
+      ctx.textAlign = 'right';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(humeurLabel, W_px - 2, H_px / 2);
+
+      resolve(canvas.toDataURL('image/png'));
+    });
+
+    // Insérer l'image dans le PDF dans la zone bandeau gris
+    const imgY = hmY + 2.8;
+    const imgH = hmH - 4;
+    const imgW = hmW - 2;
+    doc.addImage(sliderImgDataUrl, 'PNG', hmX + 1, imgY, imgW, imgH);
+  } catch(e) {
+    // Repli texte minimal si canvas échoue
+    doc.setFont('helvetica','bold'); doc.setFontSize(8);
+    doc.setTextColor(140,140,140);
+    doc.text(humeurLabel, hmX + hmW/2, hmY + hmH/2 + 1, {align:'center'});
   }
 
   // Filigrane — dessiné en dernier pour passer au-dessus des fonds blancs,
