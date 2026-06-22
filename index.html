@@ -167,6 +167,10 @@ input[type=date]{color-scheme:dark}
 .field-row{min-width:0}
 .field-row > .field-group{min-width:0;overflow:hidden}
 .field-group input[type=date],.field-group input[type=number]{width:100%;min-width:0;box-sizing:border-box;font-size:13px;padding:10px 8px;-webkit-appearance:none;appearance:none}
+#f-humeur::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:22px;height:22px;border-radius:50%;background:#fff;border:2.5px solid #CC1719;box-shadow:0 1px 4px rgba(0,0,0,0.25);cursor:pointer;margin-top:-7px}
+#f-humeur::-moz-range-thumb{width:22px;height:22px;border-radius:50%;background:#fff;border:2.5px solid #CC1719;box-shadow:0 1px 4px rgba(0,0,0,0.25);cursor:pointer}
+#f-humeur::-webkit-slider-runnable-track{height:7px;border-radius:4px;background:transparent}
+#f-humeur::-moz-range-track{height:7px;border-radius:4px;background:transparent}
 </style>
 </head>
 <body>
@@ -240,12 +244,18 @@ input[type=date]{color-scheme:dark}
 
   <!-- Slider humeur -->
   <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:12px 16px;margin-bottom:8px">
-    <div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Humeur du passage</div>
+    <div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px">
+      Humeur du passage <span style="color:var(--red)">*</span>
+    </div>
     <div style="display:flex;align-items:center;gap:10px">
-      <input type="range" id="f-humeur" min="0" max="4" value="2"
-        style="flex:1;height:5px;border-radius:3px;outline:none;border:none;cursor:pointer;background:linear-gradient(to right,#E24B4A,#EF9F27,#639922,#1D9E75,#378ADD)"
-        oninput="updateHumeur()">
-      <span id="humeur-tag" style="font-size:12px;font-weight:600;padding:4px 12px;border-radius:20px;min-width:80px;text-align:center;transition:background .2s,color .2s"></span>
+      <span id="humeur-smiley" style="font-size:22px;line-height:1;flex-shrink:0;transition:all .15s">😐</span>
+      <div style="flex:1;position:relative;height:28px;display:flex;align-items:center">
+        <div style="position:absolute;left:0;right:0;height:7px;border-radius:4px;background:linear-gradient(to right,#E24B4A 0%,#EF9F27 25%,#639922 50%,#1D9E75 75%,#378ADD 100%);pointer-events:none"></div>
+        <input type="range" id="f-humeur" min="0" max="4" value="2" step="1"
+          style="position:relative;width:100%;margin:0;height:7px;-webkit-appearance:none;appearance:none;background:transparent;cursor:pointer;outline:none;border:none;z-index:1"
+          oninput="updateHumeur(true)">
+      </div>
+      <span id="humeur-tag" style="font-size:12px;font-weight:700;padding:4px 14px;border-radius:20px;min-width:80px;text-align:center;flex-shrink:0;transition:background .15s,color .15s"></span>
     </div>
   </div>
 
@@ -606,7 +616,7 @@ function loadLogo() {
 }
 
 // ── VERSION APP ── (incrémenter à chaque mise à jour notable, pour déclencher l'invite de rechargement)
-const APP_VERSION = '2026.06.22-1';
+const APP_VERSION = '2026.06.22-2';
 
 // ── ÉTAT ──
 let magasins = [];
@@ -618,16 +628,30 @@ let fortsList = [];
 let diffList = [];
 let entretiens = [];
 
-const HUMEUR_LABELS = ['Difficile','Mitigé','Correct','Bien','Top !'];
+const HUMEUR_LABELS  = ['Difficile','Mitigé','Correct','Bien','Top !'];
+const HUMEUR_SMILEYS = ['😣','😕','😐','🙂','😄'];
 const HUMEUR_BG =    ['#FCEBEB','#FAEEDA','#EAF3DE','#E1F5EE','#E6F1FB'];
 const HUMEUR_FG =    ['#A32D2D','#854F0B','#3B6D11','#0F6E56','#185FA5'];
 
-function updateHumeur() {
+let humeurTouched = false;
+
+function updateHumeur(fromUser) {
+  if (fromUser) humeurTouched = true;
   const v = parseInt(document.getElementById('f-humeur').value);
   const tag = document.getElementById('humeur-tag');
-  tag.textContent = HUMEUR_LABELS[v];
-  tag.style.background = HUMEUR_BG[v];
-  tag.style.color = HUMEUR_FG[v];
+  const smiley = document.getElementById('humeur-smiley');
+  if (smiley) smiley.textContent = HUMEUR_SMILEYS[v] || '😐';
+  if (humeurTouched) {
+    tag.textContent = HUMEUR_LABELS[v];
+    tag.style.background = HUMEUR_BG[v];
+    tag.style.color = HUMEUR_FG[v];
+    tag.style.border = 'none';
+  } else {
+    tag.textContent = '— obligatoire';
+    tag.style.background = 'var(--surface)';
+    tag.style.color = 'var(--muted)';
+    tag.style.border = '1px dashed var(--border)';
+  }
 }
 let kpisAdded = [];
 let photos = [null, null, null];
@@ -1098,7 +1122,7 @@ function resetSaisie() {
   actions = []; kpisAdded = []; photos = [null,null,null]; photoCaptions = ['','',''];
   fortsList = []; diffList = []; entretiens = [];
   renderPoints('forts'); renderPoints('diff'); renderEntretiens();
-  document.getElementById('f-humeur').value = 2; updateHumeur();
+  humeurTouched = false; document.getElementById('f-humeur').value = 2; updateHumeur();
   ['f-date','f-duree','f-presents','f-renta','f-rh','f-formation','f-manager-obs',
    'f-kpi-comment','f-process','f-ca-mensuel','f-ca-annuel','f-ca-mensuel-detail',
    'f-mot-intro','f-mot-conclusion','f-prochain-passage','f-remarque-libre'].forEach(function(id) {
@@ -1135,7 +1159,7 @@ function startBilan() {
   actions = []; kpisAdded = []; photos = [null,null,null]; photoCaptions = ['','',''];
   fortsList = []; diffList = []; entretiens = [];
   renderPoints('forts'); renderPoints('diff'); renderEntretiens();
-  document.getElementById('f-humeur').value = 2; updateHumeur();
+  humeurTouched = false; document.getElementById('f-humeur').value = 2; updateHumeur();
   ['f-date','f-duree','f-presents','f-renta','f-rh','f-formation','f-manager-obs',
    'f-kpi-comment','f-process','f-ca-mensuel','f-ca-annuel','f-ca-mensuel-detail',
    'f-mot-intro','f-mot-conclusion','f-prochain-passage','f-remarque-libre'].forEach(function(id) {
@@ -1576,6 +1600,7 @@ function finalizeBilan() {
   if (!rh) { showToast('⚠ Situation RH obligatoire'); toggleBloc('b2'); document.getElementById('f-rh').focus(); return; }
   if (!caAnnuel) { showToast('⚠ Positionnement CA annuel N/N-1 obligatoire'); toggleBloc('b2'); document.getElementById('f-ca-annuel').focus(); return; }
   if (!caAnnuel) { showToast('⚠ Positionnement CA annuel obligatoire'); toggleBloc('b2'); document.getElementById('f-ca-annuel').focus(); return; }
+  if (!humeurTouched) { showToast('⚠ Humeur du passage obligatoire'); document.getElementById('f-humeur').scrollIntoView({behavior:'smooth',block:'center'}); return; }
   params.myEmail = document.getElementById('p-my-email').value || params.myEmail || '';
   const recips = document.getElementById('modal-recipients');
   recips.innerHTML = '';
@@ -2054,7 +2079,10 @@ async function generatePDF(data) {
   // Zones de contenu — tailles augmentées pour mieux remplir la page
   let y = headerH + 16; // sous-header (12mm) + marge (4mm), suit la hauteur du bandeau rouge
   const lineH = 5.2;
-  const colW = (contentRight - col1 - gutter) / 2;
+  const totalColW = contentRight - col1 - gutter; // largeur totale pour les 2 colonnes
+  const colW  = totalColW * 0.53; // col1 (RH, Manager, Process) : légèrement plus large
+  const colW2 = totalColW * 0.47; // col2 (Indicateurs, Points forts) : légèrement plus étroite
+  const col2Adjusted = col1 + colW + gutter; // position réelle de col2
 
   function drawBloc(x, yStart, w, title, content, titleColor, bulletLines) {
     const tColor = titleColor || [204,23,25];
@@ -2120,26 +2148,27 @@ async function generatePDF(data) {
 
   // Col 2
   let yc2 = y;
+  const col2Pos = col2Adjusted; // alias pour la lisibilité
   if (data.kpis.length) {
     const kpiCols = 3;
-    const kpiCellW = (colW - 6) / kpiCols;
+    const kpiCellW = (colW2 - 6) / kpiCols;
     const kpiRows = Math.ceil(data.kpis.length / kpiCols);
     const kpiRowH = 13;
     const kpiBlocH = 7 + kpiRows * kpiRowH + 3;
 
     doc.setDrawColor(220,220,220);
-    doc.rect(col2, yc2, colW, kpiBlocH, 'S');
+    doc.rect(col2Pos, yc2, colW2, kpiBlocH, 'S');
     doc.setFillColor(249,249,249);
-    doc.rect(col2, yc2, colW, 6.5, 'F');
+    doc.rect(col2Pos, yc2, colW2, 6.5, 'F');
     doc.setDrawColor(220,220,220);
-    doc.rect(col2, yc2, colW, 6.5, 'S');
+    doc.rect(col2Pos, yc2, colW2, 6.5, 'S');
     doc.setTextColor(204,23,25); doc.setFont('helvetica','bold'); doc.setFontSize(8);
-    doc.text('INDICATEURS CLÉS', col2+3, yc2+4.5);
+    doc.text('INDICATEURS CLÉS', col2Pos+3, yc2+4.5);
 
     data.kpis.forEach((k, i) => {
       const row = Math.floor(i / kpiCols);
       const col = i % kpiCols;
-      const cx = col2 + 3 + col * kpiCellW;
+      const cx = col2Pos + 3 + col * kpiCellW;
       const cy = yc2 + 7 + row * kpiRowH;
       const cls = kpiClass(k.val, k.def);
       const unit = k.def?.unit || '';
@@ -2151,7 +2180,7 @@ async function generatePDF(data) {
     });
 
     yc2 = yc2 + kpiBlocH + 3;
-    if (data.kpi_comment) { yc2 = drawBloc(col2, yc2, colW, 'Commentaire indicateurs', data.kpi_comment); yc2 += 3; }
+    if (data.kpi_comment) { yc2 = drawBloc(col2Pos, yc2, colW2, 'Commentaire indicateurs', data.kpi_comment); yc2 += 3; }
   }
 
   const fortsArr = Array.isArray(data.forts) ? data.forts : (data.forts ? [data.forts] : []);
@@ -2161,12 +2190,12 @@ async function generatePDF(data) {
       ...fortsArr.map(t => '(+) ' + t),
       ...diffArr.map(t => '(-) ' + t),
     ].join('\n');
-    yc2 = drawBloc(col2, yc2, colW, 'Points forts & Difficultés', pfdContent);
+    yc2 = drawBloc(col2Pos, yc2, colW2, 'Points forts & Difficultés', pfdContent);
     yc2 += 3;
   }
 
   if (data.remarque_libre) {
-    yc2 = drawBloc(col2, yc2, colW, 'Remarque libre', data.remarque_libre);
+    yc2 = drawBloc(col2Pos, yc2, colW2, 'Remarque libre', data.remarque_libre);
     yc2 += 3;
   }
 
