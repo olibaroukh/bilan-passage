@@ -248,7 +248,6 @@ input[type=date]{color-scheme:dark}
       Humeur du passage <span style="color:var(--red)">*</span>
     </div>
     <div style="display:flex;align-items:center;gap:10px">
-      <span id="humeur-smiley" style="font-size:22px;line-height:1;flex-shrink:0;transition:all .15s">😐</span>
       <div style="flex:1;position:relative;height:28px;display:flex;align-items:center">
         <div style="position:absolute;left:0;right:0;height:7px;border-radius:4px;background:linear-gradient(to right,#E24B4A 0%,#EF9F27 25%,#639922 50%,#1D9E75 75%,#378ADD 100%);pointer-events:none"></div>
         <input type="range" id="f-humeur" min="0" max="4" value="2" step="1"
@@ -616,7 +615,7 @@ function loadLogo() {
 }
 
 // ── VERSION APP ── (incrémenter à chaque mise à jour notable, pour déclencher l'invite de rechargement)
-const APP_VERSION = '2026.06.22-6';
+const APP_VERSION = '2026.06.22-7';
 
 // ── ÉTAT ──
 let magasins = [];
@@ -640,7 +639,6 @@ function updateHumeur(fromUser) {
   const v = parseInt(document.getElementById('f-humeur').value);
   const tag = document.getElementById('humeur-tag');
   const smiley = document.getElementById('humeur-smiley');
-  if (smiley) smiley.textContent = HUMEUR_SMILEYS[v] || '😐';
   if (humeurTouched) {
     tag.textContent = HUMEUR_LABELS[v];
     tag.style.background = HUMEUR_BG[v];
@@ -1901,7 +1899,7 @@ Optical Center`;
 
 // ── PDF ──
 function generateHumeurSliderImage(humeurV) {
-  // Génère une image PNG du slider d'humeur via canvas — identique à l'écran de saisie
+  // Génère une image PNG du slider : barre arc-en-ciel + curseur + mot
   return new Promise((resolve) => {
     try {
       const humeurLabels = ['Difficile','Mitigé','Correct','Bien','Top !'];
@@ -1909,32 +1907,21 @@ function generateHumeurSliderImage(humeurV) {
       const humeurLabel = humeurLabels[humeurV] || 'Correct';
       const humeurColor = humeurFgColors[humeurV] || humeurFgColors[2];
 
-      const W_px = 340, H_px = 28, dpr = 3;
+      // Canvas généreusement haut pour éviter tout écrasement, réduit à l'insertion PDF
+      const W_px = 420, H_px = 56, dpr = 2;
       const canvas = document.createElement('canvas');
       canvas.width = W_px * dpr; canvas.height = H_px * dpr;
       const ctx = canvas.getContext('2d');
       ctx.scale(dpr, dpr);
 
-      // Smiley
-      const smR = 9, smX = smR + 2, smY = H_px / 2;
-      ctx.beginPath(); ctx.arc(smX, smY, smR, 0, Math.PI * 2);
-      ctx.fillStyle = humeurColor; ctx.fill();
-      ctx.fillStyle = '#fff';
-      ctx.beginPath(); ctx.arc(smX - 3.2, smY - 2.5, 1.5, 0, Math.PI*2); ctx.fill();
-      ctx.beginPath(); ctx.arc(smX + 3.2, smY - 2.5, 1.5, 0, Math.PI*2); ctx.fill();
-      ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; ctx.lineCap = 'round';
-      ctx.beginPath();
-      if (humeurV <= 1) {
-        ctx.arc(smX, smY + 4, 3.5, Math.PI * 0.15, Math.PI * 0.85, true);
-      } else if (humeurV === 2) {
-        ctx.moveTo(smX - 3.5, smY + 3.5); ctx.lineTo(smX + 3.5, smY + 3.5);
-      } else {
-        ctx.arc(smX, smY + 1.5, 3.5, Math.PI * 0.1, Math.PI * 0.9);
-      }
-      ctx.stroke();
+      const cy = H_px / 2; // centre vertical
 
-      // Barre dégradé
-      const barX = smX + smR + 6, barY = H_px/2 - 3.5, barH2 = 7, barW2 = W_px - barX - 55;
+      // Mot à droite (mesuré d'abord pour calculer la place disponible)
+      ctx.font = 'bold 18px Arial, sans-serif';
+      const wordW = ctx.measureText(humeurLabel).width + 4;
+
+      // Barre dégradé arc-en-ciel
+      const barX = 4, barY = cy - 5, barH2 = 10, barW2 = W_px - wordW - 24;
       const grad = ctx.createLinearGradient(barX, 0, barX + barW2, 0);
       grad.addColorStop(0,    '#E24B4A');
       grad.addColorStop(0.25, '#EF9F27');
@@ -1946,17 +1933,18 @@ function generateHumeurSliderImage(humeurV) {
       ctx.roundRect(barX, barY, barW2, barH2, barH2 / 2);
       ctx.fill();
 
-      // Curseur
+      // Curseur blanc à bord rouge (rayon = barH2 * 0.9 pour rester bien dans le canvas)
+      const curR = barH2 * 0.9;
       const curX = barX + (humeurV / 4) * barW2;
-      ctx.beginPath(); ctx.arc(curX, H_px/2, 9, 0, Math.PI*2);
+      ctx.beginPath(); ctx.arc(curX, cy, curR, 0, Math.PI * 2);
       ctx.fillStyle = '#fff'; ctx.fill();
-      ctx.strokeStyle = '#CC1719'; ctx.lineWidth = 2; ctx.stroke();
+      ctx.strokeStyle = '#CC1719'; ctx.lineWidth = 2.5; ctx.stroke();
 
       // Mot à droite
-      ctx.font = 'bold 13px Arial, sans-serif';
+      ctx.font = 'bold 18px Arial, sans-serif';
       ctx.fillStyle = humeurColor;
       ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
-      ctx.fillText(humeurLabel, W_px - 2, H_px / 2);
+      ctx.fillText(humeurLabel, W_px - 2, cy);
 
       resolve(canvas.toDataURL('image/png'));
     } catch(e) {
@@ -1964,6 +1952,7 @@ function generateHumeurSliderImage(humeurV) {
     }
   });
 }
+
 
 function coverCropToRatio(dataUrl, targetRatio) {
   // Recadre une image (centrée) au ratio cible sans la déformer, façon CSS object-fit:cover
