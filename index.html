@@ -238,6 +238,17 @@ input[type=date]{color-scheme:dark}
     <button type="button" onclick="resetSaisie()" style="background:rgba(204,23,25,0.08);border:1px solid rgba(204,23,25,0.3);color:var(--red);font-size:12px;font-weight:600;border-radius:8px;cursor:pointer;font-family:'Barlow',sans-serif;padding:6px 12px">↺ Réinitialiser la saisie</button>
   </div>
 
+  <!-- Slider humeur -->
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:12px 16px;margin-bottom:8px">
+    <div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Humeur du passage</div>
+    <div style="display:flex;align-items:center;gap:10px">
+      <input type="range" id="f-humeur" min="0" max="4" value="2"
+        style="flex:1;height:5px;border-radius:3px;outline:none;border:none;cursor:pointer;background:linear-gradient(to right,#E24B4A,#EF9F27,#639922,#1D9E75,#378ADD)"
+        oninput="updateHumeur()">
+      <span id="humeur-tag" style="font-size:12px;font-weight:600;padding:4px 12px;border-radius:20px;min-width:80px;text-align:center;transition:background .2s,color .2s"></span>
+    </div>
+  </div>
+
   <!-- Bloc 1 : En-tête -->
   <div class="bloc-accordion">
     <div class="bloc-head" onclick="toggleBloc('b1')">
@@ -595,7 +606,7 @@ function loadLogo() {
 }
 
 // ── VERSION APP ── (incrémenter à chaque mise à jour notable, pour déclencher l'invite de rechargement)
-const APP_VERSION = '2026.06.20-5';
+const APP_VERSION = '2026.06.22-1';
 
 // ── ÉTAT ──
 let magasins = [];
@@ -606,6 +617,18 @@ let actions = [];
 let fortsList = [];
 let diffList = [];
 let entretiens = [];
+
+const HUMEUR_LABELS = ['Difficile','Mitigé','Correct','Bien','Top !'];
+const HUMEUR_BG =    ['#FCEBEB','#FAEEDA','#EAF3DE','#E1F5EE','#E6F1FB'];
+const HUMEUR_FG =    ['#A32D2D','#854F0B','#3B6D11','#0F6E56','#185FA5'];
+
+function updateHumeur() {
+  const v = parseInt(document.getElementById('f-humeur').value);
+  const tag = document.getElementById('humeur-tag');
+  tag.textContent = HUMEUR_LABELS[v];
+  tag.style.background = HUMEUR_BG[v];
+  tag.style.color = HUMEUR_FG[v];
+}
 let kpisAdded = [];
 let photos = [null, null, null];
 let photoCaptions = ['', '', ''];
@@ -699,7 +722,7 @@ const RITUELS_DEFAULTS = [
   {id:'confidence', label:'Utilisation quotidienne de Confidence'},
   {id:'devis', label:'Gestion des rappels Devis'},
   {id:'sop', label:'Suivi du challenge SOP'},
-  {id:'stats', label:'Suivi régulier des indicateurs statistique du magasin'},
+  {id:'stats', label:'Suivi régulier des indicateurs statistiques du magasin'},
   {id:'rush', label:'Gestion des périodes de Rush'},
   {id:'optometrie', label:'Optométrie pour TOUS'},
   {id:'debrief', label:'Débriefing des réunions'},
@@ -829,6 +852,7 @@ window.addEventListener('load', async () => {
   registerServiceWorker();
   checkForUpdate();
   loadParams();
+  if (document.getElementById('f-humeur')) updateHumeur();
   loadLogo();
   loadRituelsCustom();
   // Mise à jour watermark à chaque saisie
@@ -1074,6 +1098,7 @@ function resetSaisie() {
   actions = []; kpisAdded = []; photos = [null,null,null]; photoCaptions = ['','',''];
   fortsList = []; diffList = []; entretiens = [];
   renderPoints('forts'); renderPoints('diff'); renderEntretiens();
+  document.getElementById('f-humeur').value = 2; updateHumeur();
   ['f-date','f-duree','f-presents','f-renta','f-rh','f-formation','f-manager-obs',
    'f-kpi-comment','f-process','f-ca-mensuel','f-ca-annuel','f-ca-mensuel-detail',
    'f-mot-intro','f-mot-conclusion','f-prochain-passage','f-remarque-libre'].forEach(function(id) {
@@ -1110,6 +1135,7 @@ function startBilan() {
   actions = []; kpisAdded = []; photos = [null,null,null]; photoCaptions = ['','',''];
   fortsList = []; diffList = []; entretiens = [];
   renderPoints('forts'); renderPoints('diff'); renderEntretiens();
+  document.getElementById('f-humeur').value = 2; updateHumeur();
   ['f-date','f-duree','f-presents','f-renta','f-rh','f-formation','f-manager-obs',
    'f-kpi-comment','f-process','f-ca-mensuel','f-ca-annuel','f-ca-mensuel-detail',
    'f-mot-intro','f-mot-conclusion','f-prochain-passage','f-remarque-libre'].forEach(function(id) {
@@ -1480,6 +1506,7 @@ function collectData() {
     prochain_passage: document.getElementById('f-prochain-passage').value,
     remarque_libre: document.getElementById('f-remarque-libre').value,
     entretiens,
+    humeur: document.getElementById('f-humeur').value,
     savedAt: new Date().toISOString(),
   };
 }
@@ -1530,6 +1557,7 @@ function loadDraft() {
     if (d.prochain_passage) document.getElementById('f-prochain-passage').value = d.prochain_passage;
     if (d.remarque_libre) document.getElementById('f-remarque-libre').value = d.remarque_libre;
     if (d.entretiens) { entretiens = d.entretiens; renderEntretiens(); }
+    if (d.humeur !== undefined) { document.getElementById('f-humeur').value = d.humeur; updateHumeur(); }
     showToast('Brouillon rechargé');
   } catch(e) {}
 }
@@ -1891,7 +1919,7 @@ async function generatePDF(data) {
   // Filigrane — gros logo OC en arrière-plan de la zone de contenu, avant tout le reste
   try {
     const wmRatio = 780 / 667; // ratio du logo filigrane (largeur/hauteur)
-    const wmW = 130; // grande taille pour un vrai effet filigrane
+    const wmW = 200; // très grand pour couvrir toute la zone de contenu
     const wmH = wmW / wmRatio;
     const wmX = (W - wmW) / 2;
     const wmY = 26 + (H - 26 - wmH) / 2; // centré dans la zone de contenu, sous le header rouge
@@ -1953,7 +1981,8 @@ async function generatePDF(data) {
       items: [
         ['Effectif présent', `${mag.eff_present || '—'}`],
         ['Effectif théo.', `${mag.eff_theo || '—'}`],
-        ['Eff. réel Opt./Audio', `${mag.eff_opt || '—'}/${mag.eff_audio || '—'}`],
+        ['Eff. réel Opt./Audio', `${mag.eff_opt || '—'}/${mag.eff_audio || '—'}`,
+          (parseFloat(mag.eff_opt||0) + parseFloat(mag.eff_audio||0)) <= parseFloat(mag.eff_theo||99) ? 'ok' : 'bad'],
       ]
     },
     {
@@ -1994,6 +2023,34 @@ async function generatePDF(data) {
     });
   });
 
+  // Humeur du passage — zone vide à droite du bandeau gris
+  const humeurV = parseInt(data.humeur ?? 2);
+  const humeurLabels = ['Difficile','Mitigé','Correct','Bien','Top !'];
+  const humeurBgRgb = [[252,235,235],[250,238,218],[234,243,222],[225,245,238],[230,241,251]];
+  const humeurFgRgb = [[163,45,45],[133,79,11],[59,109,17],[15,110,86],[24,95,165]];
+  const humeurLabel = humeurLabels[humeurV] || 'Correct';
+  const humeurBg = humeurBgRgb[humeurV] || humeurBgRgb[2];
+  const humeurFg = humeurFgRgb[humeurV] || humeurFgRgb[2];
+
+  const hmX = photoCol - mar - 5 + mar + 8; // commence dans la zone libre à droite des groupes
+  const hmW = W - hmX - mar; // jusqu'au bord droit
+  const hmY = headerH + 1;
+  const hmH = 10;
+
+  // Fond coloré arrondi
+  doc.setFillColor(...humeurBg);
+  doc.roundedRect(hmX, hmY, hmW, hmH, 2, 2, 'F');
+  // Label "Humeur" en petit
+  doc.setTextColor(140,140,140);
+  doc.setFont('helvetica','normal');
+  doc.setFontSize(6);
+  doc.text('Humeur du passage', hmX + hmW/2, hmY + 3.2, {align:'center'});
+  // Valeur en gras, couleur sémantique
+  doc.setTextColor(...humeurFg);
+  doc.setFont('helvetica','bold');
+  doc.setFontSize(9);
+  doc.text(humeurLabel, hmX + hmW/2, hmY + 8, {align:'center'});
+
   // Zones de contenu — tailles augmentées pour mieux remplir la page
   let y = headerH + 16; // sous-header (12mm) + marge (4mm), suit la hauteur du bandeau rouge
   const lineH = 5.2;
@@ -2005,11 +2062,11 @@ async function generatePDF(data) {
     if (bulletLines && bulletLines.length) {
       // Chaque entrée devient une puce, avec retour à la ligne géré indépendamment par puce
       bulletLines.forEach(entry => {
-        const wrapped = doc.splitTextToSize('• ' + entry, w - 6);
-        wrapped.forEach((wl, i) => lines.push(i === 0 ? wl : '   ' + wl));
+        const wrapped = doc.splitTextToSize('• ' + entry, w - 9);
+        wrapped.forEach((wl, i) => lines.push(i === 0 ? wl : '     ' + wl));
       });
     } else if (content) {
-      lines = doc.splitTextToSize(content, w - 6);
+      lines = doc.splitTextToSize(content, w - 9);
     }
     const lineCount = lines.length;
     const blocH = 6.5 + (lines.length ? lineCount * lineH + 4 : 8);
@@ -2170,24 +2227,31 @@ async function generatePDF(data) {
   const validPhotos = photos.filter(Boolean);
   const photoZoneBottom = footerY;
   if (validPhotos.length) {
-    const phGap = 5;
-    const phH = Math.min(60, (photoZoneBottom - py - (validPhotos.length * phGap)) / validPhotos.length);
+    const n = validPhotos.length;
+    const captionH = 4.5; // hauteur réservée pour la légende sous chaque photo
+    const phGap = 4; // espace entre photos
+    // La légende de la dernière photo doit tomber exactement à footerY
+    // Zone totale = n * phH + n * captionH + (n-1) * phGap = photoZoneBottom - py
+    const totalAvail = photoZoneBottom - py;
+    const phH = Math.min(58, (totalAvail - n * captionH - (n - 1) * phGap) / n);
     const phW = photoW - 4;
+    let photoIdx = 0;
     for (let i = 0; i < photos.length; i++) {
       const p = photos[i];
       if (!p) continue;
+      const isLast = (photoIdx === n - 1);
       try {
-        // "Cover" sans déformation : on recadre l'image au ratio du cadre PDF via canvas avant insertion
         const coveredDataUrl = await coverCropToRatio(p, phW / phH);
         doc.addImage(coveredDataUrl, 'JPEG', photoCol+2, py, phW, phH);
         doc.setDrawColor(200,200,200);
         doc.rect(photoCol+2, py, phW, phH, 'S');
         if (photoCaptions[i]) {
           doc.setTextColor(80,80,80); doc.setFont('helvetica','italic'); doc.setFontSize(6.5);
-          doc.text(photoCaptions[i], photoCol+2 + phW/2, py+phH+3.5, {align:'center'});
+          doc.text(photoCaptions[i], photoCol+2 + phW/2, py+phH+3.2, {align:'center'});
         }
-        py += phH + phGap;
-      } catch(e) { py += phH + phGap; }
+        py += phH + captionH + (isLast ? 0 : phGap);
+      } catch(e) { py += phH + captionH + (isLast ? 0 : phGap); }
+      photoIdx++;
     }
   } else {
     doc.setTextColor(180,180,180); doc.setFont('helvetica','italic'); doc.setFontSize(7.5);
