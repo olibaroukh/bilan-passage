@@ -616,7 +616,7 @@ function loadLogo() {
 }
 
 // ── VERSION APP ── (incrémenter à chaque mise à jour notable, pour déclencher l'invite de rechargement)
-const APP_VERSION = '2026.06.22-2';
+const APP_VERSION = '2026.06.22-3';
 
 // ── ÉTAT ──
 let magasins = [];
@@ -1941,19 +1941,6 @@ async function generatePDF(data) {
   const col2 = col1 + (contentRight - col1 - gutter) / 2 + gutter;
   const mag = data.magasin;
 
-  // Filigrane — gros logo OC en arrière-plan de la zone de contenu, avant tout le reste
-  try {
-    const wmRatio = 780 / 667; // ratio du logo filigrane (largeur/hauteur)
-    const wmW = 200; // très grand pour couvrir toute la zone de contenu
-    const wmH = wmW / wmRatio;
-    const wmX = (W - wmW) / 2;
-    const wmY = 26 + (H - 26 - wmH) / 2; // centré dans la zone de contenu, sous le header rouge
-    doc.saveGraphicsState();
-    doc.setGState(new doc.GState({opacity: 0.1}));
-    doc.addImage(LOGO_WATERMARK_OC, 'PNG', wmX, wmY, wmW, wmH);
-    doc.restoreGraphicsState();
-  } catch(e) {}
-
   // Header rouge — agrandi pour laisser respirer le logo complet (pictogramme + texte)
   const headerH = 26;
   doc.setFillColor(204, 23, 25);
@@ -2048,33 +2035,101 @@ async function generatePDF(data) {
     });
   });
 
-  // Humeur du passage — zone vide à droite du bandeau gris
+// Humeur du passage — zone vide à droite du bandeau gris
+  // Rendu : smiley vectoriel | barre arc-en-ciel + curseur | mot coloré
   const humeurV = parseInt(data.humeur ?? 2);
   const humeurLabels = ['Difficile','Mitigé','Correct','Bien','Top !'];
-  const humeurBgRgb = [[252,235,235],[250,238,218],[234,243,222],[225,245,238],[230,241,251]];
   const humeurFgRgb = [[163,45,45],[133,79,11],[59,109,17],[15,110,86],[24,95,165]];
   const humeurLabel = humeurLabels[humeurV] || 'Correct';
-  const humeurBg = humeurBgRgb[humeurV] || humeurBgRgb[2];
   const humeurFg = humeurFgRgb[humeurV] || humeurFgRgb[2];
 
-  const hmX = photoCol - mar - 5 + mar + 8; // commence dans la zone libre à droite des groupes
-  const hmW = W - hmX - mar; // jusqu'au bord droit
-  const hmY = headerH + 1;
-  const hmH = 10;
+  const hmX = photoCol - mar - 5 + mar + 5;
+  const hmW = W - hmX - mar;
+  const hmY = headerH + 0.5;
+  const hmH = 11;
 
-  // Fond coloré arrondi
-  doc.setFillColor(...humeurBg);
-  doc.roundedRect(hmX, hmY, hmW, hmH, 2, 2, 'F');
-  // Label "Humeur" en petit
+  // Label "Humeur du passage" en haut centré
   doc.setTextColor(140,140,140);
   doc.setFont('helvetica','normal');
-  doc.setFontSize(6);
-  doc.text('Humeur du passage', hmX + hmW/2, hmY + 3.2, {align:'center'});
-  // Valeur en gras, couleur sémantique
-  doc.setTextColor(...humeurFg);
+  doc.setFontSize(5.5);
+  doc.text('Humeur du passage', hmX + hmW/2, hmY + 2.2, {align:'center'});
+
+  // ── Smiley vectoriel à gauche ──
+  const smX = hmX + 4;
+  const smY = hmY + 7;
+  const smR = 3.2;
+  const smFaceColor = humeurFg; // couleur du visage = couleur de l'humeur
+
+  // Cercle visage
+  doc.setFillColor(...smFaceColor);
+  doc.setDrawColor(...smFaceColor);
+  doc.setLineWidth(0.4);
+  doc.circle(smX, smY, smR, 'D');
+
+  // Yeux (deux petits points)
+  doc.setFillColor(255,255,255);
+  doc.circle(smX - 1.1, smY - 0.9, 0.55, 'F');
+  doc.circle(smX + 1.1, smY - 0.9, 0.55, 'F');
+
+  // Bouche selon humeur (0=triste, 1=légèrement triste, 2=neutre, 3=légèrement souriant, 4=grand sourire)
+  doc.setDrawColor(255,255,255);
+  doc.setLineWidth(0.5);
+  if (humeurV === 0) {
+    // Arc triste (vers le bas → dessiné comme arc convexe vers le haut en coords PDF)
+    doc.lines([[0.8, -0.6],[0.8, 0.6]], smX - 1.4, smY + 1.6, [1,1], 'S', false);
+  } else if (humeurV === 1) {
+    // Légèrement triste
+    doc.lines([[0.7, -0.3],[0.7, 0.3]], smX - 1.2, smY + 1.5, [1,1], 'S', false);
+  } else if (humeurV === 2) {
+    // Neutre : ligne droite
+    doc.line(smX - 1.2, smY + 1.4, smX + 1.2, smY + 1.4);
+  } else if (humeurV === 3) {
+    // Légèrement souriant
+    doc.lines([[0.7, 0.3],[0.7, -0.3]], smX - 1.2, smY + 1.2, [1,1], 'S', false);
+  } else {
+    // Grand sourire
+    doc.lines([[0.8, 0.6],[0.8, -0.6]], smX - 1.4, smY + 1.0, [1,1], 'S', false);
+  }
+  doc.setLineWidth(0.2);
+  doc.setDrawColor(220,220,220);
+
+  // ── Barre arc-en-ciel ──
+  const barX = smX + smR + 2.5;
+  const barXEnd = hmX + hmW - 18;
+  const barW = barXEnd - barX;
+  const barY = hmY + 5.5;
+  const barH = 3;
+
+  const gradColors = [
+    [226,75,74],[239,159,39],[99,153,34],[29,158,117],[55,138,221]
+  ];
+  const segW = barW / gradColors.length;
+  gradColors.forEach((c, i) => {
+    doc.setFillColor(...c);
+    doc.rect(barX + i * segW, barY, segW, barH, 'F');
+  });
+  // Arrondi gauche
+  doc.setFillColor(...gradColors[0]);
+  doc.roundedRect(barX, barY, segW * 0.7, barH, 1.4, 1.4, 'F');
+  doc.rect(barX + 1.4, barY, segW * 0.7 - 1.4, barH, 'F');
+  // Arrondi droit
+  doc.setFillColor(...gradColors[4]);
+  doc.roundedRect(barX + barW - segW * 0.7, barY, segW * 0.7, barH, 1.4, 1.4, 'F');
+  doc.rect(barX + barW - segW * 0.7, barY, segW * 0.7 - 1.4, barH, 'F');
+
+  // Curseur blanc à la position de l'humeur
+  const cursorX = barX + (humeurV / 4) * barW;
+  doc.setFillColor(255,255,255);
+  doc.setDrawColor(204,23,25);
+  doc.setLineWidth(0.6);
+  doc.circle(cursorX, barY + barH/2, 2.5, 'FD');
+  doc.setLineWidth(0.2);
+
+  // ── Mot à droite ──
   doc.setFont('helvetica','bold');
-  doc.setFontSize(9);
-  doc.text(humeurLabel, hmX + hmW/2, hmY + 8, {align:'center'});
+  doc.setFontSize(7.5);
+  doc.setTextColor(...humeurFg);
+  doc.text(humeurLabel, hmX + hmW - 1, hmY + 8.2, {align:'right'});
 
   // Zones de contenu — tailles augmentées pour mieux remplir la page
   let y = headerH + 16; // sous-header (12mm) + marge (4mm), suit la hauteur du bandeau rouge
@@ -2090,11 +2145,11 @@ async function generatePDF(data) {
     if (bulletLines && bulletLines.length) {
       // Chaque entrée devient une puce, avec retour à la ligne géré indépendamment par puce
       bulletLines.forEach(entry => {
-        const wrapped = doc.splitTextToSize('• ' + entry, w - 9);
+        const wrapped = doc.splitTextToSize('• ' + entry, w - 12);
         wrapped.forEach((wl, i) => lines.push(i === 0 ? wl : '     ' + wl));
       });
     } else if (content) {
-      lines = doc.splitTextToSize(content, w - 9);
+      lines = doc.splitTextToSize(content, w - 12);
     }
     const lineCount = lines.length;
     const blocH = 6.5 + (lines.length ? lineCount * lineH + 4 : 8);
@@ -2286,6 +2341,20 @@ async function generatePDF(data) {
     doc.setTextColor(180,180,180); doc.setFont('helvetica','italic'); doc.setFontSize(7.5);
     doc.text('Aucune photo', photoCol+3, py+8);
   }
+
+  // Filigrane — dessiné en dernier pour passer au-dessus des fonds blancs,
+  // mais sous le bandeau rouge (déjà dessiné en premier, il n'est pas écrasé)
+  try {
+    const wmRatio = 780 / 667;
+    const wmW = 200;
+    const wmH = wmW / wmRatio;
+    const wmX = (W - wmW) / 2;
+    const wmY = headerH + (H - headerH - wmH) / 2;
+    doc.saveGraphicsState();
+    doc.setGState(new doc.GState({opacity: 0.1}));
+    doc.addImage(LOGO_WATERMARK_OC, 'PNG', wmX, wmY, wmW, wmH);
+    doc.restoreGraphicsState();
+  } catch(e) {}
 
   // Footer
   doc.setFillColor(249,249,249);
