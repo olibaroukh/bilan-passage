@@ -529,7 +529,7 @@ input[type=date]{color-scheme:dark}
   </div>
   <div class="params-section">
     <div class="params-section-title">Email</div>
-    <div class="field-group"><label>Votre email (copie sur chaque bilan)</label>
+    <div class="field-group"><label>Votre email (optionnel — si différent de votre identifiant Zimbra + @optical-center.com)</label>
       <input type="email" id="p-my-email" placeholder="votre@email.fr" oninput="saveParams()"></div>
     <div class="field-group"><label>Relay Cloudflare</label>
       <input type="text" id="p-relay" placeholder="https://zimbra-relay.oli-baroukh.workers.dev" oninput="saveParams()"></div>
@@ -615,7 +615,7 @@ function loadLogo() {
 }
 
 // ── VERSION APP ── (incrémenter à chaque mise à jour notable, pour déclencher l'invite de rechargement)
-const APP_VERSION = '2026.06.22-8';
+const APP_VERSION = '2026.06.22-9';
 
 // ── ÉTAT ──
 let magasins = [];
@@ -1603,7 +1603,9 @@ function finalizeBilan() {
   const recips = document.getElementById('modal-recipients');
   recips.innerHTML = '';
   const COPY_ALWAYS = 'olivier.baroukh@optical-center.com';
-  const emails = [...new Set([mag.email, params.myEmail, COPY_ALWAYS].filter(Boolean))];
+  // Email de l'AR : construit depuis l'identifiant Zimbra si non renseigné manuellement
+  const arEmail = params.myEmail || (params.zimbraUser ? params.zimbraUser + '@optical-center.com' : '');
+  const emails = [...new Set([mag.email, arEmail, COPY_ALWAYS].filter(Boolean))];
   emails.forEach(e => {
     const div = document.createElement('div');
     div.style.cssText = 'background:var(--bg4);border-radius:6px;padding:8px 12px;font-size:13px;color:var(--text)';
@@ -1684,7 +1686,8 @@ async function sendBilan() {
     // 4. Envoi mails — un seul SendMsgRequest avec plusieurs destinataires
     // (l'attachId uploadé une fois ne doit être référencé que dans UN SEUL envoi)
     const COPY_ALWAYS = 'olivier.baroukh@optical-center.com';
-    const emails = [...new Set([data.magasin.email, params.myEmail, COPY_ALWAYS].filter(Boolean))];
+    const arEmail = params.myEmail || (params.zimbraUser ? params.zimbraUser + '@optical-center.com' : '');
+    const emails = [...new Set([data.magasin.email, arEmail, COPY_ALWAYS].filter(Boolean))];
     if (!emails.length) throw new Error('Aucun email destinataire');
     showToast('4/4 — Envoi à ' + emails.length + ' destinataire(s)...');
 
@@ -2474,7 +2477,8 @@ async function resendBilan(e, code, idx) {
     const attachId = upMatch[3];
 
     const COPY_ALWAYS = 'olivier.baroukh@optical-center.com';
-    const emails = [...new Set([d.magasin?.email, params.myEmail, COPY_ALWAYS].filter(Boolean))];
+    const arEmailR = params.myEmail || (params.zimbraUser ? params.zimbraUser + '@optical-center.com' : '');
+    const emails = [...new Set([d.magasin?.email, arEmailR, COPY_ALWAYS].filter(Boolean))];
     const subject = '[RENVOI] Bilan de passage n°' + (d.passage || '?') + ' — ' + (d.magasin?.libelle || code) + ' — ' + formatDate(d.date);
     const mailBody = buildEmailBody(d);
 
