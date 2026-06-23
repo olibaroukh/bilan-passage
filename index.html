@@ -171,6 +171,17 @@ input[type=date]{color-scheme:dark}
 #f-humeur::-moz-range-thumb{width:22px;height:22px;border-radius:50%;background:#fff;border:2.5px solid #CC1719;box-shadow:0 1px 4px rgba(0,0,0,0.25);cursor:pointer}
 #f-humeur::-webkit-slider-runnable-track{height:7px;border-radius:4px;background:transparent}
 #f-humeur::-moz-range-track{height:7px;border-radius:4px;background:transparent}
+/* ── DICTÉE VOCALE ── */
+.mic-btn{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;border:none;background:rgba(204,23,25,0.08);color:var(--red);font-size:15px;cursor:pointer;flex-shrink:0;transition:background .15s,transform .1s}
+.mic-btn:active{transform:scale(0.9)}
+.mic-btn.listening{background:var(--red);color:#fff;animation:mic-pulse 0.8s ease-in-out infinite}
+@keyframes mic-pulse{0%,100%{box-shadow:0 0 0 0 rgba(204,23,25,0.4)}50%{box-shadow:0 0 0 8px rgba(204,23,25,0)}}
+.field-label-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px}
+.field-label-row label{margin-bottom:0}
+#mic-fab{position:fixed;bottom:80px;right:16px;width:48px;height:48px;border-radius:50%;background:var(--red);color:#fff;border:none;font-size:22px;cursor:pointer;box-shadow:0 4px 16px rgba(204,23,25,0.4);z-index:1000;display:flex;align-items:center;justify-content:center;transition:transform .15s}
+#mic-fab:active{transform:scale(0.92)}
+#mic-fab.listening{animation:mic-pulse 0.8s ease-in-out infinite;background:#a01215}
+#mic-toast{position:fixed;bottom:140px;right:16px;background:rgba(0,0,0,0.75);color:#fff;font-size:12px;padding:6px 12px;border-radius:20px;z-index:1001;display:none;max-width:200px;text-align:center;line-height:1.4}
 </style>
 </head>
 <body>
@@ -303,9 +314,9 @@ input[type=date]{color-scheme:dark}
       <div class="field-group"><label>Détail positionnement (facultatif)</label>
         <input type="text" id="f-ca-mensuel-detail" placeholder="ex: optique 108%, audio 92%...">
       </div>
-      <div class="field-group"><label>Situation RH (recrutement, mutations, licenciements...)</label>
+      <div class="field-group"><div class="field-label-row"><label>Situation RH (recrutement, mutations, licenciements...)</label><button type="button" class="mic-btn" onclick="startMicFor('f-rh')" title="Dicter">🎤</button></div>
         <textarea id="f-rh" rows="3" placeholder="Décris la situation RH actuelle..."></textarea></div>
-      <div class="field-group"><label>Formation terrain dispensée</label>
+      <div class="field-group"><div class="field-label-row"><label>Formation terrain dispensée</label><button type="button" class="mic-btn" onclick="startMicFor('f-formation')" title="Dicter">🎤</button></div>
         <textarea id="f-formation" rows="2" placeholder="Thèmes abordés, personnes formées..."></textarea></div>
     </div>
   </div>
@@ -325,7 +336,7 @@ input[type=date]{color-scheme:dark}
           <button class="btn-add" onclick="addRituel()">+ Ajouter</button>
         </div>
       </div>
-      <div class="field-group"><label>Observations sur le management</label>
+      <div class="field-group"><div class="field-label-row"><label>Observations sur le management</label><button type="button" class="mic-btn" onclick="startMicFor('f-manager-obs')" title="Dicter">🎤</button></div>
         <textarea id="f-manager-obs" rows="3" placeholder="Posture, progression, points de vigilance..."></textarea></div>
     </div>
   </div>
@@ -346,7 +357,7 @@ input[type=date]{color-scheme:dark}
         <button class="btn-add" onclick="addKpi()">+ Ajouter</button>
       </div>
       <div class="kpi-chips" id="kpi-chips"></div>
-      <div class="field-group" style="margin-top:4px"><label>Commentaire sur les indicateurs</label>
+      <div class="field-group" style="margin-top:4px"><div class="field-label-row"><label>Commentaire sur les indicateurs</label><button type="button" class="mic-btn" onclick="startMicFor('f-kpi-comment')" title="Dicter">🎤</button></div>
         <textarea id="f-kpi-comment" rows="2" placeholder="Tendances, points d'attention..."></textarea></div>
     </div>
   </div>
@@ -360,6 +371,7 @@ input[type=date]{color-scheme:dark}
     </div>
     <div class="bloc-body" id="b5">
       <div class="field-group">
+        <div class="field-label-row"><label>Process & Nouveautés</label><button type="button" class="mic-btn" onclick="startMicFor('f-process')" title="Dicter">🎤</button></div>
         <textarea id="f-process" rows="4" placeholder="Déploiements en cours, niveau de mise en place, blocages identifiés, nouveaux outils..."></textarea></div>
     </div>
   </div>
@@ -376,7 +388,7 @@ input[type=date]{color-scheme:dark}
         <label style="color:var(--green)">+ Points forts</label>
         <div class="action-list" id="forts-list"></div>
         <div style="display:flex;gap:6px;margin-top:4px">
-          <input type="text" id="forts-new" placeholder="Ajouter un point fort...">
+          <input type="text" id="forts-new" onfocus="setMicTarget('forts-new')" placeholder="Ajouter un point fort...">
           <button class="btn-add" onclick="addPoint('forts')">+</button>
         </div>
       </div>
@@ -384,7 +396,7 @@ input[type=date]{color-scheme:dark}
         <label style="color:var(--red)">− Points d'amélioration</label>
         <div class="action-list" id="diff-list"></div>
         <div style="display:flex;gap:6px;margin-top:4px">
-          <input type="text" id="diff-new" placeholder="Ajouter un point d'amélioration...">
+          <input type="text" id="diff-new" onfocus="setMicTarget('diff-new')" placeholder="Ajouter un point d'amélioration...">
           <button class="btn-add" onclick="addPoint('diff')">+</button>
         </div>
       </div>
@@ -430,8 +442,8 @@ input[type=date]{color-scheme:dark}
     <div class="bloc-body" id="b8">
       <div class="action-list" id="action-list"></div>
       <div class="action-add-form">
-        <input type="text" id="act-text" placeholder="Titre de l'action...">
-        <input type="text" id="act-comment" placeholder="Commentaire / détail (facultatif)">
+        <input type="text" id="act-text" onfocus="setMicTarget('act-text')" placeholder="Titre de l'action...">
+        <input type="text" id="act-comment" onfocus="setMicTarget('act-comment')" placeholder="Commentaire / détail (facultatif)">
         <div class="action-add-row">
           <input type="text" id="act-who" placeholder="Responsable">
           <input type="date" id="act-date">
@@ -449,9 +461,9 @@ input[type=date]{color-scheme:dark}
       <span class="bloc-head-chevron" id="chev-b9">▼</span>
     </div>
     <div class="bloc-body" id="b9">
-      <div class="field-group"><label>Mot d'introduction (facultatif)</label>
+      <div class="field-group"><div class="field-label-row"><label>Mot d'introduction (facultatif)</label><button type="button" class="mic-btn" onclick="startMicFor('f-mot-intro')" title="Dicter">🎤</button></div>
         <textarea id="f-mot-intro" rows="2" placeholder="Un message d'accroche en début de mail..."></textarea></div>
-      <div class="field-group"><label>Mot de conclusion (facultatif)</label>
+      <div class="field-group"><div class="field-label-row"><label>Mot de conclusion (facultatif)</label><button type="button" class="mic-btn" onclick="startMicFor('f-mot-conclusion')" title="Dicter">🎤</button></div>
         <textarea id="f-mot-conclusion" rows="2" placeholder="Un message d'encouragement ou de cadrage en fin de mail..."></textarea></div>
       <div class="field-group"><label>Date du prochain passage (facultatif)</label>
         <input type="date" id="f-prochain-passage"></div>
@@ -466,7 +478,7 @@ input[type=date]{color-scheme:dark}
       <span class="bloc-head-chevron" id="chev-b10">▼</span>
     </div>
     <div class="bloc-body" id="b10">
-      <div class="field-group"><label>Remarque libre (facultatif)</label>
+      <div class="field-group"><div class="field-label-row"><label>Remarque libre (facultatif)</label><button type="button" class="mic-btn" onclick="startMicFor('f-remarque-libre')" title="Dicter">🎤</button></div>
         <textarea id="f-remarque-libre" rows="4" placeholder="Tout autre point à noter, sans contrainte de format..."></textarea></div>
     </div>
   </div>
@@ -482,7 +494,7 @@ input[type=date]{color-scheme:dark}
       <div class="action-list" id="entretien-list"></div>
       <div class="action-add-form">
         <input type="text" id="ent-prenom" placeholder="Prénom du collaborateur">
-        <input type="text" id="ent-sujet" placeholder="Sujet abordé (facultatif, peut rester confidentiel)">
+        <input type="text" id="ent-sujet" onfocus="setMicTarget('ent-sujet')" placeholder="Sujet abordé (facultatif, peut rester confidentiel)">
         <div class="action-add-row">
           <button class="btn-add" onclick="addEntretien()" style="flex:1">+ Ajouter</button>
         </div>
@@ -569,7 +581,7 @@ input[type=date]{color-scheme:dark}
     <div style="font-size:13px;color:var(--muted);margin-bottom:12px">Le PDF sera envoyé aux destinataires suivants :</div>
     <div id="modal-recipients" style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px"></div>
     <div class="field-group">
-      <label>Texte du mail (modifiable avant envoi)</label>
+      <div class="field-label-row"><label>Texte du mail (modifiable avant envoi)</label><button type="button" class="mic-btn" onclick="startMicFor('modal-mailbody')" title="Dicter">🎤</button></div>
       <textarea id="modal-mailbody" rows="10" style="font-family:'Barlow',sans-serif;font-size:12.5px;line-height:1.5"></textarea>
       <button type="button" class="btn-secondary" style="margin-top:6px;width:100%;font-size:12px;padding:8px" onclick="regenerateMailBody()">↺ Revenir au texte généré</button>
     </div>
@@ -615,7 +627,123 @@ function loadLogo() {
 }
 
 // ── VERSION APP ── (incrémenter à chaque mise à jour notable, pour déclencher l'invite de rechargement)
-const APP_VERSION = '2026.06.22-11';
+const APP_VERSION = '2026.06.22-12';
+
+// ── DICTÉE VOCALE ──
+let micRecognition = null;
+let micActive = false;
+let micTargetId = null; // champ ciblé par le FAB
+
+function setMicTarget(id) {
+  micTargetId = id;
+}
+
+function showMicToast(msg) {
+  const t = document.getElementById('mic-toast');
+  if (!t) return;
+  t.textContent = msg;
+  t.style.display = 'block';
+  clearTimeout(t._timeout);
+  if (msg === '') { t.style.display = 'none'; return; }
+}
+
+function stopMic() {
+  if (micRecognition) { try { micRecognition.stop(); } catch(e) {} }
+  micActive = false;
+  document.querySelectorAll('.mic-btn.listening, #mic-fab.listening').forEach(b => b.classList.remove('listening'));
+  showMicToast('');
+}
+
+function startMicFor(fieldId) {
+  // Si déjà en écoute sur ce champ → stop
+  if (micActive && micTargetId === fieldId) { stopMic(); return; }
+  stopMic();
+  micTargetId = fieldId;
+
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) {
+    showToast('⚠ Dictée vocale non supportée sur ce navigateur');
+    return;
+  }
+
+  const field = document.getElementById(fieldId);
+  if (!field) return;
+  field.focus();
+
+  micRecognition = new SpeechRecognition();
+  micRecognition.lang = 'fr-FR';
+  micRecognition.continuous = false;
+  micRecognition.interimResults = true;
+  micRecognition.maxAlternatives = 1;
+
+  let interimStart = -1; // position de début de la transcription provisoire dans le champ
+
+  micRecognition.onstart = () => {
+    micActive = true;
+    // Marquer les boutons actifs
+    document.querySelectorAll('.mic-btn').forEach(b => {
+      if (b.getAttribute('onclick') && b.getAttribute('onclick').includes(fieldId)) {
+        b.classList.add('listening');
+      }
+    });
+    const fab = document.getElementById('mic-fab');
+    if (fab) fab.classList.add('listening');
+    showMicToast('🎤 Dictée en cours...');
+  };
+
+  micRecognition.onresult = (event) => {
+    const transcript = event.results[0][0].transcript;
+    const isFinal = event.results[0].isFinal;
+
+    const start = field.selectionStart;
+    const end = field.selectionEnd;
+    const val = field.value;
+
+    if (interimStart === -1) {
+      // 1er résultat : insérer au curseur
+      interimStart = start;
+      field.value = val.slice(0, start) + transcript + val.slice(end);
+    } else {
+      // Mise à jour : remplacer le texte provisoire
+      field.value = val.slice(0, interimStart) + transcript + val.slice(interimStart + (field.value.length - val.length + transcript.length));
+      // Reconstruire proprement
+      const before = val.slice(0, interimStart);
+      const after = field.value.slice(interimStart + field.value.length - val.length);
+      field.value = before + transcript + (isFinal ? ' ' : '');
+    }
+
+    if (isFinal) {
+      // Ajouter un espace après et positionner le curseur
+      const newPos = interimStart + transcript.length + 1;
+      field.setSelectionRange(newPos, newPos);
+      interimStart = -1;
+      field.dispatchEvent(new Event('input'));
+    }
+  };
+
+  micRecognition.onerror = (event) => {
+    stopMic();
+    if (event.error !== 'no-speech' && event.error !== 'aborted') {
+      showToast('⚠ Erreur dictée : ' + event.error);
+    }
+  };
+
+  micRecognition.onend = () => {
+    stopMic();
+  };
+
+  micRecognition.start();
+}
+
+function toggleMicFab() {
+  if (micActive) { stopMic(); return; }
+  // Utiliser le champ actuellement focusé, ou le dernier cible connu
+  const focused = document.activeElement;
+  const targetId = (focused && (focused.tagName === 'TEXTAREA' || focused.tagName === 'INPUT') && focused.id)
+    ? focused.id
+    : (micTargetId || 'f-rh');
+  startMicFor(targetId);
+}
 
 // ── ÉTAT ──
 let magasins = [];
@@ -2643,5 +2771,10 @@ function showToastLong(msg) {
   setTimeout(() => { t.classList.remove('show'); t.style.cssText = ''; }, 12000);
 }
 </script>
+
+<!-- BOUTON DICTÉE VOCALE FLOTTANT -->
+<button id="mic-fab" title="Dicter dans le champ actif" onclick="toggleMicFab()" style="display:none">🎤</button>
+<div id="mic-toast"></div>
+
 </body>
 </html>
