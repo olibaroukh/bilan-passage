@@ -627,7 +627,7 @@ function loadLogo() {
 }
 
 // ── VERSION APP ── (incrémenter à chaque mise à jour notable, pour déclencher l'invite de rechargement)
-const APP_VERSION = '2026.06.22-12';
+const APP_VERSION = '2026.06.23-5';
 
 // ── DICTÉE VOCALE ──
 let micRecognition = null;
@@ -1804,7 +1804,8 @@ async function sendBilan() {
 
     // 2. Pré-générer l'image du slider humeur (canvas → PNG) avant generatePDF
     showToast('2/4 — Génération du PDF...');
-    const humeurSliderImg = await generateHumeurSliderImage(parseInt(data.humeur ?? 2));
+    const humeurV_raw = data.humeur !== undefined && data.humeur !== '' ? parseInt(data.humeur) : null;
+    const humeurSliderImg = (humeurV_raw !== null && !isNaN(humeurV_raw)) ? await generateHumeurSliderImage(humeurV_raw) : null;
     const pdfBytes = await generatePDF(data, humeurSliderImg);
 
     // 3. Upload PDF
@@ -2172,7 +2173,7 @@ async function generatePDF(data, humeurSliderImg) {
   doc.setFontSize(12);
   doc.text(mag.libelle, W - mar, 10, {align:'right'});
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8);
+  doc.setFontSize(6);
   doc.text(`Manager : ${mag.manager || '—'} · AR : ${data.ar || '—'} · Durée : ${formatDuree(data.duree) || '—'}`, W - mar, 16, {align:'right'});
 
   // Sous-header gris
@@ -2181,7 +2182,7 @@ async function generatePDF(data, humeurSliderImg) {
   doc.setDrawColor(220, 220, 220);
   doc.line(0, headerH + 12, W, headerH + 12);
   doc.setTextColor(80, 80, 80);
-  doc.setFontSize(7);
+  doc.setFontSize(6);
 
   function truncateForSh(text, maxChars) {
     if (!text) return '—';
@@ -2230,7 +2231,7 @@ async function generatePDF(data, humeurSliderImg) {
       const color = status === 'ok' ? [42,158,42] : status === 'bad' ? [204,23,25] : [40,40,40];
       doc.setTextColor(...color);
       doc.setFont('helvetica','bold');
-      doc.setFontSize(7.5);
+      doc.setFontSize(6.5);
       doc.text(v, shX, headerH + 9, { maxWidth: shColW - 3 });
       shX += shColW;
     });
@@ -2240,7 +2241,7 @@ async function generatePDF(data, humeurSliderImg) {
 
   // lineH et colonnes
   let y = headerH + 16;
-  const lineH = 5.2;
+  const lineH = 4.8; // légèrement réduit (-1pt effectif)
   const totalColW = contentRight - col1 - gutter;
   const colW  = totalColW * 0.53;
   const colW2 = totalColW * 0.47;
@@ -2251,11 +2252,11 @@ async function generatePDF(data, humeurSliderImg) {
     let lines = [];
     if (bulletLines && bulletLines.length) {
       bulletLines.forEach(entry => {
-        const wrapped = doc.splitTextToSize('\u2022 ' + entry, w - 12);
+        const wrapped = doc.splitTextToSize('\u2022 ' + pdfSafe(entry), w - 12);
         wrapped.forEach((wl, i) => lines.push(i === 0 ? wl : '     ' + wl));
       });
     } else if (content) {
-      lines = doc.splitTextToSize(content, w - 12);
+      lines = doc.splitTextToSize(pdfSafe(content), w - 12);
     }
     return lines;
   }
@@ -2271,11 +2272,11 @@ async function generatePDF(data, humeurSliderImg) {
     doc.rect(x, yStart, w, blocH, 'S');
     doc.setTextColor(...tColor);
     doc.setFont('helvetica','bold');
-    doc.setFontSize(8);
+    doc.setFontSize(6);
     doc.text(title.toUpperCase(), x + 3, yStart + 4.5);
     doc.setTextColor(55,55,55);
     doc.setFont('helvetica','normal');
-    doc.setFontSize(8.5);
+    doc.setFontSize(6.5);
     lines.forEach((line, i) => {
       doc.text(line, x + 3, yStart + 11 + i * lh);
     });
@@ -2296,13 +2297,41 @@ async function generatePDF(data, humeurSliderImg) {
     return (text || '').split('\n').map(s => s.trim()).filter(Boolean);
   }
 
-  // Calcul adaptatif du lineH — réduit si le contenu déborde la zone disponible
-  const footerY = H - 9; // déclaré ici pour le calcul adaptatif (réutilisé dans le bloc Actions)
-  const maxColH = footerY - y - 30; // espace max pour les colonnes (30mm réservé pour actions)
+  // Nettoie le texte pour jsPDF (police Helvetica = latin-1)
+  // Remplace les caractères hors latin-1 par leur équivalent ou les supprime
+  function pdfSafe(str) {
+    if (!str) return '';
+    return str
+      .replace(/[\u2018\u2019\u201A\u201B]/g, "'")   // guillemets simples typographiques
+      .replace(/[\u201C\u201D\u201E\u201F]/g, '"')   // guillemets doubles typographiques
+      .replace(/\u2026/g, '...')                         // ellipse
+      .replace(/\u2013/g, '-')                           // tiret demi-cadratin
+      .replace(/\u2014/g, '-')                           // tiret cadratin
+      .replace(/\u2022/g, '•')                           // puce
+      .replace(/\u00A0/g, ' ')                           // espace insécable
+      .replace(/[\u0100-\u017E]/g, c => {               // latin étendu → latin de base
+        const map = {'Ā':'A','ā':'a','Ă':'A','ă':'a','Ą':'A','ą':'a','Ć':'C','ć':'c','Ĉ':'C','ĉ':'c','Ċ':'C','ċ':'c','Č':'C','č':'c','Ď':'D','ď':'d','Đ':'D','đ':'d','Ē':'E','ē':'e','Ĕ':'E','ĕ':'e','Ė':'E','ė':'e','Ę':'E','ę':'e','Ě':'E','ě':'e','Ĝ':'G','ĝ':'g','Ğ':'G','ğ':'g','Ġ':'G','ġ':'g','Ģ':'G','ģ':'g','Ĥ':'H','ĥ':'h','Ħ':'H','ħ':'h','Ĩ':'I','ĩ':'i','Ī':'I','ī':'i','Ĭ':'I','ĭ':'i','Į':'I','į':'i','İ':'I','ı':'i','Ĳ':'IJ','ĳ':'ij','Ĵ':'J','ĵ':'j','Ķ':'K','ķ':'k','ĸ':'k','Ĺ':'L','ĺ':'l','Ļ':'L','ļ':'l','Ľ':'L','ľ':'l','Ŀ':'L','ŀ':'l','Ł':'L','ł':'l','Ń':'N','ń':'n','Ņ':'N','ņ':'n','Ň':'N','ň':'n','ŉ':'n','Ŋ':'N','ŋ':'n','Ō':'O','ō':'o','Ŏ':'O','ŏ':'o','Ő':'O','ő':'o','Œ':'OE','œ':'oe','Ŕ':'R','ŕ':'r','Ŗ':'R','ŗ':'r','Ř':'R','ř':'r','Ś':'S','ś':'s','Ŝ':'S','ŝ':'s','Ş':'S','ş':'s','Š':'S','š':'s','Ţ':'T','ţ':'t','Ť':'T','ť':'t','Ŧ':'T','ŧ':'t','Ũ':'U','ũ':'u','Ū':'U','ū':'u','Ŭ':'U','ŭ':'u','Ů':'U','ů':'u','Ű':'U','ű':'u','Ų':'U','ų':'u','Ŵ':'W','ŵ':'w','Ŷ':'Y','ŷ':'y','Ÿ':'Y','Ź':'Z','ź':'z','Ż':'Z','ż':'z','Ž':'Z','ž':'z'};
+        return map[c] || c;
+      })
+      .replace(/[^\x00-\xFF]/g, '?');  // tout caractère hors latin-1 → ?
+  }
 
-  // Pré-calculer les contenus de col1 pour estimer la hauteur
+  // Calcul adaptatif du lineH — cherche la valeur qui fait tenir les DEUX colonnes
+  const footerY = H - 9;
+  const minActH = 35;
+  // Calculer actNeededH ici (avant maxColH qui en dépend)
+  function estimateActionsHEarly(actions) {
+    if (!actions || !actions.length) return 18;
+    const cols = 2;
+    const rows = Math.ceil(actions.length / cols);
+    return 7 + rows * 10 + 4; // plus compact : 10mm par rangée au lieu de 12
+  }
+  const actNeededH = Math.max(estimateActionsHEarly(data.actions), 24);
+  const maxColH = footerY - y - actNeededH - 4;
+
+  // Pré-calculer les contenus de col1
   const rhBulletsEst = [
-    data.ca_mensuel_detail ? 'D\u00e9tail positionnement : ' + data.ca_mensuel_detail : '',
+    data.ca_mensuel_detail ? 'Détail positionnement : ' + data.ca_mensuel_detail : '',
     ...((data.rh || '').split('\n').map(s => s.trim()).filter(Boolean)),
     ...((data.formation || '').split('\n').map(s => s.trim()).filter(Boolean)).map(l => 'Formation : ' + l),
   ].filter(Boolean);
@@ -2310,23 +2339,45 @@ async function generatePDF(data, humeurSliderImg) {
     ...(data.rituels || []).map(r => 'Rituel en place : ' + r),
     ...((data.manager_obs || '').split('\n').map(s => s.trim()).filter(Boolean)).map(l => "Point d'attention : " + l),
   ].filter(Boolean);
-
   const col1Blocs = [
     [colW, null, rhBulletsEst],
     [colW, null, mgrBulletsEst],
     data.process ? [colW, data.process, null] : null,
-    [(data.entretiens||[]).length
+    (data.entretiens||[]).length
       ? [colW, null, (data.entretiens||[]).map(e => e.prenom + (e.sujet ? ' : '+e.sujet : ' (sujet confidentiel)'))]
-      : [colW, "Pas d'entretien individuel lors de ce passage.", null]][0],
+      : [colW, "Pas d'entretien individuel lors de ce passage.", null],
   ].filter(Boolean);
 
-  // Trouver le lineH qui fait tenir col1 dans maxColH
+  // Pré-calculer les contenus de col2 (hors KPI qui ont hauteur fixe)
+  const fortsArrEst = Array.isArray(data.forts) ? data.forts : (data.forts ? [data.forts] : []);
+  const diffArrEst  = Array.isArray(data.diff)  ? data.diff  : (data.diff  ? [data.diff]  : []);
+  const pfdEst = [...fortsArrEst.map(t => '(+) '+t), ...diffArrEst.map(t => '(-) '+t)].join('\n');
+  const col2Blocs = [
+    data.kpi_comment ? [colW2, data.kpi_comment, null] : null,
+    (fortsArrEst.length || diffArrEst.length) ? [colW2, pfdEst, null] : null,
+    data.remarque_libre ? [colW2, data.remarque_libre, null] : null,
+  ].filter(Boolean);
+  const kpiFixedH = data.kpis.length ? (6.5 + Math.ceil(data.kpis.length/3)*14 + 4 + 3) : 0;
+
+  // estimateActionsH (version complète, identique à estimateActionsHEarly)
+  function estimateActionsH(actions) {
+    if (!actions || !actions.length) return 18;
+    const cols = 2;
+    const rows = Math.ceil(actions.length / cols);
+    return 7 + rows * 10 + 4;
+  }
+  // actNeededH déjà déclaré plus haut
+
+  // Trouver le lineH qui fait tenir les DEUX colonnes ET les actions dans la page
   let adaptLineH = lineH;
-  for (const lh of [5.2, 4.8, 4.4, 4.0, 3.7]) {
-    if (estimateColH(col1Blocs, lh) <= maxColH) { adaptLineH = lh; break; }
+  for (const lh of [4.8, 4.4, 4.0, 3.7, 3.4, 3.1, 2.9]) {
+    const h1 = estimateColH(col1Blocs, lh);
+    const h2 = kpiFixedH + estimateColH(col2Blocs, lh);
+    const totalNeeded = Math.max(h1, h2) + actNeededH + 4;
+    if (totalNeeded <= (footerY - y)) { adaptLineH = lh; break; }
   }
 
-  // Col 1
+    // Col 1
   let yc1 = y;
   const rhBullets = [
     data.ca_mensuel_detail ? 'D\u00e9tail positionnement : ' + data.ca_mensuel_detail : '',
@@ -2360,49 +2411,52 @@ async function generatePDF(data, humeurSliderImg) {
     const kpiCols = 3;
     const kpiCellW = (colW2 - 6) / kpiCols;
     const kpiRows = Math.ceil(data.kpis.length / kpiCols);
-    const kpiBlocH = 6.5 + kpiRows * 22 + 4;
+    const kpiBlocH = 6.5 + kpiRows * 14 + 4;
     doc.setFillColor(249,249,249);
     doc.rect(col2Pos, yc2, colW2, 6.5, 'F');
     doc.setDrawColor(220,220,220);
     doc.rect(col2Pos, yc2, colW2, kpiBlocH, 'S');
-    doc.setTextColor(204,23,25); doc.setFont('helvetica','bold'); doc.setFontSize(8);
+    doc.setTextColor(204,23,25); doc.setFont('helvetica','bold'); doc.setFontSize(6);
     doc.text('INDICATEURS CL\u00c9S', col2Pos+3, yc2+4.5);
     data.kpis.forEach((k, idx) => {
       const row = Math.floor(idx / kpiCols);
       const col = idx % kpiCols;
       const cx = col2Pos + 3 + col * kpiCellW;
-      const cy = yc2 + 11 + row * 22;
+      const cy = yc2 + 10 + row * 14;
       const def = k.def || {};
       const val = parseFloat(k.val);
       const obj = parseFloat(def.obj || 0);
       const ok = def.dir === 'gte' ? val >= obj : (def.dir === 'lte' ? val <= obj : true);
       const kColor = !def.obj ? [40,40,40] : (ok ? [42,158,42] : [204,23,25]);
-      doc.setTextColor(140,140,140); doc.setFont('helvetica','normal'); doc.setFontSize(7);
+      doc.setTextColor(140,140,140); doc.setFont('helvetica','normal'); doc.setFontSize(6);
       doc.text(doc.splitTextToSize(k.name, kpiCellW - 4)[0], cx, cy);
       doc.setTextColor(...kColor); doc.setFont('helvetica','bold'); doc.setFontSize(11);
-      doc.text(k.val + (def.unit || ''), cx, cy + 8);
+      doc.text(k.val + (def.unit || ''), cx, cy + 6);
     });
     yc2 += kpiBlocH + 3;
   }
 
-  if (data.kpi_comment) { yc2 = drawBloc(col2Pos, yc2, colW2, 'Commentaire indicateurs', data.kpi_comment); yc2 += 3; }
+  if (data.kpi_comment) { yc2 = drawBloc(col2Pos, yc2, colW2, 'Commentaire indicateurs', data.kpi_comment, null, null, adaptLineH); yc2 += 3; }
 
   const fortsArr = Array.isArray(data.forts) ? data.forts : (data.forts ? [data.forts] : []);
   const diffArr = Array.isArray(data.diff) ? data.diff : (data.diff ? [data.diff] : []);
   if (fortsArr.length || diffArr.length) {
     const pfdContent = [...fortsArr.map(t => '(+) ' + t), ...diffArr.map(t => '(-) ' + t)].join('\n');
-    yc2 = drawBloc(col2Pos, yc2, colW2, 'Points forts & Difficult\u00e9s', pfdContent);
+    yc2 = drawBloc(col2Pos, yc2, colW2, 'Points forts & Difficult\u00e9s', pfdContent, null, null, adaptLineH);
     yc2 += 3;
   }
 
   if (data.remarque_libre) {
-    yc2 = drawBloc(col2Pos, yc2, colW2, 'Remarque libre', data.remarque_libre);
+    yc2 = drawBloc(col2Pos, yc2, colW2, 'Remarque libre', data.remarque_libre, null, null, adaptLineH);
     yc2 += 3;
   }
 
   // ACTIONS ATTENDUES — mise en page intelligente (2 col → 1 col → compact)
-  const contentBottom = Math.max(yc1, yc2) + 2;
-  const actY = Math.min(contentBottom, footerY - 24);
+  // Plafonner yc1/yc2 pour garantir l'espace des actions (le contenu est déjà dessiné, 
+  // mais les blocs pdf sont "clippés" naturellement si on ne va pas en dessous)
+  const maxContentY = footerY - actNeededH - 4;
+  const contentBottom = Math.min(Math.max(yc1, yc2) + 2, maxContentY);
+  const actY = contentBottom;
   const actTotalH = footerY - actY;
   const actHeaderH = 7;
   const actBodyH = actTotalH - actHeaderH;
@@ -2411,7 +2465,7 @@ async function generatePDF(data, humeurSliderImg) {
   // Calcule la hauteur nécessaire pour une action donnée avec une colW et police données
   function calcActionH(a, colW, fszTitle, fszComment, lhComment) {
     doc.setFontSize(fszTitle);
-    const titleLines = doc.splitTextToSize(a.text, colW - 22).length;
+    const titleLines = doc.splitTextToSize(pdfSafe(a.text), colW - 22).length;
     let h = titleLines * (fszTitle * 0.35) + 3;
     if (a.comment) {
       doc.setFontSize(fszComment);
@@ -2426,23 +2480,23 @@ async function generatePDF(data, humeurSliderImg) {
   function drawAction(a, ax, ay, colW, fszTitle, fszComment, lhComment) {
     doc.setFillColor(204,23,25); doc.ellipse(ax+1.5, ay-1.3, 1.5, 1.5, 'F');
     doc.setTextColor(45,45,45); doc.setFont('helvetica','bold'); doc.setFontSize(fszTitle);
-    const tLines = doc.splitTextToSize(a.text, colW - 22);
+    const tLines = doc.splitTextToSize(pdfSafe(a.text), colW - 22);
     tLines.forEach((tl, ti) => doc.text(tl, ax+6, ay + ti*(fszTitle*0.35)));
     let ayOff = tLines.length * (fszTitle*0.35) + 1.5;
     if (a.comment) {
       doc.setTextColor(90,90,90); doc.setFont('helvetica','normal'); doc.setFontSize(fszComment);
-      const cl = doc.splitTextToSize(a.comment, colW - 22);
+      const cl = doc.splitTextToSize(pdfSafe(a.comment), colW - 22);
       cl.forEach((c, ci) => doc.text(c, ax+6, ay+ayOff+(ci*lhComment)));
       ayOff += cl.length * lhComment;
     }
-    if (a.who) { doc.setTextColor(130,130,130); doc.setFont('helvetica','italic'); doc.setFontSize(fszComment-0.5); doc.text(a.who, ax+6, ay+ayOff); }
+    if (a.who) { doc.setTextColor(130,130,130); doc.setFont('helvetica','italic'); doc.setFontSize(fszComment-0.5); doc.text(pdfSafe(a.who), ax+6, ay+ayOff); }
     if (a.date) { doc.setTextColor(204,23,25); doc.setFont('helvetica','bold'); doc.setFontSize(fszComment); doc.text(formatDate(a.date), ax+colW-6, ay, {align:'right'}); }
   }
 
   // Cadre actions
   doc.setFillColor(204, 23, 25);
   doc.rect(col1, actY, contentRight - col1, actHeaderH, 'F');
-  doc.setTextColor(255,255,255); doc.setFont('helvetica','bold'); doc.setFontSize(8.5);
+  doc.setTextColor(255,255,255); doc.setFont('helvetica','bold'); doc.setFontSize(6.5);
   doc.text('ACTIONS ATTENDUES — PROCHAIN PASSAGE', col1+3, actY+5);
   doc.setFillColor(255,255,255);
   doc.rect(col1, actY+actHeaderH, contentRight-col1, actBodyH, 'F');
@@ -2453,14 +2507,17 @@ async function generatePDF(data, humeurSliderImg) {
   if (data.actions.length) {
     // Essai avec différentes configs jusqu'à ce que tout rentre
     const configs = [
-      {cols:2, fszT:8.5, fszC:7.5, lhC:3.8, gap:4},
-      {cols:2, fszT:7.5, fszC:6.5, lhC:3.5, gap:3},
-      {cols:1, fszT:8,   fszC:7,   lhC:3.8, gap:4},
-      {cols:1, fszT:7,   fszC:6,   lhC:3.5, gap:3},
-      {cols:1, fszT:6.5, fszC:5.5, lhC:3.2, gap:2},
+      {cols:2, fszT:7.5, fszC:6.5, lhC:3.5, gap:4},
+      {cols:2, fszT:6.5, fszC:5.5, lhC:3.2, gap:3},
+      {cols:2, fszT:6,   fszC:5,   lhC:3.0, gap:2},
+      {cols:2, fszT:5.5, fszC:5,   lhC:2.8, gap:2},
+      {cols:1, fszT:6.5, fszC:5.5, lhC:3.2, gap:3},
+      {cols:1, fszT:6,   fszC:5,   lhC:3.0, gap:2},
+      {cols:1, fszT:5.5, fszC:5,   lhC:2.8, gap:1.5},
     ];
 
-    let chosen = configs[configs.length-1];
+    // La config de dernier recours force tout en 2 colonnes ultra-compact
+    let chosen = {cols:2, fszT:5.5, fszC:5, lhC:2.8, gap:1.5};
     for (const cfg of configs) {
       const colW = cfg.cols === 2 ? (contentRight-col1-8)/2 : (contentRight-col1-8);
       const perCol = cfg.cols === 2 ? Math.ceil(data.actions.length/2) : data.actions.length;
@@ -2494,7 +2551,7 @@ async function generatePDF(data, humeurSliderImg) {
       });
     });
   } else {
-    doc.setTextColor(180,180,180); doc.setFont('helvetica','italic'); doc.setFontSize(8);
+    doc.setTextColor(180,180,180); doc.setFont('helvetica','italic'); doc.setFontSize(6);
     doc.text('Aucune action renseignée pour ce passage', col1+4, actY+actHeaderH+8);
   }
 
@@ -2505,7 +2562,7 @@ async function generatePDF(data, humeurSliderImg) {
   doc.rect(photoCol, py, photoW, 6.5, 'F');
   doc.setDrawColor(220,220,220);
   doc.rect(photoCol, py, photoW, 6.5, 'S');
-  doc.setTextColor(204,23,25); doc.setFont('helvetica','bold'); doc.setFontSize(8);
+  doc.setTextColor(204,23,25); doc.setFont('helvetica','bold'); doc.setFontSize(6);
   doc.text('PHOTOS', photoCol+3, py+4.5);
   py += 11;
 
@@ -2535,7 +2592,7 @@ async function generatePDF(data, humeurSliderImg) {
       photoIdx++;
     }
   } else {
-    doc.setTextColor(180,180,180); doc.setFont('helvetica','italic'); doc.setFontSize(7.5);
+    doc.setTextColor(180,180,180); doc.setFont('helvetica','italic'); doc.setFontSize(6.5);
     doc.text('Aucune photo', photoCol+3, py+8);
   }
 
@@ -2559,16 +2616,19 @@ async function generatePDF(data, humeurSliderImg) {
   doc.text('Humeur du passage', hmX + hmW/2, hmY + 2.2, {align:'center'});
 
   // Insérer l'image du slider (pré-générée avant generatePDF, pas de await ici)
-  if (humeurSliderImg) {
+  if (humeurSliderImg && data.humeur !== undefined && data.humeur !== null && data.humeur !== '') {
     const imgY = hmY + 2.8;
     const imgH = hmH - 4;
     const imgW = hmW - 2;
     doc.addImage(humeurSliderImg, 'PNG', hmX + 1, imgY, imgW, imgH);
-  } else {
-    doc.setFont('helvetica','bold'); doc.setFontSize(8);
-    doc.setTextColor(140,140,140);
+  } else if (data.humeur !== undefined && data.humeur !== null && data.humeur !== '') {
+    // Repli texte si l'image n'a pas pu être générée
+    const humeurFallbackFg = humeurFgRgb[humeurV] || humeurFgRgb[2];
+    doc.setFont('helvetica','bold'); doc.setFontSize(6);
+    doc.setTextColor(...humeurFallbackFg);
     doc.text(humeurLabel, hmX + hmW/2, hmY + hmH/2 + 1, {align:'center'});
   }
+  // Si pas d'humeur du tout (ancien bilan), on n'affiche rien dans cette zone
 
   // Filigrane — dessiné en dernier pour passer au-dessus des fonds blancs,
   // mais sous le bandeau rouge (déjà dessiné en premier, il n'est pas écrasé)
