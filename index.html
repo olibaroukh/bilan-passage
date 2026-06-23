@@ -615,7 +615,7 @@ function loadLogo() {
 }
 
 // ── VERSION APP ── (incrémenter à chaque mise à jour notable, pour déclencher l'invite de rechargement)
-const APP_VERSION = '2026.06.22-9';
+const APP_VERSION = '2026.06.22-10';
 
 // ── ÉTAT ──
 let magasins = [];
@@ -941,16 +941,31 @@ function initParamsUI() {
     row.innerHTML = `<span class="kpi-param-name">${k.name}</span>
       <div class="kpi-param-inputs">
         <span class="kpi-param-label">Objectif</span>
-        <input type="number" value="${k.obj || ''}" placeholder="—" oninput="updateKpiObj('${k.name}', this.value)">
+        <input type="text" inputmode="decimal" value="${formatDecimal(k.obj)}" placeholder="—" oninput="updateKpiObj('${k.name}', this.value)">
         <span class="kpi-param-label">${k.unit || ''}</span>
       </div>`;
     list.appendChild(row);
   });
 }
 
+function parseDecimal(val) {
+  // Accepte virgule ou point comme séparateur décimal
+  if (!val && val !== 0) return null;
+  const n = parseFloat(String(val).replace(',', '.'));
+  return isNaN(n) ? null : n;
+}
+
+function formatDecimal(val) {
+  // Affiche sans décimale si c'est un entier (ex: 4.0 → "4"), avec si nécessaire (4.5 → "4.5")
+  if (val === null || val === undefined || val === '') return '';
+  const n = parseFloat(val);
+  if (isNaN(n)) return '';
+  return Number.isInteger(n) ? String(n) : String(n);
+}
+
 function updateKpiObj(name, val) {
   const k = KPI_DEFAULTS.find(x => x.name === name);
-  if (k) { k.obj = val ? parseFloat(val) : null; saveParams(); }
+  if (k) { k.obj = parseDecimal(val); saveParams(); }
 }
 
 function addNewKpi() {
@@ -959,7 +974,7 @@ function addNewKpi() {
   const unit = document.getElementById('new-kpi-unit').value.trim();
   if (!name) { showToast('Indique un nom pour l\'indicateur'); return; }
   if (KPI_DEFAULTS.some(k => k.name === name)) { showToast('Cet indicateur existe déjà'); return; }
-  const newKpi = { name, unit, obj: objVal ? parseFloat(objVal) : null, dir: objVal ? 'gte' : null };
+  const newKpi = { name, unit, obj: objVal ? parseDecimal(objVal) : null, dir: objVal ? 'gte' : null };
   KPI_DEFAULTS.push(newKpi);
   saveKpiCustom(newKpi);
   document.getElementById('new-kpi-name').value = '';
