@@ -615,7 +615,7 @@ function loadLogo() {
 }
 
 // ── VERSION APP ── (incrémenter à chaque mise à jour notable, pour déclencher l'invite de rechargement)
-const APP_VERSION = '2026.06.22-10';
+const APP_VERSION = '2026.06.22-11';
 
 // ── ÉTAT ──
 let magasins = [];
@@ -2118,8 +2118,8 @@ async function generatePDF(data, humeurSliderImg) {
   const colW2 = totalColW * 0.47;
   const col2Pos = col1 + colW + gutter;
 
-  function drawBloc(x, yStart, w, title, content, titleColor, bulletLines) {
-    const tColor = titleColor || [204,23,25];
+  // Calcule les lignes d'un bloc sans le dessiner
+  function getBlocLines(w, content, bulletLines) {
     let lines = [];
     if (bulletLines && bulletLines.length) {
       bulletLines.forEach(entry => {
@@ -2129,7 +2129,14 @@ async function generatePDF(data, humeurSliderImg) {
     } else if (content) {
       lines = doc.splitTextToSize(content, w - 12);
     }
-    const blocH = 6.5 + (lines.length ? lines.length * lineH + 4 : 8);
+    return lines;
+  }
+
+  function drawBloc(x, yStart, w, title, content, titleColor, bulletLines, forcedLineH) {
+    const tColor = titleColor || [204,23,25];
+    const lh = forcedLineH || lineH;
+    const lines = getBlocLines(w, content, bulletLines);
+    const blocH = 6.5 + (lines.length ? lines.length * lh + 4 : 8);
     doc.setFillColor(249,249,249);
     doc.rect(x, yStart, w, 6.5, 'F');
     doc.setDrawColor(220,220,220);
@@ -2142,13 +2149,53 @@ async function generatePDF(data, humeurSliderImg) {
     doc.setFont('helvetica','normal');
     doc.setFontSize(8.5);
     lines.forEach((line, i) => {
-      doc.text(line, x + 3, yStart + 11 + i * lineH);
+      doc.text(line, x + 3, yStart + 11 + i * lh);
     });
     return yStart + blocH;
   }
 
+  // Calcule la hauteur totale d'une colonne avec un lineH donné
+  function estimateColH(blocs, lh) {
+    let total = 0;
+    blocs.forEach(([w, content, bulletLines]) => {
+      const lines = getBlocLines(w, content, bulletLines);
+      total += 6.5 + (lines.length ? lines.length * lh + 4 : 8) + 3;
+    });
+    return total;
+  }
+
   function splitToLines(text) {
     return (text || '').split('\n').map(s => s.trim()).filter(Boolean);
+  }
+
+  // Calcul adaptatif du lineH — réduit si le contenu déborde la zone disponible
+  const footerY = H - 9; // déclaré ici pour le calcul adaptatif (réutilisé dans le bloc Actions)
+  const maxColH = footerY - y - 30; // espace max pour les colonnes (30mm réservé pour actions)
+
+  // Pré-calculer les contenus de col1 pour estimer la hauteur
+  const rhBulletsEst = [
+    data.ca_mensuel_detail ? 'D\u00e9tail positionnement : ' + data.ca_mensuel_detail : '',
+    ...((data.rh || '').split('\n').map(s => s.trim()).filter(Boolean)),
+    ...((data.formation || '').split('\n').map(s => s.trim()).filter(Boolean)).map(l => 'Formation : ' + l),
+  ].filter(Boolean);
+  const mgrBulletsEst = [
+    ...(data.rituels || []).map(r => 'Rituel en place : ' + r),
+    ...((data.manager_obs || '').split('\n').map(s => s.trim()).filter(Boolean)).map(l => "Point d'attention : " + l),
+  ].filter(Boolean);
+
+  const col1Blocs = [
+    [colW, null, rhBulletsEst],
+    [colW, null, mgrBulletsEst],
+    data.process ? [colW, data.process, null] : null,
+    [(data.entretiens||[]).length
+      ? [colW, null, (data.entretiens||[]).map(e => e.prenom + (e.sujet ? ' : '+e.sujet : ' (sujet confidentiel)'))]
+      : [colW, "Pas d'entretien individuel lors de ce passage.", null]][0],
+  ].filter(Boolean);
+
+  // Trouver le lineH qui fait tenir col1 dans maxColH
+  let adaptLineH = lineH;
+  for (const lh of [5.2, 4.8, 4.4, 4.0, 3.7]) {
+    if (estimateColH(col1Blocs, lh) <= maxColH) { adaptLineH = lh; break; }
   }
 
   // Col 1
@@ -2158,24 +2205,24 @@ async function generatePDF(data, humeurSliderImg) {
     ...splitToLines(data.rh),
     ...splitToLines(data.formation).map(l => 'Formation : ' + l),
   ].filter(Boolean);
-  yc1 = drawBloc(col1, yc1, colW, 'RH & \u00c9quipe', null, null, rhBullets);
+  yc1 = drawBloc(col1, yc1, colW, 'RH & \u00c9quipe', null, null, rhBullets, adaptLineH);
   yc1 += 3;
 
   const mgrBullets = [
     ...(data.rituels || []).map(r => 'Rituel en place : ' + r),
     ...splitToLines(data.manager_obs).map(l => "Point d'attention : " + l),
   ].filter(Boolean);
-  yc1 = drawBloc(col1, yc1, colW, 'Suivi manager', null, null, mgrBullets);
+  yc1 = drawBloc(col1, yc1, colW, 'Suivi manager', null, null, mgrBullets, adaptLineH);
   yc1 += 3;
 
-  if (data.process) { yc1 = drawBloc(col1, yc1, colW, 'Process & Nouveaut\u00e9s', data.process); yc1 += 3; }
+  if (data.process) { yc1 = drawBloc(col1, yc1, colW, 'Process & Nouveaut\u00e9s', data.process, null, null, adaptLineH); yc1 += 3; }
 
   const entretiensArr = data.entretiens || [];
   if (entretiensArr.length) {
     const entBullets = entretiensArr.map(e => e.prenom + (e.sujet ? ' : ' + e.sujet : ' (sujet confidentiel)'));
-    yc1 = drawBloc(col1, yc1, colW, 'Entretiens individuels', null, null, entBullets);
+    yc1 = drawBloc(col1, yc1, colW, 'Entretiens individuels', null, null, entBullets, adaptLineH);
   } else {
-    yc1 = drawBloc(col1, yc1, colW, 'Entretiens individuels', "Pas d'entretien individuel lors de ce passage.");
+    yc1 = drawBloc(col1, yc1, colW, 'Entretiens individuels', "Pas d'entretien individuel lors de ce passage.", null, null, adaptLineH);
   }
   yc1 += 3;
 
@@ -2225,18 +2272,50 @@ async function generatePDF(data, humeurSliderImg) {
     yc2 += 3;
   }
 
-  // ACTIONS ATTENDUES
-  const footerY = H - 9;
+  // ACTIONS ATTENDUES — mise en page intelligente (2 col → 1 col → compact)
   const contentBottom = Math.max(yc1, yc2) + 2;
   const actY = Math.min(contentBottom, footerY - 24);
   const actTotalH = footerY - actY;
   const actHeaderH = 7;
   const actBodyH = actTotalH - actHeaderH;
+  const actAvailH = actBodyH - 4; // marge interne
 
+  // Calcule la hauteur nécessaire pour une action donnée avec une colW et police données
+  function calcActionH(a, colW, fszTitle, fszComment, lhComment) {
+    doc.setFontSize(fszTitle);
+    const titleLines = doc.splitTextToSize(a.text, colW - 22).length;
+    let h = titleLines * (fszTitle * 0.35) + 3;
+    if (a.comment) {
+      doc.setFontSize(fszComment);
+      const cLines = doc.splitTextToSize(a.comment, colW - 22).length;
+      h += cLines * lhComment;
+    }
+    if (a.who) h += 4;
+    return Math.max(h, fszTitle * 0.4 + 4);
+  }
+
+  // Dessine une action à la position donnée
+  function drawAction(a, ax, ay, colW, fszTitle, fszComment, lhComment) {
+    doc.setFillColor(204,23,25); doc.ellipse(ax+1.5, ay-1.3, 1.5, 1.5, 'F');
+    doc.setTextColor(45,45,45); doc.setFont('helvetica','bold'); doc.setFontSize(fszTitle);
+    const tLines = doc.splitTextToSize(a.text, colW - 22);
+    tLines.forEach((tl, ti) => doc.text(tl, ax+6, ay + ti*(fszTitle*0.35)));
+    let ayOff = tLines.length * (fszTitle*0.35) + 1.5;
+    if (a.comment) {
+      doc.setTextColor(90,90,90); doc.setFont('helvetica','normal'); doc.setFontSize(fszComment);
+      const cl = doc.splitTextToSize(a.comment, colW - 22);
+      cl.forEach((c, ci) => doc.text(c, ax+6, ay+ayOff+(ci*lhComment)));
+      ayOff += cl.length * lhComment;
+    }
+    if (a.who) { doc.setTextColor(130,130,130); doc.setFont('helvetica','italic'); doc.setFontSize(fszComment-0.5); doc.text(a.who, ax+6, ay+ayOff); }
+    if (a.date) { doc.setTextColor(204,23,25); doc.setFont('helvetica','bold'); doc.setFontSize(fszComment); doc.text(formatDate(a.date), ax+colW-6, ay, {align:'right'}); }
+  }
+
+  // Cadre actions
   doc.setFillColor(204, 23, 25);
   doc.rect(col1, actY, contentRight - col1, actHeaderH, 'F');
   doc.setTextColor(255,255,255); doc.setFont('helvetica','bold'); doc.setFontSize(8.5);
-  doc.text('ACTIONS ATTENDUES \u2014 PROCHAIN PASSAGE', col1+3, actY+5);
+  doc.text('ACTIONS ATTENDUES — PROCHAIN PASSAGE', col1+3, actY+5);
   doc.setFillColor(255,255,255);
   doc.rect(col1, actY+actHeaderH, contentRight-col1, actBodyH, 'F');
   doc.setDrawColor(204,23,25); doc.setLineWidth(0.5);
@@ -2244,25 +2323,47 @@ async function generatePDF(data, humeurSliderImg) {
   doc.setLineWidth(0.2);
 
   if (data.actions.length) {
-    const aColW = (contentRight-col1-8) / 2;
-    const hasComments = data.actions.some(a => a.comment);
-    const actRowH = hasComments ? 14 : 10;
-    let ax = col1+4, ay = actY+actHeaderH+actRowH*0.55;
-    data.actions.forEach((a, i) => {
-      if (i > 0 && i === Math.ceil(data.actions.length/2)) { ax = col1+4+aColW+4; ay = actY+actHeaderH+actRowH*0.55; }
-      doc.setFillColor(204,23,25); doc.ellipse(ax+1.5, ay-1.3, 1.7, 1.7, 'F');
-      doc.setTextColor(45,45,45); doc.setFont('helvetica','bold'); doc.setFontSize(8.5);
-      doc.text(doc.splitTextToSize(a.text, aColW - 22)[0], ax+6, ay);
-      let ayOff = 4;
-      if (a.comment) {
-        doc.setTextColor(90,90,90); doc.setFont('helvetica','normal'); doc.setFontSize(7.5);
-        const cl = doc.splitTextToSize(a.comment, aColW - 22);
-        cl.forEach((c, ci) => { doc.text(c, ax+6, ay+ayOff+(ci*4)); });
-        ayOff += cl.length * 4;
+    // Essai avec différentes configs jusqu'à ce que tout rentre
+    const configs = [
+      {cols:2, fszT:8.5, fszC:7.5, lhC:3.8, gap:4},
+      {cols:2, fszT:7.5, fszC:6.5, lhC:3.5, gap:3},
+      {cols:1, fszT:8,   fszC:7,   lhC:3.8, gap:4},
+      {cols:1, fszT:7,   fszC:6,   lhC:3.5, gap:3},
+      {cols:1, fszT:6.5, fszC:5.5, lhC:3.2, gap:2},
+    ];
+
+    let chosen = configs[configs.length-1];
+    for (const cfg of configs) {
+      const colW = cfg.cols === 2 ? (contentRight-col1-8)/2 : (contentRight-col1-8);
+      const perCol = cfg.cols === 2 ? Math.ceil(data.actions.length/2) : data.actions.length;
+      const colActions = cfg.cols === 2
+        ? [data.actions.slice(0, perCol), data.actions.slice(perCol)]
+        : [data.actions];
+
+      let fits = true;
+      for (const colActs of colActions) {
+        let totalH = 0;
+        colActs.forEach(a => { totalH += calcActionH(a, colW, cfg.fszT, cfg.fszC, cfg.lhC) + cfg.gap; });
+        if (totalH > actAvailH) { fits = false; break; }
       }
-      if (a.who) { doc.setTextColor(130,130,130); doc.setFont('helvetica','italic'); doc.setFontSize(7); doc.text(a.who, ax+6, ay+ayOff); }
-      if (a.date) { doc.setTextColor(204,23,25); doc.setFont('helvetica','bold'); doc.setFontSize(7.5); doc.text(formatDate(a.date), ax+aColW-20, ay, {align:'right'}); }
-      ay += actRowH;
+      if (fits) { chosen = cfg; break; }
+    }
+
+    // Rendu avec la config choisie
+    const aColW = chosen.cols === 2 ? (contentRight-col1-8)/2 : (contentRight-col1-8);
+    const perCol = chosen.cols === 2 ? Math.ceil(data.actions.length/2) : data.actions.length;
+    const columns = chosen.cols === 2
+      ? [data.actions.slice(0, perCol), data.actions.slice(perCol)]
+      : [data.actions];
+
+    columns.forEach((colActs, ci) => {
+      let ax = col1+4 + ci*(aColW+8);
+      let ay = actY+actHeaderH+4;
+      colActs.forEach(a => {
+        const h = calcActionH(a, aColW, chosen.fszT, chosen.fszC, chosen.lhC);
+        drawAction(a, ax, ay, aColW, chosen.fszT, chosen.fszC, chosen.lhC);
+        ay += h + chosen.gap;
+      });
     });
   } else {
     doc.setTextColor(180,180,180); doc.setFont('helvetica','italic'); doc.setFontSize(8);
