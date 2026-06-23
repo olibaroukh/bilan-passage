@@ -3,17 +3,21 @@ SOP;%;40;gte
 TC;%;95;gte
 PC %;%;50;gte
 PC €;€;80;gte
+Seuil PC;;4000;gte
 Panier Moyen;€;450;gte
 NDV;;50;gte
 MdC/Intemporelle;%;66;gte
-Lukkas;%;12;gte
-PM Paire 1;€;130;gte
+Lukkas;%;20;gte
+PM Paire 1;€;135;gte
 Lyleoo;;6;gte
 Retour Verres;%;5;lte
 Audio dépistage;%;30;gte
 Vente add;%;12;gte
 PM Prothèse;€;1200;gte
-PM Vente Audio;€;2500;gte
+PM Vente Audio;€;2350;gte
 Nb de Prothèse;;25;gte
 Nb d'avis Google;;500;gte
 Note Google;;4,5;gte
+Transition;%;20;gte
+SAP;%;70;gte
+Seuil de Perf;;42750;gte
