@@ -589,6 +589,7 @@ input[type=date]{color-scheme:dark}
       <input type="password" id="modal-pwd" placeholder="Mot de passe..."></div>
     <div class="modal-actions">
       <button class="btn-primary" onclick="sendBilan()">📧 Envoyer</button>
+      <button class="btn-secondary" onclick="previewPDF()">👁 Prévisualiser le PDF</button>
       <button class="btn-secondary" onclick="closeModal()">Annuler</button>
     </div>
   </div>
@@ -627,7 +628,7 @@ function loadLogo() {
 }
 
 // ── VERSION APP ── (incrémenter à chaque mise à jour notable, pour déclencher l'invite de rechargement)
-const APP_VERSION = '2026.06.23-5';
+const APP_VERSION = '2026.06.23-6';
 
 // ── DICTÉE VOCALE ──
 let micRecognition = null;
@@ -1763,6 +1764,35 @@ function finalizeBilan() {
 function closeModal() {
   document.getElementById('modal-send').classList.remove('open');
   document.getElementById('modal-pwd').value = '';
+}
+
+async function previewPDF() {
+  if (!pendingBilanData) { showToast('Aucune donnée à prévisualiser'); return; }
+  showToast('1/2 — Génération du PDF...');
+  try {
+    const data = pendingBilanData;
+    const hv = data.humeur !== undefined && data.humeur !== '' ? parseInt(data.humeur) : null;
+    const humeurSliderImg = (hv !== null && !isNaN(hv)) ? await generateHumeurSliderImage(hv) : null;
+    const pdfBytes = await generatePDF(data, humeurSliderImg);
+    const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+    const url = URL.createObjectURL(blob);
+    // Ouvrir dans un nouvel onglet
+    const tab = window.open(url, '_blank');
+    if (!tab) {
+      // Si les popups sont bloqués, proposer un lien de téléchargement
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'Bilan_' + (data.magasin?.libelle || 'apercu') + '_' + (data.date || '') + '.pdf';
+      a.click();
+      showToast('PDF téléchargé (popups bloqués)');
+    } else {
+      showToast('PDF ouvert dans un nouvel onglet');
+      // Libérer l'URL après 60s
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+    }
+  } catch(e) {
+    showToast('⚠ Erreur lors de la prévisualisation : ' + e.message);
+  }
 }
 
 async function sendBilan() {
