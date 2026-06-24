@@ -654,7 +654,7 @@ function loadLogo() {
 }
 
 // ── VERSION APP ── (incrémenter à chaque mise à jour notable, pour déclencher l'invite de rechargement)
-const APP_VERSION = '2026.06.24-2';
+const APP_VERSION = '2026.06.24-3';
 
 // ── DICTÉE VOCALE ──
 let micRecognition = null;
@@ -2071,112 +2071,198 @@ function buildEmailBody(d) {
   const mag = d.magasin;
   const rituels = d.rituels || [];
   const paragraphs = [];
+  const humeur = parseInt(d.humeur ?? 2); // 0=Difficile 1=Mitigé 2=Correct 3=Bien 4=Top
 
-  // Phrase d'ouverture + mot d'intro
-  let opener = `Veuillez trouver ci-joint le bilan de ma visite au magasin ${mag.libelle} du ${formatDate(d.date)}.`;
-  if (d.mot_intro) opener += ` ${d.mot_intro}`;
+  // ── Helpers tonalité selon humeur ──
+  function ton(difficile, mitige, correct, bien, top) {
+    return [difficile, mitige, correct, bien, top][Math.min(Math.max(humeur, 0), 4)];
+  }
+  function pick(arr) { return arr[Math.min(Math.max(humeur, 0), arr.length-1)]; }
+
+  // ── Ouverture ──
+  const openers = [
+    `Je reviens de ma visite au magasin ${mag.libelle} du ${formatDate(d.date)}. Ce passage a été dense et nous avons eu des sujets sérieux à aborder.`,
+    `Veuillez trouver ci-joint le bilan de ma visite au magasin ${mag.libelle} du ${formatDate(d.date)}.`,
+    `Je reviens de ma visite au magasin ${mag.libelle} du ${formatDate(d.date)}. Un passage constructif avec des échanges de qualité.`,
+    `Je reviens de ma visite au magasin ${mag.libelle} du ${formatDate(d.date)}. Ce passage était vraiment positif et encourageant !`,
+    `Je reviens de ma visite au magasin ${mag.libelle} du ${formatDate(d.date)}. Excellente journée — une belle énergie dans ce magasin !`,
+  ];
+  let opener = pick(openers);
+  if (d.mot_intro) opener += ' ' + d.mot_intro;
   paragraphs.push(opener);
 
-  // Paragraphe contexte de la visite (présents, passage)
-  let contextSentence = d.presents ? `Nous nous sommes vus en présence de ${d.presents}.` : '';
-  if (d.passage) contextSentence += (contextSentence ? ' ' : '') + `Il s'agissait du passage n°${d.passage} de l'année.`;
-  if (contextSentence) paragraphs.push(contextSentence);
+  // ── Contexte visite ──
+  let ctx = '';
+  if (d.presents) ctx += `Nous nous sommes retrouvés en présence de ${d.presents}.`;
+  if (d.passage) ctx += (ctx ? ' ' : '') + `C'était le passage n°${d.passage} de l'année.`;
+  if (ctx) paragraphs.push(ctx);
 
-  // Paragraphe RH / renta / positionnement
+  // ── Renta + positionnement CA ──
   const rhSentences = [];
   if (d.renta) {
-    const atteint = parseFloat(d.renta) >= parseFloat(d.renta_obj || 28);
-    rhSentences.push(`La renta salariale s'établit à ${d.renta}% pour un objectif de ${d.renta_obj || 28}%${atteint ? ', objectif atteint' : ''}.`);
+    const renta = parseFloat(d.renta);
+    const obj = parseFloat(d.renta_obj || 28);
+    const ecart = Math.abs(renta - obj).toFixed(1);
+    const atteint = renta <= obj; // ✅ CORRIGÉ : renta salariale, plus bas = mieux
+    if (atteint) {
+      rhSentences.push(pick([
+        `La rentabilité salariale s'établit à ${d.renta}% pour un objectif de ${obj}% — objectif atteint, ${ecart} point${ecart>1?'s':''} en dessous.`,
+        `La rentabilité salariale est à ${d.renta}% (objectif ${obj}%) — dans les clous.`,
+        `La rentabilité salariale ressort à ${d.renta}% pour un objectif de ${obj}% — objectif atteint.`,
+        `Bonne maîtrise de la rentabilité salariale à ${d.renta}% — ${ecart} point${ecart>1?'s':''} sous l'objectif de ${obj}%.`,
+        `Excellente rentabilité salariale à ${d.renta}%, ${ecart} point${ecart>1?'s':''} sous l'objectif de ${obj}% — bravo !`,
+      ]));
+    } else {
+      rhSentences.push(pick([
+        `La rentabilité salariale est à ${d.renta}% pour un objectif de ${obj}% — ${ecart} point${ecart>1?'s':''} au-dessus de l'objectif, un axe de travail prioritaire.`,
+        `La rentabilité salariale s'établit à ${d.renta}% (objectif ${obj}%) — ${ecart} point${ecart>1?'s':''} à résorber.`,
+        `La rentabilité salariale est à ${d.renta}% pour un objectif de ${obj}% — ${ecart} point${ecart>1?'s':''} au-dessus, à optimiser.`,
+        `La rentabilité salariale est à ${d.renta}% pour un objectif de ${obj}% — ${ecart} point${ecart>1?'s':''} au-dessus, un point de vigilance.`,
+        `La rentabilité salariale ressort à ${d.renta}% (objectif ${obj}%) — ${ecart} point${ecart>1?'s':''} au-dessus, à surveiller malgré les bons résultats.`,
+      ]));
+    }
   }
-  if (d.ca_annuel || d.ca_mensuel) {
-    const posParts = [];
-    if (d.ca_mensuel) posParts.push(`${d.ca_mensuel}% sur le mois`);
-    if (d.ca_annuel) posParts.push(`${d.ca_annuel}% sur l'année`);
-    rhSentences.push(`Le positionnement CA ressort à ${posParts.join(' et ')}${d.ca_mensuel_detail ? ' (' + d.ca_mensuel_detail + ')' : ''}.`);
+  if (d.ca_mensuel || d.ca_annuel) {
+    const parts = [];
+    if (d.ca_mensuel) {
+      const pct = parseFloat(d.ca_mensuel);
+      const ecartCa = Math.abs(pct - 100).toFixed(0);
+      const sens = pct >= 100
+        ? pick(['légèrement en avance', 'en avance', 'bien positionné', 'bien en avance', 'excellemment positionné'])
+        : pick(['en retard', 'en léger retard', 'légèrement en retrait', 'en retrait', 'en dessous']);
+      parts.push(`${pct}% sur le mois (${sens} de ${ecartCa} point${ecartCa>1?'s':''})`);
+    }
+    if (d.ca_annuel) {
+      const pct = parseFloat(d.ca_annuel);
+      const ecartAn = Math.abs(pct - 100).toFixed(0);
+      const sensAn = pct >= 100 ? 'en avance' : 'en retrait';
+      parts.push(`${pct}% sur l'année (${ecartAn} point${ecartAn>1?'s':''} ${sensAn})`);
+    }
+    rhSentences.push(`Le positionnement CA ressort à ${parts.join(' et ')}${d.ca_mensuel_detail ? ' (' + d.ca_mensuel_detail + ')' : ''}.`);
   }
   if (d.rh) rhSentences.push(d.rh);
   if (d.formation) rhSentences.push(`Formation dispensée sur place : ${d.formation}.`);
   if (rhSentences.length) paragraphs.push(rhSentences.join(' '));
 
-  // Paragraphe management
+  // ── Management ──
   const mgrSentences = [];
-  if (rituels.length) mgrSentences.push(`Côté management, ${rituels.join(', ').toLowerCase()} sont bien en place.`);
+  if (rituels.length) {
+    const intro = pick([
+      'Sur le management, les rituels suivants sont en place :',
+      'Côté management,',
+      'Sur le plan managérial,',
+      'Le management est bien structuré :',
+      'Le management est au top :',
+    ]);
+    const rituelsStr = rituels.join(', ').toLowerCase();
+    mgrSentences.push(rituels.length > 2
+      ? `${intro} ${rituelsStr}.`
+      : `${intro} ${rituelsStr} sont bien en place.`);
+  }
   if (d.manager_obs) mgrSentences.push(d.manager_obs);
   if (mgrSentences.length) paragraphs.push(mgrSentences.join(' '));
 
-  // Entretiens individuels — mentionnés seulement s'il y en a eu (pas de mention si vide, pour rester naturel)
+  // ── Entretiens individuels ──
   if (d.entretiens && d.entretiens.length) {
     const entLines = d.entretiens.map(e => `• ${e.prenom}${e.sujet ? ' : ' + e.sujet : ' (sujet confidentiel)'}`);
     const intro = d.entretiens.length > 1
-      ? `Des entretiens individuels ont également été menés avec :`
-      : `Un entretien individuel a également été mené avec :`;
+      ? pick(["Des entretiens individuels ont été menés avec :", "J'ai également eu des échanges individuels avec :", "Des entretiens ont été conduits avec :", "Nous avons également eu des temps individuels avec :", "De beaux échanges individuels avec :"])
+      : pick(["Un entretien individuel a été mené avec :", "J'ai eu un échange individuel avec :", "Un entretien a été conduit avec :", "Un temps individuel a été pris avec :", "Un bel échange individuel avec :"]);
     paragraphs.push(intro + '\n' + entLines.join('\n'));
   }
 
-  // Paragraphe indicateurs
-  if (d.kpis.length) {
+  // ── Indicateurs ──
+  if (d.kpis && d.kpis.length) {
     const kpisLine = d.kpis.map(k => `${k.name} à ${k.val}${k.def?.unit || ''}`).join(', ');
-    let kpiSentence = `Sur les indicateurs, on retient ${kpisLine}.`;
-    if (d.kpi_comment) kpiSentence += ` ${d.kpi_comment}`;
+    let kpiSentence = pick([
+      `Sur les indicateurs : ${kpisLine}.`,
+      `Les indicateurs ressortent comme suit : ${kpisLine}.`,
+      `Côté indicateurs, on retient ${kpisLine}.`,
+      `Les indicateurs sont bons : ${kpisLine}.`,
+      `Excellents indicateurs : ${kpisLine}.`,
+    ]);
+    if (d.kpi_comment) kpiSentence += ' ' + d.kpi_comment;
     paragraphs.push(kpiSentence);
   }
 
-  // Paragraphe process
+  // ── Process ──
   if (d.process) paragraphs.push(d.process);
 
-  // Paragraphe points forts / difficultés
-  function stripFinalDot(s) { return s.trim().replace(/\.+$/, ''); }
-  function capitalize(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
-  function lowerFirst(s) { return s.charAt(0).toLowerCase() + s.slice(1); }
+  // ── Points forts / difficultés ──
+  function stripDot(s) { return s.trim().replace(/\.+$/, ''); }
+  function cap(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
+  function low(s) { return s.charAt(0).toLowerCase() + s.slice(1); }
   const fortsArr = Array.isArray(d.forts) ? d.forts : (d.forts ? [d.forts] : []);
-  const diffArr = Array.isArray(d.diff) ? d.diff : (d.diff ? [d.diff] : []);
+  const diffArr  = Array.isArray(d.diff)  ? d.diff  : (d.diff  ? [d.diff]  : []);
   const ptsSentences = [];
   if (fortsArr.length) {
-    const joined = fortsArr.map(t => lowerFirst(stripFinalDot(t))).join(', ');
-    ptsSentences.push(capitalize(`côté points forts, ${joined}`) + '.');
+    const intro = pick(['Quelques points positifs tout de même :', 'À noter côté points forts :', 'Côté points forts,', 'Parmi les points forts :', 'De vrais points forts à souligner :']);
+    ptsSentences.push(cap(`${intro} ${fortsArr.map(t => low(stripDot(t))).join(', ')}.`));
   }
   if (diffArr.length) {
-    const joined = diffArr.map(t => lowerFirst(stripFinalDot(t))).join(', ');
-    ptsSentences.push(capitalize(`en revanche, ${joined}`) + '.');
+    const intro = pick(['Des axes de travail importants :', 'Des points de vigilance :', 'En revanche,', 'À améliorer :', 'Quelques points à travailler malgré les excellents résultats :']);
+    ptsSentences.push(cap(`${intro} ${diffArr.map(t => low(stripDot(t))).join(', ')}.`));
   }
   if (ptsSentences.length) paragraphs.push(ptsSentences.join(' '));
 
-  // Bloc actions attendues — phrase d'intro + liste à puces (avec sous-puce pour le commentaire)
-  if (d.actions.length) {
-    const intro = d.actions.length > 1
-      ? `Pour le prochain passage, voici les points à traiter :`
-      : `Pour le prochain passage, voici le point à traiter :`;
-    const actionLines = d.actions.map(a => {
-      let line = '• ' + a.text;
+  // ── Actions attendues ──
+  if (d.actions && d.actions.length) {
+    const nonReported = d.actions.filter(a => !a._fromPrevious);
+    const reported = d.actions.filter(a => a._fromPrevious);
+    const intro = pick([
+      'Points à traiter en priorité avant le prochain passage :',
+      "Pour avancer d'ici le prochain passage, voici les points à traiter :",
+      "Voici les actions à mener d'ici mon retour :",
+      'Pour continuer sur cette lancée, voici les actions attendues :',
+      'Pour maintenir cette excellente dynamique, voici les actions à mener :',
+    ]);
+    const actionLines = [];
+    if (reported.length) {
+      actionLines.push(`↩ Actions reportées du passage précédent :`);
+      reported.forEach(a => {
+        let line = `  • ${a.text}`;
+        if (a.who) line += ` (${a.who})`;
+        if (a.date) line += ` — pour le ${formatDate(a.date)}`;
+        if (a.comment) line += `\n     ↳ ${a.comment}`;
+        actionLines.push(line);
+      });
+      if (nonReported.length) actionLines.push('');
+    }
+    nonReported.forEach(a => {
+      let line = `• ${a.text}`;
       if (a.who) line += ` (${a.who})`;
       if (a.date) line += ` — pour le ${formatDate(a.date)}`;
       if (a.comment) line += `\n   ↳ ${a.comment}`;
-      return line;
+      actionLines.push(line);
     });
     paragraphs.push(intro + '\n' + actionLines.join('\n'));
   }
 
-  // Remarque libre
+  // ── Remarque libre ──
   if (d.remarque_libre) paragraphs.push(d.remarque_libre);
 
-  // Mot de conclusion + date prochain passage
-  let closing = d.mot_conclusion || '';
+  // ── Closing ──
+  let closing = d.mot_conclusion || pick([
+    'Je reste disponible pour échanger sur ce passage.',
+    "N'hésitez pas à me contacter si vous avez des questions.",
+    'Je suis disponible si vous souhaitez en discuter.',
+    'Je suis à votre disposition pour tout échange complémentaire.',
+    'Encore bravo pour cette belle journée — continuez sur cette lancée !',
+  ]);
   if (d.prochain_passage) {
-    const dateSentence = `On se revoit le ${formatDate(d.prochain_passage)} pour faire le point.`;
-    closing = closing ? closing + ' ' + dateSentence : dateSentence;
+    closing += pick([
+      ` Rendez-vous le ${formatDate(d.prochain_passage)}.`,
+      ` Je reviendrai le ${formatDate(d.prochain_passage)}.`,
+      ` On se retrouve le ${formatDate(d.prochain_passage)} pour faire le point.`,
+      ` À très vite — je reviendrai le ${formatDate(d.prochain_passage)}.`,
+      ` Vivement le ${formatDate(d.prochain_passage)} pour voir vos progrès !`,
+    ]);
   }
-  if (closing) paragraphs.push(closing);
+  paragraphs.push(closing);
 
-  const body = paragraphs.filter(Boolean).join('\n\n');
-
-  return `Bonjour,
-
-${body}
-
-Bien cordialement,
-${d.ar || 'Votre animateur réseau'}
-Optical Center`;
+  return `Bonjour,\n\n${paragraphs.filter(Boolean).join('\n\n')}\n\nBien cordialement,\n${d.ar || 'Votre animateur réseau'}\nOptical Center`;
 }
+
 
 // ── PDF ──
 function generateHumeurSliderImage(humeurV) {
