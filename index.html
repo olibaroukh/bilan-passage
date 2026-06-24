@@ -182,6 +182,17 @@ input[type=date]{color-scheme:dark}
 #mic-fab:active{transform:scale(0.92)}
 #mic-fab.listening{animation:mic-pulse 0.8s ease-in-out infinite;background:#a01215}
 #mic-toast{position:fixed;bottom:140px;right:16px;background:rgba(0,0,0,0.75);color:#fff;font-size:12px;padding:6px 12px;border-radius:20px;z-index:1001;display:none;max-width:200px;text-align:center;line-height:1.4}
+.prev-action-row{display:flex;align-items:flex-start;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)}
+.prev-action-row:last-child{border-bottom:none}
+.prev-action-info{flex:1;min-width:0}
+.prev-action-text{font-size:13px;font-weight:600;color:var(--text)}
+.prev-action-meta{font-size:11px;color:var(--muted);margin-top:2px}
+.prev-action-btns{display:flex;gap:4px;flex-shrink:0}
+.prev-status-btn{border:none;border-radius:20px;font-size:11px;font-weight:600;padding:4px 10px;cursor:pointer;transition:all .15s;opacity:0.35}
+.prev-status-btn.active{opacity:1}
+.prev-status-done{background:#e6f4ea;color:#2d7a3a}
+.prev-status-ongoing{background:#fff3e0;color:#b45000}
+.prev-status-todo{background:#fce8e8;color:#cc1719}
 </style>
 </head>
 <body>
@@ -266,6 +277,21 @@ input[type=date]{color-scheme:dark}
           oninput="updateHumeur(true)">
       </div>
       <span id="humeur-tag" style="font-size:12px;font-weight:700;padding:4px 14px;border-radius:20px;min-width:80px;text-align:center;flex-shrink:0;transition:background .15s,color .15s"></span>
+    </div>
+  </div>
+
+  <!-- Bloc 0 : Suivi actions précédentes (chargé dynamiquement) -->
+  <div class="bloc-accordion" id="bloc-prev-actions" style="display:none">
+    <div class="bloc-head" onclick="toggleBloc('b-prev')">
+      <div class="bloc-head-icon">🔄</div>
+      <span class="bloc-head-label">Suivi des actions du dernier passage</span>
+      <span class="bloc-head-chevron" id="chev-b-prev">▼</span>
+    </div>
+    <div class="bloc-body" id="b-prev">
+      <div style="font-size:12px;color:var(--muted);margin-bottom:10px">
+        Les actions non faites ou en cours seront automatiquement reprises dans le nouveau bilan.
+      </div>
+      <div id="prev-actions-list"></div>
     </div>
   </div>
 
@@ -628,7 +654,7 @@ function loadLogo() {
 }
 
 // ── VERSION APP ── (incrémenter à chaque mise à jour notable, pour déclencher l'invite de rechargement)
-const APP_VERSION = '2026.06.23-6';
+const APP_VERSION = '2026.06.23-7';
 
 // ── DICTÉE VOCALE ──
 let micRecognition = null;
@@ -755,6 +781,71 @@ let actions = [];
 let fortsList = [];
 let diffList = [];
 let entretiens = [];
+let previousActions = []; // actions du dernier bilan du même magasin
+let previousActionsStatus = {}; // {index: 'done'|'ongoing'|'todo'}
+
+function loadPreviousActions(magCode) {
+  previousActions = [];
+  previousActionsStatus = {};
+  try {
+    const history = JSON.parse(localStorage.getItem(`bilan_history_${magCode}`) || '[]');
+    if (history.length > 0 && history[0].actions && history[0].actions.length > 0) {
+      previousActions = history[0].actions;
+      // Par défaut : toutes "En cours" (à l'AR de confirmer)
+      previousActions.forEach((_, i) => { previousActionsStatus[i] = 'ongoing'; });
+    }
+  } catch(e) {}
+  renderPreviousActions();
+}
+
+function setPrevStatus(i, status) {
+  previousActionsStatus[i] = status;
+  renderPreviousActions();
+  // Propager immédiatement dans les actions du nouveau bilan
+  propagatePreviousActions();
+}
+
+function renderPreviousActions() {
+  const bloc = document.getElementById('bloc-prev-actions');
+  const list = document.getElementById('prev-actions-list');
+  if (!bloc || !list) return;
+
+  if (!previousActions.length) {
+    bloc.style.display = 'none';
+    return;
+  }
+  bloc.style.display = 'block';
+  list.innerHTML = '';
+
+  previousActions.forEach((a, i) => {
+    const status = previousActionsStatus[i] || 'ongoing';
+    const row = document.createElement('div');
+    row.className = 'prev-action-row';
+    const dateStr = a.date ? new Date(a.date).toLocaleDateString('fr-FR',{day:'numeric',month:'short'}) : '';
+    row.innerHTML = `
+      <div class="prev-action-info">
+        <div class="prev-action-text">${a.text}</div>
+        <div class="prev-action-meta">${a.comment ? a.comment + ' · ' : ''}${a.who || ''}${dateStr ? ' · ' + dateStr : ''}</div>
+      </div>
+      <div class="prev-action-btns">
+        <button class="prev-status-btn prev-status-done ${status==='done'?'active':''}" onclick="setPrevStatus(${i},'done')">✓ Fait</button>
+        <button class="prev-status-btn prev-status-ongoing ${status==='ongoing'?'active':''}" onclick="setPrevStatus(${i},'ongoing')">⟳ En cours</button>
+        <button class="prev-status-btn prev-status-todo ${status==='todo'?'active':''}" onclick="setPrevStatus(${i},'todo')">✗ Non fait</button>
+      </div>`;
+    list.appendChild(row);
+  });
+}
+
+function propagatePreviousActions() {
+  // Supprimer d'abord toutes les actions issues du bilan précédent
+  actions = actions.filter(a => !a._fromPrevious);
+  // Ajouter les actions "En cours" et "Non fait" en tête du nouveau bilan
+  const toPropagate = previousActions.filter((_, i) =>
+    previousActionsStatus[i] === 'ongoing' || previousActionsStatus[i] === 'todo'
+  ).map(a => ({...a, _fromPrevious: true}));
+  actions = [...toPropagate, ...actions];
+  renderActions();
+}
 
 const HUMEUR_LABELS  = ['Difficile','Mitigé','Correct','Bien','Top !'];
 const HUMEUR_SMILEYS = ['😣','😕','😐','🙂','😄'];
@@ -1261,6 +1352,7 @@ function onMagChange() {
 function resetSaisie() {
   if (!confirm('Réinitialiser la saisie en cours ? Toutes les informations déjà saisies pour ce bilan seront effacées.')) return;
   if (draftKey) localStorage.removeItem(draftKey);
+  previousActions = []; previousActionsStatus = {};
   actions = []; kpisAdded = []; photos = [null,null,null]; photoCaptions = ['','',''];
   fortsList = []; diffList = []; entretiens = [];
   renderPoints('forts'); renderPoints('diff'); renderEntretiens();
@@ -1298,6 +1390,7 @@ function startBilan() {
   document.getElementById('header-passage').textContent = `Passage n°${passage}`;
   document.getElementById('header-passage').style.display = 'block';
   document.getElementById('f-renta-obj').value = (params.rentaTarget || '28') + '%';
+  previousActions = []; previousActionsStatus = {};
   actions = []; kpisAdded = []; photos = [null,null,null]; photoCaptions = ['','',''];
   fortsList = []; diffList = []; entretiens = [];
   renderPoints('forts'); renderPoints('diff'); renderEntretiens();
@@ -1316,6 +1409,8 @@ function startBilan() {
   goScreen('saisie');
   document.getElementById('bottom-bar').style.display = 'flex';
   setToday();
+  // Charger les actions du dernier passage pour ce magasin
+  loadPreviousActions(currentMag.code);
   // Auto-save toutes les 20 secondes pendant la saisie
   if (autoSaveInterval) clearInterval(autoSaveInterval);
   autoSaveInterval = setInterval(() => { if (draftKey) saveDraft(true); }, 20000);
@@ -1482,9 +1577,10 @@ function renderActions() {
     const row = document.createElement('div');
     row.className = 'action-item-row';
     const dateStr = a.date ? new Date(a.date).toLocaleDateString('fr-FR',{day:'numeric',month:'short'}) : '';
-    row.innerHTML = `<div class="action-item-dot"></div>
+    const isPrev = a._fromPrevious;
+    row.innerHTML = `<div class="action-item-dot" style="${isPrev ? 'background:var(--muted)' : ''}"></div>
       <div class="action-item-content">
-        <div class="action-item-text">${a.text}</div>
+        <div class="action-item-text">${isPrev ? '<span style="font-size:10px;background:#f0ede6;color:var(--muted);border-radius:4px;padding:1px 5px;margin-right:4px">↩ Report</span>' : ''}${a.text}</div>
         ${a.comment ? `<div class="action-item-comment" style="font-size:11px;color:var(--muted);margin-top:2px">${a.comment}</div>` : ''}
         <div class="action-item-meta">${a.who ? `<span>${a.who}</span>` : ''}<span style="color:var(--red)">${dateStr}</span></div>
       </div>
@@ -1672,6 +1768,10 @@ function collectData() {
     prochain_passage: document.getElementById('f-prochain-passage').value,
     remarque_libre: document.getElementById('f-remarque-libre').value,
     entretiens,
+    previousActionsStatus: Object.keys(previousActionsStatus).reduce((acc, k) => {
+      acc[k] = previousActionsStatus[k];
+      return acc;
+    }, {}),
     humeur: document.getElementById('f-humeur').value,
     savedAt: new Date().toISOString(),
   };
@@ -1773,7 +1873,9 @@ async function previewPDF() {
     const data = pendingBilanData;
     const hv = data.humeur !== undefined && data.humeur !== '' ? parseInt(data.humeur) : null;
     const humeurSliderImg = (hv !== null && !isNaN(hv)) ? await generateHumeurSliderImage(hv) : null;
-    const pdfBytes = await generatePDF(data, humeurSliderImg);
+    // Nettoyer le flag interne avant le rendu PDF
+    const dataForPDF = {...data, actions: data.actions.map(a => {const {_fromPrevious, ...rest} = a; return rest;})};
+    const pdfBytes = await generatePDF(dataForPDF, humeurSliderImg);
     const blob = new Blob([pdfBytes], { type: 'application/pdf' });
     const url = URL.createObjectURL(blob);
     // Ouvrir dans un nouvel onglet
@@ -1836,7 +1938,9 @@ async function sendBilan() {
     showToast('2/4 — Génération du PDF...');
     const humeurV_raw = data.humeur !== undefined && data.humeur !== '' ? parseInt(data.humeur) : null;
     const humeurSliderImg = (humeurV_raw !== null && !isNaN(humeurV_raw)) ? await generateHumeurSliderImage(humeurV_raw) : null;
-    const pdfBytes = await generatePDF(data, humeurSliderImg);
+    // Nettoyer le flag interne avant le rendu PDF
+    const dataForPDF = {...data, actions: data.actions.map(a => {const {_fromPrevious, ...rest} = a; return rest;})};
+    const pdfBytes = await generatePDF(dataForPDF, humeurSliderImg);
 
     // 3. Upload PDF
     showToast('3/4 — Upload pièce jointe...');
