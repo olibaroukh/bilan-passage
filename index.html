@@ -654,7 +654,7 @@ function loadLogo() {
 }
 
 // ── VERSION APP ── (incrémenter à chaque mise à jour notable, pour déclencher l'invite de rechargement)
-const APP_VERSION = '2026.06.24-15';
+const APP_VERSION = '2026.06.24-16';
 
 // ── DICTÉE VOCALE ──
 let micRecognition = null;
@@ -2977,10 +2977,22 @@ function renderHistory() {
   list.innerHTML = '';
   const codes = filter ? [filter] : magasins.map(m => m.code);
   let total = 0;
+
+  // Bouton "Tout supprimer"
+  const clearBtn = document.createElement('button');
+  clearBtn.textContent = '🗑️ Tout supprimer';
+  clearBtn.className = 'btn-secondary';
+  clearBtn.style.cssText = 'margin-bottom:12px;font-size:12px;padding:6px 12px;';
+  clearBtn.onclick = () => {
+    if (!confirm('Supprimer tout l\'historique' + (filter ? ' de ce magasin' : '') + ' ?')) return;
+    codes.forEach(code => localStorage.removeItem(`bilan_history_${code}`));
+    renderHistory();
+  };
+
   codes.forEach(code => {
     let history = [];
     try { history = JSON.parse(localStorage.getItem(`bilan_history_${code}`) || '[]'); } catch(e) {}
-    history.forEach(d => {
+    history.forEach((d, idx) => {
       total++;
       const item = document.createElement('div');
       item.className = 'history-item';
@@ -2990,15 +3002,29 @@ function renderHistory() {
           <div class="history-item-meta">${formatDate(d.date)} · ${d.ar || ''}${d.duree ? ' · ' + formatDuree(d.duree) : ''}</div>
         </div>
         <div class="history-item-actions">
-          <button class="icon-btn" title="Télécharger PDF" onclick="downloadHistoryPDF(event,${JSON.stringify(code)},${history.indexOf(d)})">📥</button>
-          <button class="icon-btn" title="Renvoyer par mail" onclick="resendBilan(event,${JSON.stringify(code)},${history.indexOf(d)})">📧</button>
+          <button class="icon-btn" title="Télécharger PDF" onclick="downloadHistoryPDF(event,${JSON.stringify(code)},${idx})">📥</button>
+          <button class="icon-btn" title="Renvoyer par mail" onclick="resendBilan(event,${JSON.stringify(code)},${idx})">📧</button>
+          <button class="icon-btn" title="Supprimer" onclick="deleteHistoryItem(event,${JSON.stringify(code)},${idx})">🗑️</button>
         </div>`;
       list.appendChild(item);
     });
   });
+
   if (total === 0) {
     list.innerHTML = '<div class="history-empty">Aucun bilan enregistré pour ce filtre.</div>';
+  } else {
+    list.prepend(clearBtn);
   }
+}
+
+function deleteHistoryItem(e, code, idx) {
+  e.stopPropagation();
+  if (!confirm('Supprimer ce bilan de l\'historique ?')) return;
+  const history = JSON.parse(localStorage.getItem(`bilan_history_${code}`) || '[]');
+  history.splice(idx, 1);
+  if (history.length) localStorage.setItem(`bilan_history_${code}`, JSON.stringify(history));
+  else localStorage.removeItem(`bilan_history_${code}`);
+  renderHistory();
 }
 
 async function downloadHistoryPDF(e, code, idx) {
