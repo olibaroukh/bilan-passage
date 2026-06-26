@@ -654,7 +654,7 @@ function loadLogo() {
 }
 
 // ── VERSION APP ── (incrémenter à chaque mise à jour notable, pour déclencher l'invite de rechargement)
-const APP_VERSION = '2026.06.24-8';
+const APP_VERSION = '2026.06.24-9';
 
 // ── DICTÉE VOCALE ──
 let micRecognition = null;
@@ -2480,13 +2480,14 @@ async function generatePDF(data, humeurSliderImg) {
     return lines;
   }
 
-  function drawBloc(x, yStart, w, title, content, titleColor, bulletLines, forcedLineH) {
+  function drawBloc(x, yStart, w, title, content, titleColor, bulletLines, forcedLineH, bgColor) {
     const tColor = titleColor || [204,23,25];
+    const bg = bgColor || [249,249,249];
     const lh = forcedLineH || lineH;
     const lines = getBlocLines(w, content, bulletLines);
     const blocH = 6.5 + (lines.length ? lines.length * lh + 4 : 8);
-    doc.setFillColor(249,249,249);
-    doc.rect(x, yStart, w, 6.5, 'F');
+    doc.setFillColor(...bg);
+    doc.rect(x, yStart, w, blocH, 'F');
     doc.setDrawColor(220,220,220);
     doc.rect(x, yStart, w, blocH, 'S');
     doc.setTextColor(...tColor);
@@ -2597,6 +2598,16 @@ async function generatePDF(data, humeurSliderImg) {
     if (totalNeeded <= (footerY - y)) { break; }
   }
 
+  // Couleurs des blocs
+  const cRH       = { bg:[200,230,255], title:[0,85,204] };    // Bleu
+  const cManager  = { bg:[217,179,255], title:[85,0,204] };    // Violet flash
+  const cProcess  = { bg:[255,179,71],  title:[204,68,0] };    // Orange flash
+  const cEntret   = { bg:[255,241,118], title:[170,136,0] };   // Jaune flash
+  const cKpi      = { bg:[204,255,144], title:[46,125,0] };    // Vert lime
+  const cCommInd  = { bg:[178,240,232], title:[0,102,85] };    // Turquoise
+  const cPfd      = { bg:[240,217,176], title:[122,69,0] };    // Beige/Marron
+  const cRemarque = { bg:[255,128,179], title:[204,0,85] };    // Rose flash
+
     // Col 1
   let yc1 = y;
   const rhBullets = [
@@ -2604,24 +2615,24 @@ async function generatePDF(data, humeurSliderImg) {
     ...splitToLines(data.rh),
     ...splitToLines(data.formation).map(l => 'Formation : ' + l),
   ].filter(Boolean);
-  yc1 = drawBloc(col1, yc1, colW, 'RH & \u00c9quipe', null, null, rhBullets, adaptLineH);
+  yc1 = drawBloc(col1, yc1, colW, 'RH & \u00c9quipe', null, cRH.title, rhBullets, adaptLineH, cRH.bg);
   yc1 += 3;
 
   const mgrBullets = [
     ...(data.rituels || []).map(r => 'Rituel en place : ' + r),
     ...splitToLines(data.manager_obs).map(l => "Point d'attention : " + l),
   ].filter(Boolean);
-  yc1 = drawBloc(col1, yc1, colW, 'Suivi manager', null, null, mgrBullets, adaptLineH);
+  yc1 = drawBloc(col1, yc1, colW, 'Suivi manager', null, cManager.title, mgrBullets, adaptLineH, cManager.bg);
   yc1 += 3;
 
-  if (data.process) { yc1 = drawBloc(col1, yc1, colW, 'Process & Nouveaut\u00e9s', data.process, null, null, adaptLineH); yc1 += 3; }
+  if (data.process) { yc1 = drawBloc(col1, yc1, colW, 'Process & Nouveaut\u00e9s', data.process, cProcess.title, null, adaptLineH, cProcess.bg); yc1 += 3; }
 
   const entretiensArr = data.entretiens || [];
   if (entretiensArr.length) {
     const entBullets = entretiensArr.map(e => e.prenom + (e.sujet ? ' : ' + e.sujet : ' (sujet confidentiel)'));
-    yc1 = drawBloc(col1, yc1, colW, 'Entretiens individuels', null, null, entBullets, adaptLineH);
+    yc1 = drawBloc(col1, yc1, colW, 'Entretiens individuels', null, cEntret.title, entBullets, adaptLineH, cEntret.bg);
   } else {
-    yc1 = drawBloc(col1, yc1, colW, 'Entretiens individuels', "Pas d'entretien individuel lors de ce passage.", null, null, adaptLineH);
+    yc1 = drawBloc(col1, yc1, colW, 'Entretiens individuels', "Pas d'entretien individuel lors de ce passage.", cEntret.title, null, adaptLineH, cEntret.bg);
   }
   yc1 += 3;
 
@@ -2632,11 +2643,11 @@ async function generatePDF(data, humeurSliderImg) {
     const kpiCellW = (colW2 - 6) / kpiCols;
     const kpiRows = Math.ceil(data.kpis.length / kpiCols);
     const kpiBlocH = 6.5 + kpiRows * 11 + 4;
-    doc.setFillColor(249,249,249);
+    doc.setFillColor(...cKpi.bg);
     doc.rect(col2Pos, yc2, colW2, 6.5, 'F');
     doc.setDrawColor(220,220,220);
     doc.rect(col2Pos, yc2, colW2, kpiBlocH, 'S');
-    doc.setTextColor(204,23,25); doc.setFont('helvetica','bold'); doc.setFontSize(6);
+    doc.setTextColor(...cKpi.title); doc.setFont('helvetica','bold'); doc.setFontSize(6);
     doc.text('INDICATEURS CL\u00c9S', col2Pos+3, yc2+4.5);
     data.kpis.forEach((k, idx) => {
       const row = Math.floor(idx / kpiCols);
@@ -2658,7 +2669,7 @@ async function generatePDF(data, humeurSliderImg) {
 
   // Blocs col2 : partent juste après les KPI (yc2), pas de Math.max
   if (data.kpi_comment) {
-    yc2 = drawBloc(col2Pos, yc2, colW2, 'Commentaire indicateurs', data.kpi_comment, null, null, adaptLineH);
+    yc2 = drawBloc(col2Pos, yc2, colW2, 'Commentaire indicateurs', data.kpi_comment, cCommInd.title, null, adaptLineH, cCommInd.bg);
     yc2 += 3;
   }
 
@@ -2666,12 +2677,12 @@ async function generatePDF(data, humeurSliderImg) {
   const diffArr = Array.isArray(data.diff) ? data.diff : (data.diff ? [data.diff] : []);
   if (fortsArr.length || diffArr.length) {
     const pfdContent = [...fortsArr.map(t => '(+) ' + t), ...diffArr.map(t => '(-) ' + t)].join('\n');
-    yc2 = drawBloc(col2Pos, yc2, colW2, 'Points forts & Difficult\u00e9s', pfdContent, null, null, adaptLineH);
+    yc2 = drawBloc(col2Pos, yc2, colW2, 'Points forts & Difficult\u00e9s', pfdContent, cPfd.title, null, adaptLineH, cPfd.bg);
     yc2 += 3;
   }
 
   if (data.remarque_libre) {
-    yc2 = drawBloc(col2Pos, yc2, colW2, 'Remarque libre', data.remarque_libre, null, null, adaptLineH);
+    yc2 = drawBloc(col2Pos, yc2, colW2, 'Remarque libre', data.remarque_libre, cRemarque.title, null, adaptLineH, cRemarque.bg);
     yc2 += 3;
   }
 
