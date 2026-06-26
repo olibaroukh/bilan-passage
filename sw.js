@@ -3,7 +3,7 @@
 // Ne met rien en cache pour offline (volontairement) afin de toujours servir
 // la dernière version disponible sur le réseau.
 
-const SW_VERSION = '2026.06.25-1';
+const SW_VERSION = '2026.06.25-2';
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();

@@ -654,7 +654,7 @@ function loadLogo() {
 }
 
 // ── VERSION APP ── (incrémenter à chaque mise à jour notable, pour déclencher l'invite de rechargement)
-const APP_VERSION = '2026.06.25-1';
+const APP_VERSION = '2026.06.25-2';
 
 // ── DICTÉE VOCALE ──
 let micRecognition = null;
@@ -2598,7 +2598,8 @@ async function generatePDF(data, humeurSliderImg) {
     const h2 = kpiFixedH + estimateColH(col2Blocs, lh);
     const hFull = estimateColH(fullBlocs, lh);
     const totalNeeded = Math.max(h1, h2) + hFull + actNeededH + 4;
-    if (totalNeeded <= (footerY - y)) { adaptLineH = lh; break; }
+    adaptLineH = lh; // prend toujours le lh courant (le plus petit atteint)
+    if (totalNeeded <= (footerY - y)) { break; }
   }
 
     // Col 1
@@ -2661,30 +2662,32 @@ async function generatePDF(data, humeurSliderImg) {
   }
 
   // Blocs pleine largeur sous les deux colonnes
+  // Plafonner pour ne pas empiéter sur la zone des actions
+  const maxForFull = footerY - actNeededH - 4;
   let yFull = Math.max(yc1, yc2) + 2;
   const fullW = colW + gutter + colW2;
 
-  if (data.kpi_comment) {
+  if (data.kpi_comment && yFull < maxForFull) {
     yFull = drawBloc(col1, yFull, fullW, 'Commentaire indicateurs', data.kpi_comment, null, null, adaptLineH);
     yFull += 3;
   }
 
   const fortsArr = Array.isArray(data.forts) ? data.forts : (data.forts ? [data.forts] : []);
   const diffArr = Array.isArray(data.diff) ? data.diff : (data.diff ? [data.diff] : []);
-  if (fortsArr.length || diffArr.length) {
+  if ((fortsArr.length || diffArr.length) && yFull < maxForFull) {
     const pfdContent = [...fortsArr.map(t => '(+) ' + t), ...diffArr.map(t => '(-) ' + t)].join('\n');
     yFull = drawBloc(col1, yFull, fullW, 'Points forts & Difficult\u00e9s', pfdContent, null, null, adaptLineH);
     yFull += 3;
   }
 
-  if (data.remarque_libre) {
+  if (data.remarque_libre && yFull < maxForFull) {
     yFull = drawBloc(col1, yFull, fullW, 'Remarque libre', data.remarque_libre, null, null, adaptLineH);
     yFull += 3;
   }
 
   // Synchroniser yc1 et yc2 avec yFull pour le calcul des actions
-  yc1 = yFull;
-  yc2 = yFull;
+  yc1 = Math.min(yFull, maxForFull);
+  yc2 = yc1;
 
   // ACTIONS ATTENDUES — mise en page intelligente (2 col → 1 col → compact)
   // Plafonner yc1/yc2 pour garantir l'espace des actions (le contenu est déjà dessiné, 
