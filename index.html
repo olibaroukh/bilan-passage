@@ -654,7 +654,7 @@ function loadLogo() {
 }
 
 // ── VERSION APP ── (incrémenter à chaque mise à jour notable, pour déclencher l'invite de rechargement)
-const APP_VERSION = '2026.06.24-12';
+const APP_VERSION = '2026.06.24-13';
 
 // ── DICTÉE VOCALE ──
 let micRecognition = null;
@@ -1281,6 +1281,18 @@ async function loadMagasins() {
   }
   populateARSelect();
   populateHistoryFilter();
+  // Nettoyer les anciens pdfB64 du localStorage pour libérer de l'espace
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key && key.startsWith('bilan_history_')) {
+      try {
+        const h = JSON.parse(localStorage.getItem(key) || '[]');
+        let changed = false;
+        h.forEach(entry => { if (entry.pdfB64) { delete entry.pdfB64; changed = true; } });
+        if (changed) localStorage.setItem(key, JSON.stringify(h));
+      } catch(e) {}
+    }
+  }
 }
 
 async function reloadMagasins() {
@@ -1876,7 +1888,7 @@ async function previewPDF() {
     // Nettoyer le flag interne avant le rendu PDF
     const dataForPDF = {...data, actions: data.actions.map(a => {const {_fromPrevious, ...rest} = a; return rest;})};
     const pdfBytes = await generatePDF(dataForPDF, humeurSliderImg);
-    saveToHistory(data, pdfBytes);
+    saveToHistory(data);
     const blob = new Blob([pdfBytes], { type: 'application/pdf' });
     const url = URL.createObjectURL(blob);
     // Ouvrir dans un nouvel onglet
@@ -1997,7 +2009,7 @@ async function sendBilan() {
     // Sauvegarder seulement si pas déjà en tête (prévisualisation l'a peut-être déjà fait)
     const _existingH = JSON.parse(localStorage.getItem(`bilan_history_${data.magasin.code}`) || '[]');
     if (!_existingH.length || _existingH[0].date !== data.date || _existingH[0].passage !== data.passage) {
-      saveToHistory(data, pdfBytes);
+      saveToHistory(data);
     }
     if (draftKey) localStorage.removeItem(draftKey);
 
@@ -2929,20 +2941,14 @@ async function generatePDF(data, humeurSliderImg) {
 }
 
 // ── HISTORIQUE ──
-function saveToHistory(data, pdfBytes) {
+function saveToHistory(data) {
   const key = `bilan_history_${data.magasin.code}`;
   let history = [];
   try { history = JSON.parse(localStorage.getItem(key) || '[]'); } catch(e) {}
-  // Stocker PDF en base64
-  // Encoder en base64 par chunks pour éviter "maximum call stack size exceeded"
-  const uint8 = new Uint8Array(pdfBytes);
-  let b64 = '';
-  const chunkSize = 8192;
-  for (let i = 0; i < uint8.length; i += chunkSize) {
-    b64 += String.fromCharCode(...uint8.subarray(i, i + chunkSize));
-  }
-  b64 = btoa(b64);
-  history.unshift({...data, pdfB64: b64, photos: null, photoCaptions: data.photoCaptions});
+  // Stocker uniquement les données (pas le PDF) pour économiser le localStorage
+  const entry = {...data, photos: null, photoCaptions: data.photoCaptions};
+  delete entry.pdfB64;
+  history.unshift(entry);
   if (history.length > 24) history = history.slice(0, 24);
   localStorage.setItem(key, JSON.stringify(history));
   renderHistory();
@@ -2993,15 +2999,19 @@ async function downloadHistoryPDF(e, code, idx) {
   try {
     const history = JSON.parse(localStorage.getItem(`bilan_history_${code}`) || '[]');
     const d = history[idx];
-    if (!d?.pdfB64) { showToast('PDF non disponible'); return; }
-    const bytes = Uint8Array.from(atob(d.pdfB64), c => c.charCodeAt(0));
-    const blob = new Blob([bytes], {type:'application/pdf'});
+    if (!d) { showToast('Bilan non disponible'); return; }
+    showToast('Génération du PDF...');
+    const hv = d.humeur !== undefined ? d.humeur : null;
+    const humeurSliderImg = (hv !== null && !isNaN(hv)) ? await generateHumeurSliderImage(hv) : null;
+    const dataForPDF = {...d, actions: (d.actions||[]).map(a => {const {_fromPrevious, ...rest} = a; return rest;})};
+    const pdfBytes = await generatePDF(dataForPDF, humeurSliderImg);
+    const blob = new Blob([pdfBytes], {type:'application/pdf'});
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = `bilan_${code}_${d.date||''}.pdf`;
+    a.download = `Bilan_${code}_${d.date||''}.pdf`;
     a.click();
     URL.revokeObjectURL(a.href);
-  } catch(ex) { showToast('Erreur PDF'); }
+  } catch(ex) { showToast('Erreur PDF : ' + ex.message); }
 }
 
 async function resendBilan(e, code, idx) {
@@ -3009,12 +3019,19 @@ async function resendBilan(e, code, idx) {
   try {
     const history = JSON.parse(localStorage.getItem('bilan_history_' + code) || '[]');
     const d = history[idx];
-    if (!d?.pdfB64) { showToast('PDF non disponible'); return; }
+    if (!d) { showToast('Bilan non disponible'); return; }
     const pwd = prompt('Mot de passe Zimbra pour renvoyer le bilan :');
     if (!pwd) return;
     const relay = params.relay || 'https://zimbra-relay.oli-baroukh.workers.dev';
     const user = params.zimbraUser || '';
     if (!relay || !user) { showToast('Relay non configuré'); return; }
+
+    // Régénérer le PDF depuis les données
+    showToast('Génération du PDF...');
+    const hv = d.humeur !== undefined ? d.humeur : null;
+    const humeurSliderImg = (hv !== null && !isNaN(hv)) ? await generateHumeurSliderImage(hv) : null;
+    const dataForPDF = {...d, actions: (d.actions||[]).map(a => {const {_fromPrevious, ...rest} = a; return rest;})};
+    const pdfBytes = await generatePDF(dataForPDF, humeurSliderImg);
 
     function soapEnv(body, authToken) {
       const context = { _jsns: 'urn:zimbra', format: { _content: 'js', type: 'js' } };
@@ -3039,8 +3056,7 @@ async function resendBilan(e, code, idx) {
     if (!token) throw new Error('Auth échouée');
 
     showToast('Upload PDF...');
-    const bytes = Uint8Array.from(atob(d.pdfB64), c => c.charCodeAt(0));
-    const blob = new Blob([bytes], { type: 'application/pdf' });
+    const blob = new Blob([pdfBytes], { type: 'application/pdf' });
     const form = new FormData();
     form.append('file', blob, 'Bilan_' + code + '_' + (d.date || '') + '.pdf');
     const upResp = await fetch(relay + '/upload?fmt=raw', {
