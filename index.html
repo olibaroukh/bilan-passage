@@ -543,6 +543,13 @@ input[type=date]{color-scheme:dark}
       <option value="">Tous les magasins</option>
     </select>
   </div>
+  <div style="display:flex;gap:8px;margin-bottom:12px;">
+    <button class="btn-secondary" style="font-size:12px;padding:6px 12px;flex:1;" onclick="exportHistory()">📤 Exporter sauvegarde</button>
+    <label class="btn-secondary" style="font-size:12px;padding:6px 12px;flex:1;text-align:center;cursor:pointer;">
+      📥 Importer sauvegarde
+      <input type="file" accept=".json" style="display:none;" onchange="importHistory(this)">
+    </label>
+  </div>
   <div id="history-list"></div>
 </div>
 
@@ -654,7 +661,7 @@ function loadLogo() {
 }
 
 // ── VERSION APP ── (incrémenter à chaque mise à jour notable, pour déclencher l'invite de rechargement)
-const APP_VERSION = '2026.06.24-19';
+const APP_VERSION = '2026.06.24-20';
 
 // ── DICTÉE VOCALE ──
 let micRecognition = null;
@@ -3029,6 +3036,56 @@ function renderHistory() {
   } else {
     list.prepend(clearBtn);
   }
+}
+
+function exportHistory() {
+  const backup = {};
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key && key.startsWith('bilan_history_')) {
+      try { backup[key] = JSON.parse(localStorage.getItem(key) || '[]'); } catch(e) {}
+    }
+  }
+  if (!Object.keys(backup).length) { showToast('Aucun historique à exporter'); return; }
+  const json = JSON.stringify(backup, null, 2);
+  const blob = new Blob([json], {type: 'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `bilan_historique_${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+  showToast('✓ Sauvegarde exportée');
+}
+
+function importHistory(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const backup = JSON.parse(e.target.result);
+      let count = 0;
+      Object.entries(backup).forEach(([key, entries]) => {
+        if (!key.startsWith('bilan_history_') || !Array.isArray(entries)) return;
+        // Fusionner avec l'existant (pas d'écrasement)
+        let existing = [];
+        try { existing = JSON.parse(localStorage.getItem(key) || '[]'); } catch(ex) {}
+        // Ajouter les entrées importées qui ne sont pas déjà présentes (même date + passage)
+        entries.forEach(entry => {
+          const exists = existing.some(e => e.date === entry.date && e.passage === entry.passage);
+          if (!exists) { existing.push(entry); count++; }
+        });
+        existing.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+        localStorage.setItem(key, JSON.stringify(existing));
+      });
+      showToast(`✓ ${count} bilan(s) importé(s)`);
+      renderHistory();
+    } catch(ex) {
+      showToast('⚠ Fichier invalide : ' + ex.message);
+    }
+    input.value = '';
+  };
+  reader.readAsText(file);
 }
 
 function deleteHistoryItem(e, code, idx) {
