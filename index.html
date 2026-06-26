@@ -661,7 +661,7 @@ function loadLogo() {
 }
 
 // ── VERSION APP ── (incrémenter à chaque mise à jour notable, pour déclencher l'invite de rechargement)
-const APP_VERSION = '2026.06.24-21';
+const APP_VERSION = '2026.06.24-22';
 
 // ── DICTÉE VOCALE ──
 let micRecognition = null;
@@ -2513,10 +2513,11 @@ async function generatePDF(data, humeurSliderImg) {
     doc.setFont('helvetica','bold');
     doc.setFontSize(6);
     doc.text(title.toUpperCase(), x + 3, yStart + 4.5);
-    // Bordures colorées (même couleur que le titre)
+    // Bordures colorées (même couleur que le titre) + séparatrice header/corps
     doc.setDrawColor(...tColor);
     doc.setLineWidth(0.4);
     doc.rect(x, yStart, w, blocH, 'S');
+    doc.line(x, yStart + 6.5, x + w, yStart + 6.5);
     doc.setLineWidth(0.2);
     doc.setTextColor(55,55,55);
     doc.setFont('helvetica','normal');
@@ -2675,6 +2676,7 @@ async function generatePDF(data, humeurSliderImg) {
     const kpiTitleColor = kpiBgLum > 160 ? cKpi.title : [255,255,255];
     doc.setDrawColor(...cKpi.title); doc.setLineWidth(0.4);
     doc.rect(col2Pos, yc2, colW2, kpiBlocH, 'S');
+    doc.line(col2Pos, yc2 + 6.5, col2Pos + colW2, yc2 + 6.5);
     doc.setLineWidth(0.2);
     doc.setTextColor(...kpiTitleColor); doc.setFont('helvetica','bold'); doc.setFontSize(6);
     doc.text('INDICATEURS CL\u00c9S', col2Pos+3, yc2+4.5);
