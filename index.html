@@ -654,7 +654,7 @@ function loadLogo() {
 }
 
 // ── VERSION APP ── (incrémenter à chaque mise à jour notable, pour déclencher l'invite de rechargement)
-const APP_VERSION = '2026.06.24-17';
+const APP_VERSION = '2026.06.24-19';
 
 // ── DICTÉE VOCALE ──
 let micRecognition = null;
@@ -1281,18 +1281,6 @@ async function loadMagasins() {
   }
   populateARSelect();
   populateHistoryFilter();
-  // Nettoyer les anciens pdfB64 du localStorage pour libérer de l'espace
-  for (let i = 0; i < localStorage.length; i++) {
-    const key = localStorage.key(i);
-    if (key && key.startsWith('bilan_history_')) {
-      try {
-        const h = JSON.parse(localStorage.getItem(key) || '[]');
-        let changed = false;
-        h.forEach(entry => { if (entry.pdfB64) { delete entry.pdfB64; changed = true; } });
-        if (changed) localStorage.setItem(key, JSON.stringify(h));
-      } catch(e) {}
-    }
-  }
 }
 
 async function reloadMagasins() {
@@ -2760,16 +2748,6 @@ async function generatePDF(data, humeurSliderImg) {
   }
 
   // Cadre actions
-  doc.setFillColor(204, 23, 25);
-  doc.rect(col1, actY, contentRight - col1, actHeaderH, 'F');
-  doc.setTextColor(255,255,255); doc.setFont('helvetica','bold'); doc.setFontSize(6.5);
-  doc.text('ACTIONS ATTENDUES — PROCHAIN PASSAGE', col1+3, actY+5);
-  doc.setFillColor(255,255,255);
-  doc.rect(col1, actY+actHeaderH, contentRight-col1, actBodyH, 'F');
-  doc.setDrawColor(204,23,25); doc.setLineWidth(0.5);
-  doc.rect(col1, actY, contentRight-col1, actTotalH, 'S');
-  doc.setLineWidth(0.2);
-
   if (data.actions.length) {
     // Essai avec différentes configs jusqu'à ce que tout rentre
     const configs = [
@@ -2819,6 +2797,21 @@ async function generatePDF(data, humeurSliderImg) {
       actY = Math.min(actY, footerY - realH);
     }
 
+    // Recalculer actTotalH/actBodyH avec le actY final
+    const actTotalH2 = footerY - actY;
+    const actBodyH2 = actTotalH2 - actHeaderH;
+
+    // Dessiner le cadre actions maintenant qu'actY est définitif
+    doc.setFillColor(204, 23, 25);
+    doc.rect(col1, actY, contentRight - col1, actHeaderH, 'F');
+    doc.setTextColor(255,255,255); doc.setFont('helvetica','bold'); doc.setFontSize(6.5);
+    doc.text('ACTIONS ATTENDUES \u2014 PROCHAIN PASSAGE', col1+3, actY+5);
+    doc.setFillColor(255,255,255);
+    doc.rect(col1, actY+actHeaderH, contentRight-col1, actBodyH2, 'F');
+    doc.setDrawColor(204,23,25); doc.setLineWidth(0.5);
+    doc.rect(col1, actY, contentRight-col1, actTotalH2, 'S');
+    doc.setLineWidth(0.2);
+
     // Rendu avec la config choisie
     const aColW = chosen.cols === 2 ? (contentRight-col1-8)/2 : (contentRight-col1-8);
     const perCol = chosen.cols === 2 ? Math.ceil(data.actions.length/2) : data.actions.length;
@@ -2838,6 +2831,16 @@ async function generatePDF(data, humeurSliderImg) {
       });
     });
   } else {
+    // Cas sans actions : dessiner le cadre maintenant
+    doc.setFillColor(204, 23, 25);
+    doc.rect(col1, actY, contentRight - col1, actHeaderH, 'F');
+    doc.setTextColor(255,255,255); doc.setFont('helvetica','bold'); doc.setFontSize(6.5);
+    doc.text('ACTIONS ATTENDUES \u2014 PROCHAIN PASSAGE', col1+3, actY+5);
+    doc.setFillColor(255,255,255);
+    doc.rect(col1, actY+actHeaderH, contentRight-col1, actBodyH, 'F');
+    doc.setDrawColor(204,23,25); doc.setLineWidth(0.5);
+    doc.rect(col1, actY, contentRight-col1, actTotalH, 'S');
+    doc.setLineWidth(0.2);
     doc.setTextColor(180,180,180); doc.setFont('helvetica','italic'); doc.setFontSize(6);
     doc.text('Aucune action renseignée pour ce passage', col1+4, actY+actHeaderH+8);
   }
