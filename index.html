@@ -654,7 +654,7 @@ function loadLogo() {
 }
 
 // ── VERSION APP ── (incrémenter à chaque mise à jour notable, pour déclencher l'invite de rechargement)
-const APP_VERSION = '2026.06.24-7';
+const APP_VERSION = '2026.06.24-8';
 
 // ── DICTÉE VOCALE ──
 let micRecognition = null;
@@ -2471,11 +2471,11 @@ async function generatePDF(data, humeurSliderImg) {
     let lines = [];
     if (bulletLines && bulletLines.length) {
       bulletLines.forEach(entry => {
-        const wrapped = doc.splitTextToSize('\u2022 ' + pdfSafe(entry), w - 12);
+        const wrapped = doc.splitTextToSize('\u2022 ' + pdfSafe(entry), w - 7);
         wrapped.forEach((wl, i) => lines.push(i === 0 ? wl : '     ' + wl));
       });
     } else if (content) {
-      lines = doc.splitTextToSize(pdfSafe(content), w - 12);
+      lines = doc.splitTextToSize(pdfSafe(content), w - 7);
     }
     return lines;
   }
