@@ -654,7 +654,7 @@ function loadLogo() {
 }
 
 // ── VERSION APP ── (incrémenter à chaque mise à jour notable, pour déclencher l'invite de rechargement)
-const APP_VERSION = '2026.06.25-3';
+const APP_VERSION = '2026.06.24-5';
 
 // ── DICTÉE VOCALE ──
 let micRecognition = null;
@@ -2572,13 +2572,9 @@ async function generatePDF(data, humeurSliderImg) {
   const diffArrEst  = Array.isArray(data.diff)  ? data.diff  : (data.diff  ? [data.diff]  : []);
   const pfdEst = [...fortsArrEst.map(t => '(+) '+t), ...diffArrEst.map(t => '(-) '+t)].join('\n');
   const col2Blocs = [
-  ].filter(Boolean);
-  // Blocs pleine largeur (kpi_comment, points forts, remarque libre) estimés avec fullW
-  const fullWest = colW + gutter + colW2;
-  const fullBlocs = [
-    data.kpi_comment ? [fullWest, data.kpi_comment, null] : null,
-    (fortsArrEst.length || diffArrEst.length) ? [fullWest, pfdEst, null] : null,
-    data.remarque_libre ? [fullWest, data.remarque_libre, null] : null,
+    data.kpi_comment ? [colW2, data.kpi_comment, null] : null,
+    (fortsArrEst.length || diffArrEst.length) ? [colW2, pfdEst, null] : null,
+    data.remarque_libre ? [colW2, data.remarque_libre, null] : null,
   ].filter(Boolean);
   const kpiFixedH = data.kpis.length ? (6.5 + Math.ceil(data.kpis.length/3)*11 + 4 + 3) : 0;
 
@@ -2596,9 +2592,8 @@ async function generatePDF(data, humeurSliderImg) {
   for (const lh of [4.8, 4.4, 4.0, 3.7, 3.4, 3.1, 2.9]) {
     const h1 = estimateColH(col1Blocs, lh);
     const h2 = kpiFixedH + estimateColH(col2Blocs, lh);
-    const hFull = estimateColH(fullBlocs, lh);
-    const totalNeeded = Math.max(h1, h2) + hFull + actNeededH + 4;
-    adaptLineH = lh; // prend toujours le lh courant (le plus petit atteint)
+    const totalNeeded = Math.max(h1, h2) + actNeededH + 4;
+    adaptLineH = lh;
     if (totalNeeded <= (footerY - y)) { break; }
   }
 
@@ -2661,32 +2656,29 @@ async function generatePDF(data, humeurSliderImg) {
     yc2 += kpiBlocH + 3;
   }
 
-  // Blocs pleine largeur sous les deux colonnes (partant de Math.max(yc1,yc2))
-  const maxForFull = footerY - actNeededH - 4;
-  let yFull = Math.max(yc1, yc2) + 2;
-  const fullW = colW + gutter + colW2;
+  // Blocs sous col2, partant de Math.max(yc1,yc2)
+  const contentBottom2 = Math.max(yc1, yc2) + 2;
+  let yc2full = contentBottom2;
 
-  if (data.kpi_comment && yFull < maxForFull) {
-    yFull = drawBloc(col1, yFull, fullW, 'Commentaire indicateurs', data.kpi_comment, null, null, adaptLineH);
-    yFull += 3;
+  if (data.kpi_comment) {
+    yc2full = drawBloc(col2Pos, yc2full, colW2, 'Commentaire indicateurs', data.kpi_comment, null, null, adaptLineH);
+    yc2full += 3;
   }
 
   const fortsArr = Array.isArray(data.forts) ? data.forts : (data.forts ? [data.forts] : []);
   const diffArr = Array.isArray(data.diff) ? data.diff : (data.diff ? [data.diff] : []);
-  if ((fortsArr.length || diffArr.length) && yFull < maxForFull) {
+  if (fortsArr.length || diffArr.length) {
     const pfdContent = [...fortsArr.map(t => '(+) ' + t), ...diffArr.map(t => '(-) ' + t)].join('\n');
-    yFull = drawBloc(col1, yFull, fullW, 'Points forts & Difficult\u00e9s', pfdContent, null, null, adaptLineH);
-    yFull += 3;
+    yc2full = drawBloc(col2Pos, yc2full, colW2, 'Points forts & Difficult\u00e9s', pfdContent, null, null, adaptLineH);
+    yc2full += 3;
   }
 
-  if (data.remarque_libre && yFull < maxForFull) {
-    yFull = drawBloc(col1, yFull, fullW, 'Remarque libre', data.remarque_libre, null, null, adaptLineH);
-    yFull += 3;
+  if (data.remarque_libre) {
+    yc2full = drawBloc(col2Pos, yc2full, colW2, 'Remarque libre', data.remarque_libre, null, null, adaptLineH);
+    yc2full += 3;
   }
 
-  // Synchroniser yc1 et yc2 avec yFull pour le calcul des actions
-  yc1 = Math.min(yFull, maxForFull);
-  yc2 = yc1;
+  yc2 = yc2full;
 
   // ACTIONS ATTENDUES — mise en page intelligente (2 col → 1 col → compact)
   // Plafonner yc1/yc2 pour garantir l'espace des actions (le contenu est déjà dessiné, 
