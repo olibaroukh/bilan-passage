@@ -654,7 +654,7 @@ function loadLogo() {
 }
 
 // ── VERSION APP ── (incrémenter à chaque mise à jour notable, pour déclencher l'invite de rechargement)
-const APP_VERSION = '2026.06.24-13';
+const APP_VERSION = '2026.06.24-14';
 
 // ── DICTÉE VOCALE ──
 let micRecognition = null;
@@ -2511,7 +2511,10 @@ async function generatePDF(data, humeurSliderImg) {
     doc.rect(x, yStart + 6.5, w, blocH - 6.5, 'F');
     doc.setDrawColor(220,220,220);
     doc.rect(x, yStart, w, blocH, 'S');
-    doc.setTextColor(255,255,255);
+    // Titre : blanc si fond saturé, couleur foncée si fond clair
+    const bgLuminance = (bg[0]*299 + bg[1]*587 + bg[2]*114) / 1000;
+    const titleTextColor = bgLuminance > 180 ? tColor : [255,255,255];
+    doc.setTextColor(...titleTextColor);
     doc.setFont('helvetica','bold');
     doc.setFontSize(6);
     doc.text(title.toUpperCase(), x + 3, yStart + 4.5);
@@ -2670,7 +2673,9 @@ async function generatePDF(data, humeurSliderImg) {
     doc.rect(col2Pos, yc2 + 6.5, colW2, kpiBlocH - 6.5, 'F');
     doc.setDrawColor(220,220,220);
     doc.rect(col2Pos, yc2, colW2, kpiBlocH, 'S');
-    doc.setTextColor(255,255,255); doc.setFont('helvetica','bold'); doc.setFontSize(6);
+    const kpiBgLum = (cKpi.bg[0]*299 + cKpi.bg[1]*587 + cKpi.bg[2]*114) / 1000;
+    const kpiTitleColor = kpiBgLum > 180 ? cKpi.title : [255,255,255];
+    doc.setTextColor(...kpiTitleColor); doc.setFont('helvetica','bold'); doc.setFontSize(6);
     doc.text('INDICATEURS CL\u00c9S', col2Pos+3, yc2+4.5);
     data.kpis.forEach((k, idx) => {
       const row = Math.floor(idx / kpiCols);
