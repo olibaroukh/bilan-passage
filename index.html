@@ -654,7 +654,7 @@ function loadLogo() {
 }
 
 // ── VERSION APP ── (incrémenter à chaque mise à jour notable, pour déclencher l'invite de rechargement)
-const APP_VERSION = '2026.06.24-9';
+const APP_VERSION = '2026.06.24-10';
 
 // ── DICTÉE VOCALE ──
 let micRecognition = null;
@@ -2482,15 +2482,19 @@ async function generatePDF(data, humeurSliderImg) {
 
   function drawBloc(x, yStart, w, title, content, titleColor, bulletLines, forcedLineH, bgColor) {
     const tColor = titleColor || [204,23,25];
-    const bg = bgColor || [249,249,249];
+    const bg = bgColor || [204,23,25];
     const lh = forcedLineH || lineH;
     const lines = getBlocLines(w, content, bulletLines);
     const blocH = 6.5 + (lines.length ? lines.length * lh + 4 : 8);
+    // Header coloré
     doc.setFillColor(...bg);
-    doc.rect(x, yStart, w, blocH, 'F');
+    doc.rect(x, yStart, w, 6.5, 'F');
+    // Corps blanc cassé
+    doc.setFillColor(249,249,249);
+    doc.rect(x, yStart + 6.5, w, blocH - 6.5, 'F');
     doc.setDrawColor(220,220,220);
     doc.rect(x, yStart, w, blocH, 'S');
-    doc.setTextColor(...tColor);
+    doc.setTextColor(255,255,255);
     doc.setFont('helvetica','bold');
     doc.setFontSize(6);
     doc.text(title.toUpperCase(), x + 3, yStart + 4.5);
@@ -2645,9 +2649,11 @@ async function generatePDF(data, humeurSliderImg) {
     const kpiBlocH = 6.5 + kpiRows * 11 + 4;
     doc.setFillColor(...cKpi.bg);
     doc.rect(col2Pos, yc2, colW2, 6.5, 'F');
+    doc.setFillColor(249,249,249);
+    doc.rect(col2Pos, yc2 + 6.5, colW2, kpiBlocH - 6.5, 'F');
     doc.setDrawColor(220,220,220);
     doc.rect(col2Pos, yc2, colW2, kpiBlocH, 'S');
-    doc.setTextColor(...cKpi.title); doc.setFont('helvetica','bold'); doc.setFontSize(6);
+    doc.setTextColor(255,255,255); doc.setFont('helvetica','bold'); doc.setFontSize(6);
     doc.text('INDICATEURS CL\u00c9S', col2Pos+3, yc2+4.5);
     data.kpis.forEach((k, idx) => {
       const row = Math.floor(idx / kpiCols);
