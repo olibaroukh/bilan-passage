@@ -654,7 +654,7 @@ function loadLogo() {
 }
 
 // ── VERSION APP ── (incrémenter à chaque mise à jour notable, pour déclencher l'invite de rechargement)
-const APP_VERSION = '2026.06.24-11';
+const APP_VERSION = '2026.06.24-12';
 
 // ── DICTÉE VOCALE ──
 let micRecognition = null;
@@ -2934,7 +2934,14 @@ function saveToHistory(data, pdfBytes) {
   let history = [];
   try { history = JSON.parse(localStorage.getItem(key) || '[]'); } catch(e) {}
   // Stocker PDF en base64
-  const b64 = btoa(String.fromCharCode(...new Uint8Array(pdfBytes)));
+  // Encoder en base64 par chunks pour éviter "maximum call stack size exceeded"
+  const uint8 = new Uint8Array(pdfBytes);
+  let b64 = '';
+  const chunkSize = 8192;
+  for (let i = 0; i < uint8.length; i += chunkSize) {
+    b64 += String.fromCharCode(...uint8.subarray(i, i + chunkSize));
+  }
+  b64 = btoa(b64);
   history.unshift({...data, pdfB64: b64, photos: null, photoCaptions: data.photoCaptions});
   if (history.length > 24) history = history.slice(0, 24);
   localStorage.setItem(key, JSON.stringify(history));
