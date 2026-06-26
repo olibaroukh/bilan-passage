@@ -654,7 +654,7 @@ function loadLogo() {
 }
 
 // ── VERSION APP ── (incrémenter à chaque mise à jour notable, pour déclencher l'invite de rechargement)
-const APP_VERSION = '2026.06.24-10';
+const APP_VERSION = '2026.06.24-11';
 
 // ── DICTÉE VOCALE ──
 let micRecognition = null;
@@ -1876,6 +1876,7 @@ async function previewPDF() {
     // Nettoyer le flag interne avant le rendu PDF
     const dataForPDF = {...data, actions: data.actions.map(a => {const {_fromPrevious, ...rest} = a; return rest;})};
     const pdfBytes = await generatePDF(dataForPDF, humeurSliderImg);
+    saveToHistory(data, pdfBytes);
     const blob = new Blob([pdfBytes], { type: 'application/pdf' });
     const url = URL.createObjectURL(blob);
     // Ouvrir dans un nouvel onglet
@@ -1993,7 +1994,11 @@ async function sendBilan() {
       if (sendData?.Body?.Fault) sendOk = false;
     } catch(e) {}
 
-    saveToHistory(data, pdfBytes);
+    // Sauvegarder seulement si pas déjà en tête (prévisualisation l'a peut-être déjà fait)
+    const _existingH = JSON.parse(localStorage.getItem(`bilan_history_${data.magasin.code}`) || '[]');
+    if (!_existingH.length || _existingH[0].date !== data.date || _existingH[0].passage !== data.passage) {
+      saveToHistory(data, pdfBytes);
+    }
     if (draftKey) localStorage.removeItem(draftKey);
 
     if (sendOk) {
