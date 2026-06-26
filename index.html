@@ -654,7 +654,7 @@ function loadLogo() {
 }
 
 // ── VERSION APP ── (incrémenter à chaque mise à jour notable, pour déclencher l'invite de rechargement)
-const APP_VERSION = '2026.06.24-16';
+const APP_VERSION = '2026.06.24-17';
 
 // ── DICTÉE VOCALE ──
 let micRecognition = null;
@@ -3002,10 +3002,21 @@ function renderHistory() {
           <div class="history-item-meta">${formatDate(d.date)} · ${d.ar || ''}${d.duree ? ' · ' + formatDuree(d.duree) : ''}</div>
         </div>
         <div class="history-item-actions">
-          <button class="icon-btn" title="Télécharger PDF" onclick="downloadHistoryPDF(event,${JSON.stringify(code)},${idx})">📥</button>
-          <button class="icon-btn" title="Renvoyer par mail" onclick="resendBilan(event,${JSON.stringify(code)},${idx})">📧</button>
-          <button class="icon-btn" title="Supprimer" onclick="deleteHistoryItem(event,${JSON.stringify(code)},${idx})">🗑️</button>
+          <button class="icon-btn" title="Télécharger PDF" data-action="download" data-code="${code}" data-idx="${idx}">📥</button>
+          <button class="icon-btn" title="Renvoyer par mail" data-action="resend" data-code="${code}" data-idx="${idx}">📧</button>
+          <button class="icon-btn" title="Supprimer" data-action="delete" data-code="${code}" data-idx="${idx}">🗑️</button>
         </div>`;
+      // Attacher les événements via JS (évite les problèmes de guillemets dans onclick inline)
+      item.querySelectorAll('[data-action]').forEach(btn => {
+        btn.addEventListener('click', e => {
+          e.stopPropagation();
+          const c = btn.dataset.code;
+          const i = parseInt(btn.dataset.idx);
+          if (btn.dataset.action === 'download') downloadHistoryPDF(e, c, i);
+          else if (btn.dataset.action === 'resend') resendBilan(e, c, i);
+          else if (btn.dataset.action === 'delete') deleteHistoryItem(e, c, i);
+        });
+      });
       list.appendChild(item);
     });
   });
