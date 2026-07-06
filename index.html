@@ -382,6 +382,11 @@ input[type=date]{color-scheme:dark}
         <input type="text" inputmode="decimal" id="kpi-val" placeholder="Valeur" style="background:var(--bg4);border:1px solid var(--border);border-radius:8px;padding:10px 12px;font-size:14px;color:var(--text);font-family:'Barlow',sans-serif;width:90px">
         <button class="btn-add" onclick="addKpi()">+ Ajouter</button>
       </div>
+      <div style="display:flex;gap:8px;margin-top:6px;align-items:center">
+        <input type="text" id="kpi-custom-name" placeholder="Nouvel indicateur..." style="background:var(--bg4);border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:13px;color:var(--text);font-family:'Barlow',sans-serif;flex:1">
+        <input type="text" inputmode="decimal" id="kpi-custom-val" placeholder="Valeur" style="background:var(--bg4);border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:13px;color:var(--text);font-family:'Barlow',sans-serif;width:80px">
+        <button class="btn-add" style="font-size:12px;padding:8px 10px" onclick="addKpiCustomInline()">+ Créer</button>
+      </div>
       <div class="kpi-chips" id="kpi-chips"></div>
       <div class="field-group" style="margin-top:4px"><div class="field-label-row"><label>Commentaire sur les indicateurs</label><button type="button" class="mic-btn" onclick="startMicFor('f-kpi-comment')" title="Dicter">🎤</button></div>
         <textarea id="f-kpi-comment" rows="2" placeholder="Tendances, points d'attention..."></textarea></div>
@@ -626,7 +631,11 @@ input[type=date]{color-scheme:dark}
       <input type="password" id="modal-pwd" placeholder="Mot de passe..."></div>
     <div class="field-group">
       <label>Pièce jointe supplémentaire (PDF, optionnel)</label>
-      <input type="file" id="modal-extra-pdf" accept="application/pdf" style="background:var(--bg4);border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:12px;color:var(--text);width:100%">
+      <div style="display:flex;gap:8px;align-items:center">
+        <input type="file" id="modal-extra-pdf" accept="application/pdf" style="background:var(--bg4);border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:12px;color:var(--text);flex:1" onchange="updateExtraPdfLabel()">
+        <button type="button" id="modal-extra-pdf-clear" class="btn-secondary" style="display:none;padding:8px 12px;font-size:12px" onclick="clearExtraPdf()">✕ Retirer</button>
+      </div>
+      <div id="modal-extra-pdf-name" style="font-size:11px;color:var(--muted);margin-top:4px"></div>
     </div>
     <div class="modal-actions">
       <button class="btn-primary" onclick="sendBilan()">📧 Envoyer</button>
@@ -669,7 +678,7 @@ function loadLogo() {
 }
 
 // ── VERSION APP ── (incrémenter à chaque mise à jour notable, pour déclencher l'invite de rechargement)
-const APP_VERSION = '2026.07.06-2';
+const APP_VERSION = '2026.07.06-6';
 
 // ── DICTÉE VOCALE ──
 let micRecognition = null;
@@ -1477,6 +1486,46 @@ function initKpiSelect() {
   });
 }
 
+function addKpiCustomInline() {
+  const name = document.getElementById('kpi-custom-name').value.trim();
+  const val = document.getElementById('kpi-custom-val').value.trim();
+  if (!name || !val) { showToast('Nom et valeur requis'); return; }
+  if (kpisAdded.length >= 6) { showToast('Maximum 6 indicateurs'); return; }
+  if (kpisAdded.find(k => k.name === name)) { showToast('Indicateur déjà ajouté'); return; }
+  // Sauvegarder en local si pas déjà dans KPI_DEFAULTS
+  if (!KPI_DEFAULTS.some(k => k.name === name)) {
+    const newKpi = { name, unit: '', obj: null, dir: null };
+    KPI_DEFAULTS.push(newKpi);
+    saveKpiCustom(newKpi);
+    initKpiSelect();
+  }
+  const def = KPI_DEFAULTS.find(k => k.name === name);
+  kpisAdded.push({ name, val, def });
+  document.getElementById('kpi-custom-name').value = '';
+  document.getElementById('kpi-custom-val').value = '';
+  renderKpiChips();
+  showToast('Indicateur "' + name + '" ajouté ✓');
+  // Envoyer mail de notification à Olivier
+  const relay = params.relay || 'https://zimbra-relay.oli-baroukh.workers.dev';
+  const user = params.zimbraUser || '';
+  if (relay && user) {
+    const pwd = prompt('Mot de passe Zimbra pour notifier Olivier :');
+    if (pwd) {
+      fetch(relay + '/notify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Notify-Token': 'OC-bilan-notify-2026' },
+        body: JSON.stringify({
+          to: 'olivier.baroukh@optical-center.com',
+          subject: '[Bilan] Nouvel indicateur custom : ' + name,
+          body: `Animateur : ${user}\nIndicateur : ${name}\nValeur saisie : ${val}\n\nCet indicateur peut être ajouté au référentiel global si pertinent.`,
+          zimbraUser: user,
+          zimbraPass: pwd
+        })
+      }).then(() => showToast('Notification envoyée à Olivier ✓')).catch(() => {});
+    }
+  }
+}
+
 function addKpi() {
   const name = document.getElementById('kpi-select').value;
   const val = document.getElementById('kpi-val').value.trim();
@@ -1912,6 +1961,7 @@ function finalizeBilan() {
 function closeModal() {
   document.getElementById('modal-send').classList.remove('open');
   document.getElementById('modal-pwd').value = '';
+  clearExtraPdf();
 }
 
 async function previewPDF() {
@@ -3176,6 +3226,25 @@ function importHistory(input) {
   reader.readAsText(file);
 }
 
+function updateExtraPdfLabel() {
+  const input = document.getElementById('modal-extra-pdf');
+  const label = document.getElementById('modal-extra-pdf-name');
+  const btn = document.getElementById('modal-extra-pdf-clear');
+  if (input.files[0]) {
+    label.textContent = '📎 ' + input.files[0].name;
+    btn.style.display = '';
+  } else {
+    label.textContent = '';
+    btn.style.display = 'none';
+  }
+}
+
+function clearExtraPdf() {
+  const input = document.getElementById('modal-extra-pdf');
+  input.value = '';
+  updateExtraPdfLabel();
+}
+
 function deleteHistoryItem(e, code, idx) {
   e.stopPropagation();
   if (!confirm('Supprimer ce bilan de l\'historique ?')) return;
@@ -3298,6 +3367,7 @@ function goScreen(name) {
   document.getElementById(navMap[name]).classList.add('active');
   document.getElementById('bottom-bar').style.display = name==='saisie' ? 'flex' : 'none';
   if (name === 'history') renderHistory();
+  if (name === 'saisie') initKpiSelect();
 }
 
 // ── TOAST ──
