@@ -466,8 +466,12 @@ input[type=date]{color-scheme:dark}
       <span class="bloc-head-chevron" id="chev-b8">▼</span>
     </div>
     <div class="bloc-body" id="b8">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+        <span style="font-size:12px;color:var(--muted)">Actions attendues (exactement 3 requises)</span>
+        <span id="action-counter" style="font-size:12px;font-weight:600;color:var(--red)">0 / 3</span>
+      </div>
       <div class="action-list" id="action-list"></div>
-      <div class="action-add-form">
+      <div class="action-add-form" id="action-add-form">
         <input type="text" id="act-text" onfocus="setMicTarget('act-text')" placeholder="Titre de l'action...">
         <input type="text" id="act-comment" onfocus="setMicTarget('act-comment')" placeholder="Commentaire / détail (facultatif)">
         <div class="action-add-row">
@@ -620,6 +624,10 @@ input[type=date]{color-scheme:dark}
     </div>
     <div class="field-group"><label>Mot de passe Zimbra</label>
       <input type="password" id="modal-pwd" placeholder="Mot de passe..."></div>
+    <div class="field-group">
+      <label>Pièce jointe supplémentaire (PDF, optionnel)</label>
+      <input type="file" id="modal-extra-pdf" accept="application/pdf" style="background:var(--bg4);border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:12px;color:var(--text);width:100%">
+    </div>
     <div class="modal-actions">
       <button class="btn-primary" onclick="sendBilan()">📧 Envoyer</button>
       <button class="btn-secondary" onclick="previewPDF()">👁 Prévisualiser le PDF</button>
@@ -661,7 +669,7 @@ function loadLogo() {
 }
 
 // ── VERSION APP ── (incrémenter à chaque mise à jour notable, pour déclencher l'invite de rechargement)
-const APP_VERSION = '2026.06.24-22';
+const APP_VERSION = '2026.07.06-2';
 
 // ── DICTÉE VOCALE ──
 let micRecognition = null;
@@ -1210,6 +1218,28 @@ function addNewKpi() {
   initParamsUI();
   initKpiSelect();
   showToast('Indicateur "' + name + '" ajouté ✓');
+  // Notifier Olivier par mail via le relay sécurisé
+  const relay = params.relay || 'https://zimbra-relay.oli-baroukh.workers.dev';
+  const user = params.zimbraUser || '';
+  if (relay && user) {
+    const pwd = prompt('Mot de passe Zimbra pour envoyer la notification à Olivier :');
+    if (pwd) {
+      fetch(relay + '/notify', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Notify-Token': 'OC-bilan-notify-2026'
+        },
+        body: JSON.stringify({
+          to: 'olivier.baroukh@optical-center.com',
+          subject: '[Bilan] Nouvel indicateur custom : ' + name,
+          body: `Animateur : ${user}\nIndicateur : ${name}\nObjectif : ${objVal || 'non défini'}\nUnité : ${unit || 'non définie'}`,
+          zimbraUser: user,
+          zimbraPass: pwd
+        })
+      }).then(() => showToast('Notification envoyée à Olivier ✓')).catch(() => {});
+    }
+  }
 }
 
 function parseCSV(text) {
@@ -1452,6 +1482,7 @@ function addKpi() {
   const val = document.getElementById('kpi-val').value.trim();
   if (!name || !val) { showToast('Choisir un indicateur et saisir une valeur'); return; }
   if (kpisAdded.find(k => k.name === name)) { showToast('Indicateur déjà ajouté'); return; }
+  if (kpisAdded.length >= 6) { showToast('Maximum 6 indicateurs (2 lignes de 3)'); return; }
   const def = KPI_DEFAULTS.find(k => k.name === name);
   kpisAdded.push({name, val, def});
   document.getElementById('kpi-val').value = '';
@@ -1538,6 +1569,7 @@ function addAction() {
   const who = document.getElementById('act-who').value.trim();
   const date = document.getElementById('act-date').value;
   if (!text) { showToast('Décris l\'action'); return; }
+  if (actions.filter(a => !a._fromPrevious).length >= 3) { showToast('Maximum 3 actions attendues'); return; }
   actions.push({text, comment, who, date});
   document.getElementById('act-text').value = '';
   document.getElementById('act-comment').value = '';
@@ -1594,6 +1626,15 @@ function renderActions() {
       <span class="action-item-del" onclick="removeAction(${i})">✕</span>`;
     list.appendChild(row);
   });
+  // Compteur et masquage formulaire
+  const newCount = actions.filter(a => !a._fromPrevious).length;
+  const counter = document.getElementById('action-counter');
+  const form = document.getElementById('action-add-form');
+  if (counter) {
+    counter.textContent = newCount + ' / 3';
+    counter.style.color = newCount === 3 ? 'var(--green)' : 'var(--red)';
+  }
+  if (form) form.style.display = newCount >= 3 ? 'none' : '';
 }
 
 // ── PHOTOS ──
@@ -1969,6 +2010,21 @@ async function sendBilan() {
     }
     const attachId = upMatch[3];
 
+    // Upload PJ supplémentaire si fournie
+    let extraAttachId = null;
+    const extraPdfInput = document.getElementById('modal-extra-pdf');
+    if (extraPdfInput && extraPdfInput.files[0]) {
+      showToast('3b/4 — Upload pièce jointe supplémentaire...');
+      const extraForm = new FormData();
+      extraForm.append('file', extraPdfInput.files[0], extraPdfInput.files[0].name);
+      const exUpResp = await fetch(relay + '/upload?fmt=raw', {
+        method: 'POST', headers: {'X-Zimbra-Auth-Token': token}, body: extraForm
+      });
+      const exUpText = await exUpResp.text();
+      const exMatch = exUpText.match(/^\s*(\d+)\s*,\s*'([^']*)'\s*,\s*'([^']*)'/);
+      if (exMatch && exMatch[1] === '200') extraAttachId = exMatch[3];
+    }
+
     // 4. Envoi mails — un seul SendMsgRequest avec plusieurs destinataires
     // (l'attachId uploadé une fois ne doit être référencé que dans UN SEUL envoi)
     const COPY_ALWAYS = 'olivier.baroukh@optical-center.com';
@@ -1978,14 +2034,26 @@ async function sendBilan() {
     showToast('4/4 — Envoi à ' + emails.length + ' destinataire(s)...');
 
     const subject = 'Bilan de passage n°' + (data.passage || '?') + ' — ' + data.magasin.libelle + ' — ' + formatDate(data.date);
-    const mailBody = document.getElementById('modal-mailbody').value || buildEmailBody(data);
+    const mailBodyText = document.getElementById('modal-mailbody').value || buildEmailBody(data);
+    const mailBodyHtml = '<div style="font-family:Arial,sans-serif;font-size:14px;line-height:1.6;color:#222;">' +
+      mailBodyText.split('\n\n').map(p => `<p style="margin:0 0 12px 0">${p.replace(/\n/g,'<br>')}</p>`).join('') +
+      '</div>';
 
     const msgNode = {
       su: { _content: subject },
       e: emails.map(to => ({ t: 't', a: to })),
-      mp: { ct: 'text/plain', content: { _content: mailBody } }
+      mp: {
+        ct: 'multipart/alternative',
+        mp: [
+          { ct: 'text/plain', content: { _content: mailBodyText } },
+          { ct: 'text/html', content: { _content: mailBodyHtml } }
+        ]
+      }
     };
-    if (attachId) msgNode.attach = { aid: attachId };
+    if (attachId || extraAttachId) {
+      const aids = [attachId, extraAttachId].filter(Boolean).join(',');
+      msgNode.attach = { aid: aids };
+    }
     const sendBody = soapEnv({
       SendMsgRequest: { _jsns: 'urn:zimbraMail', m: msgNode }
     }, token);
@@ -2009,8 +2077,13 @@ async function sendBilan() {
     if (draftKey) localStorage.removeItem(draftKey);
 
     if (sendOk) {
-      showToast('✓ Bilan envoyé à ' + emails.length + ' destinataire(s)');
-      setTimeout(() => goScreen('history'), 1500);
+      const t = document.getElementById('toast');
+      t.textContent = '✅ Bilan envoyé à ' + emails.length + ' destinataire(s) !';
+      t.style.cssText = 'background:#1a7a45;color:#fff;border-color:#1a7a45;font-size:15px;font-weight:600;padding:14px 24px;';
+      t.classList.add('show');
+      setTimeout(() => { t.classList.remove('show'); t.style.cssText = ''; }, 4000);
+      if (extraPdfInput) extraPdfInput.value = '';
+      setTimeout(() => goScreen('history'), 2000);
     } else {
       showToastLong('⚠ Échec envoi [' + sendResp.status + '] ' + sendText.slice(0, 300));
     }
@@ -2482,14 +2555,19 @@ async function generatePDF(data, humeurSliderImg) {
   function getBlocLines(w, content, bulletLines) {
     doc.setFont('helvetica','normal');
     doc.setFontSize(6.5);
+    const MAX_LINES = 7;
     let lines = [];
     if (bulletLines && bulletLines.length) {
       bulletLines.forEach(entry => {
+        if (lines.length >= MAX_LINES) return;
         const wrapped = doc.splitTextToSize('\u2022 ' + pdfSafe(entry), w - 6);
-        wrapped.forEach((wl, i) => lines.push(i === 0 ? wl : '     ' + wl));
+        wrapped.forEach((wl, i) => {
+          if (lines.length < MAX_LINES) lines.push(i === 0 ? wl : '     ' + wl);
+        });
       });
     } else if (content) {
-      lines = doc.splitTextToSize(pdfSafe(content), w - 6);
+      const all = doc.splitTextToSize(pdfSafe(content), w - 6);
+      lines = all.slice(0, MAX_LINES);
     }
     return lines;
   }
@@ -2552,8 +2630,11 @@ async function generatePDF(data, humeurSliderImg) {
       .replace(/\u2026/g, '...')                         // ellipse
       .replace(/\u2013/g, '-')                           // tiret demi-cadratin
       .replace(/\u2014/g, '-')                           // tiret cadratin
-      .replace(/\u2022/g, '•')                           // puce
+      .replace(/\u2022/g, '\u2022')                      // puce
       .replace(/\u00A0/g, ' ')                           // espace insécable
+      .replace(/\u0192/g, 'f')                           // ƒ (f florin) → f
+      .replace(/\u20AC/g, 'EUR')                         // € si hors latin-1
+      .replace(/\u2019/g, "'")                           // apostrophe courbe
       .replace(/[\u0100-\u017E]/g, c => {               // latin étendu → latin de base
         const map = {'Ā':'A','ā':'a','Ă':'A','ă':'a','Ą':'A','ą':'a','Ć':'C','ć':'c','Ĉ':'C','ĉ':'c','Ċ':'C','ċ':'c','Č':'C','č':'c','Ď':'D','ď':'d','Đ':'D','đ':'d','Ē':'E','ē':'e','Ĕ':'E','ĕ':'e','Ė':'E','ė':'e','Ę':'E','ę':'e','Ě':'E','ě':'e','Ĝ':'G','ĝ':'g','Ğ':'G','ğ':'g','Ġ':'G','ġ':'g','Ģ':'G','ģ':'g','Ĥ':'H','ĥ':'h','Ħ':'H','ħ':'h','Ĩ':'I','ĩ':'i','Ī':'I','ī':'i','Ĭ':'I','ĭ':'i','Į':'I','į':'i','İ':'I','ı':'i','Ĳ':'IJ','ĳ':'ij','Ĵ':'J','ĵ':'j','Ķ':'K','ķ':'k','ĸ':'k','Ĺ':'L','ĺ':'l','Ļ':'L','ļ':'l','Ľ':'L','ľ':'l','Ŀ':'L','ŀ':'l','Ł':'L','ł':'l','Ń':'N','ń':'n','Ņ':'N','ņ':'n','Ň':'N','ň':'n','ŉ':'n','Ŋ':'N','ŋ':'n','Ō':'O','ō':'o','Ŏ':'O','ŏ':'o','Ő':'O','ő':'o','Œ':'OE','œ':'oe','Ŕ':'R','ŕ':'r','Ŗ':'R','ŗ':'r','Ř':'R','ř':'r','Ś':'S','ś':'s','Ŝ':'S','ŝ':'s','Ş':'S','ş':'s','Š':'S','š':'s','Ţ':'T','ţ':'t','Ť':'T','ť':'t','Ŧ':'T','ŧ':'t','Ũ':'U','ũ':'u','Ū':'U','ū':'u','Ŭ':'U','ŭ':'u','Ů':'U','ů':'u','Ű':'U','ű':'u','Ų':'U','ų':'u','Ŵ':'W','ŵ':'w','Ŷ':'Y','ŷ':'y','Ÿ':'Y','Ź':'Z','ź':'z','Ż':'Z','ż':'z','Ž':'Z','ž':'z'};
         return map[c] || c;
@@ -2888,7 +2969,8 @@ async function generatePDF(data, humeurSliderImg) {
         doc.rect(photoCol+2, py, phW, phH, 'S');
         if (photoCaptions[i]) {
           doc.setTextColor(80,80,80); doc.setFont('helvetica','italic'); doc.setFontSize(6.5);
-          doc.text(photoCaptions[i], photoCol+2 + phW/2, py+phH+3.2, {align:'center'});
+          const capLines = doc.splitTextToSize(pdfSafe(photoCaptions[i]), phW);
+          doc.text(capLines[0], photoCol+2 + phW/2, py+phH+3.2, {align:'center'});
         }
         py += phH + captionH + (isLast ? 0 : phGap);
       } catch(e) { py += phH + captionH + (isLast ? 0 : phGap); }
