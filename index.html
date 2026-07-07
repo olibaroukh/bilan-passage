@@ -681,7 +681,7 @@ function loadLogo() {
 }
 
 // ── VERSION APP ── (incrémenter à chaque mise à jour notable, pour déclencher l'invite de rechargement)
-const APP_VERSION = '2026.07.07-4';
+const APP_VERSION = '2026.07.07-5';
 
 // ── DICTÉE VOCALE ──
 let micRecognition = null;
@@ -2069,14 +2069,20 @@ async function sendBilan() {
     const extraPdfInput = document.getElementById('modal-extra-pdf');
     if (extraPdfInput && extraPdfInput.files[0]) {
       showToast('3b/4 — Upload pièce jointe supplémentaire...');
-      const extraForm = new FormData();
-      extraForm.append('file', extraPdfInput.files[0], extraPdfInput.files[0].name);
+      const extraFile = extraPdfInput.files[0];
+      const extraBytes = await extraFile.arrayBuffer();
       const exUpResp = await fetch(relay + '/upload?fmt=raw', {
-        method: 'POST', headers: {'X-Zimbra-Auth-Token': token}, body: extraForm
+        method: 'POST',
+        headers: {
+          'X-Zimbra-Auth-Token': token,
+          'Content-Type': extraFile.type || 'application/pdf'
+        },
+        body: extraBytes
       });
       const exUpText = await exUpResp.text();
       const exMatch = exUpText.match(/^\s*(\d+)\s*,\s*'([^']*)'\s*,\s*'([^']*)'/);
       if (exMatch && exMatch[1] === '200') extraAttachId = exMatch[3];
+      console.log('Upload PJ extra:', exUpText.slice(0,100), '| extraAttachId:', extraAttachId);
     }
 
     // 4. Envoi mails — un seul SendMsgRequest avec plusieurs destinataires
