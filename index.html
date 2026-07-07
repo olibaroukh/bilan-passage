@@ -681,7 +681,7 @@ function loadLogo() {
 }
 
 // ── VERSION APP ── (incrémenter à chaque mise à jour notable, pour déclencher l'invite de rechargement)
-const APP_VERSION = '2026.07.07-3';
+const APP_VERSION = '2026.07.07-4';
 
 // ── DICTÉE VOCALE ──
 let micRecognition = null;
@@ -2108,6 +2108,8 @@ async function sendBilan() {
       const aids = [attachId, extraAttachId].filter(Boolean).join(',');
       msgNode.attach = { aid: aids };
     }
+    // Debug : afficher les IDs dans la console
+    console.log('attachId bilan:', attachId, '| extraAttachId PJ:', extraAttachId);
     const sendBody = soapEnv({
       SendMsgRequest: { _jsns: 'urn:zimbraMail', m: msgNode }
     }, token);
