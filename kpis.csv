@@ -21,3 +21,4 @@ Note Google;;4,5;gte
 Transition;%;20;gte
 SAP;%;70;gte
 Seuil de Perf;;42750;gte
+Fréquentation;%;5;gte
