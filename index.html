@@ -678,7 +678,7 @@ function loadLogo() {
 }
 
 // ── VERSION APP ── (incrémenter à chaque mise à jour notable, pour déclencher l'invite de rechargement)
-const APP_VERSION = '2026.07.06-6';
+const APP_VERSION = '2026.07.06-7';
 
 // ── DICTÉE VOCALE ──
 let micRecognition = null;
@@ -1955,7 +1955,18 @@ function finalizeBilan() {
   });
   document.getElementById('modal-send').classList.add('open');
   pendingBilanData = data;
-  document.getElementById('modal-mailbody').value = buildEmailBody(data);
+  // Afficher spinner pendant la reformulation
+  const textarea = document.getElementById('modal-mailbody');
+  textarea.value = '✍️ Reformulation en cours...';
+  textarea.disabled = true;
+  const rawMail = buildEmailBody(data);
+  reformulateWithClaude(rawMail, data).then(improved => {
+    textarea.value = improved;
+    textarea.disabled = false;
+  }).catch(() => {
+    textarea.value = rawMail;
+    textarea.disabled = false;
+  });
 }
 
 function closeModal() {
@@ -2199,7 +2210,54 @@ function summarizeDataForPrompt(d) {
 }
 
 function regenerateMailBody() {
-  if (pendingBilanData) document.getElementById('modal-mailbody').value = buildEmailBody(pendingBilanData);
+  if (pendingBilanData) {
+    const ta = document.getElementById('modal-mailbody');
+    ta.value = '✍️ Reformulation en cours...';
+    ta.disabled = true;
+    reformulateWithClaude(buildEmailBody(pendingBilanData), pendingBilanData).then(improved => {
+      ta.value = improved; ta.disabled = false;
+    }).catch(() => {
+      ta.value = buildEmailBody(pendingBilanData); ta.disabled = false;
+    });
+  }
+}
+
+async function reformulateWithClaude(rawMail, data) {
+  const humeur = parseInt(data.humeur ?? 2);
+  const humeurLabel = ['difficile', 'mitigé', 'correct', 'bien', 'top'][Math.min(Math.max(humeur, 0), 4)];
+  const ar = data.ar || 'l\'animateur réseau';
+  const mag = data.magasin?.libelle || 'le magasin';
+
+  const prompt = `Tu es ${ar}, animateur réseau chez Optical Center. Tu viens de visiter le magasin ${mag}. L'humeur du passage était : ${humeurLabel}.
+
+Voici le mail de bilan généré automatiquement :
+
+---
+${rawMail}
+---
+
+Réécris ce mail dans un style narratif, chaleureux et professionnel. Règles impératives :
+- Commence par "Bonjour à toute l'équipe,"
+- Garde TOUTES les informations factuelles (chiffres, noms, dates, actions)
+- Rends le texte fluide et naturel, sans listes à puces sauf pour les actions attendues
+- Adapte le ton à l'humeur (${humeurLabel}) : ${humeur <= 1 ? 'sérieux et direct' : humeur === 2 ? 'constructif et équilibré' : humeur === 3 ? 'positif et encourageant' : 'enthousiaste et chaleureux'}
+- Termine par une clôture chaleureuse adaptée à l'humeur, puis "Bien cordialement," suivi du nom de l'AR et "Optical Center"
+- Longueur similaire au mail original
+- Pas de mise en forme markdown, texte brut uniquement`;
+
+  const response = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 1500,
+      messages: [{ role: 'user', content: prompt }]
+    })
+  });
+  const result = await response.json();
+  const text = result?.content?.[0]?.text || '';
+  if (!text) throw new Error('Réponse vide');
+  return text.trim();
 }
 
 function buildEmailBody(d) {
