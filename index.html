@@ -681,7 +681,7 @@ function loadLogo() {
 }
 
 // ── VERSION APP ── (incrémenter à chaque mise à jour notable, pour déclencher l'invite de rechargement)
-const APP_VERSION = '2026.07.07-11';
+const APP_VERSION = '2026.07.07-12';
 
 // ── DICTÉE VOCALE ──
 let micRecognition = null;
@@ -2763,7 +2763,7 @@ async function generatePDF(data, humeurSliderImg) {
   // Calculer actNeededH ici (avant maxColH qui en dépend)
   function estimateActionsHEarly(actions) {
     if (!actions || !actions.length) return 18;
-    const cols = 2;
+    const cols = Math.min(3, actions.length);
     const rows = Math.ceil(actions.length / cols);
     return 7 + rows * 10 + 4; // plus compact : 10mm par rangée au lieu de 12
   }
@@ -2803,7 +2803,7 @@ async function generatePDF(data, humeurSliderImg) {
   // estimateActionsH (version complète, identique à estimateActionsHEarly)
   function estimateActionsH(actions) {
     if (!actions || !actions.length) return 18;
-    const cols = 2;
+    const cols = Math.min(3, actions.length);
     const rows = Math.ceil(actions.length / cols);
     return 7 + rows * 10 + 4;
   }
@@ -2913,13 +2913,15 @@ async function generatePDF(data, humeurSliderImg) {
     yc2 += 3;
   }
 
-  // ACTIONS ATTENDUES — mise en page intelligente (2 col → 1 col → compact)
-  // Plafonner yc1/yc2 pour garantir l'espace des actions (le contenu est déjà dessiné, 
-  // mais les blocs pdf sont "clippés" naturellement si on ne va pas en dessous)
-  const maxContentY = footerY - actNeededH - 4;
-  const maxContentY2 = footerY - actNeededH;
-  const contentBottom = Math.min(Math.max(yc1, yc2) + 2, maxContentY2);
-  let actY = contentBottom;
+  // ACTIONS ATTENDUES — mise en page intelligente (3 col → 2 col → 1 col → compact)
+  // Le cadre Actions ne doit JAMAIS démarrer avant la fin réelle du contenu des
+  // colonnes (yc1/yc2), sinon il se dessine PAR-DESSUS le bas du contenu déjà
+  // tracé (ex: Entretiens individuels tronqués visuellement). On ne plafonne
+  // donc plus vers le bas : si le contenu a dépassé l'estimation, le cadre
+  // Actions descend avec lui et se comprime via les configs de police/colonnes.
+  const actNeededHMin = 24; // hauteur plancher pour rester lisible, utilisée seulement à titre indicatif
+  const realContentBottom = Math.max(yc1, yc2) + 2;
+  let actY = realContentBottom;
   const actTotalH = footerY - actY;
   const actHeaderH = 7;
   const actBodyH = actTotalH - actHeaderH;
@@ -2957,10 +2959,23 @@ async function generatePDF(data, humeurSliderImg) {
   }
 
   // Cadre actions
+  function actionColWidth(cols) {
+    return (contentRight - col1 - 8 * (cols - 1)) / cols;
+  }
+  function splitActionsIntoCols(actions, cols) {
+    const perCol = Math.ceil(actions.length / cols);
+    const result = [];
+    for (let c = 0; c < cols; c++) result.push(actions.slice(c * perCol, (c + 1) * perCol));
+    return result;
+  }
   if (data.actions.length) {
-    // Essai avec différentes configs jusqu'à ce que tout rentre
+    // Essai avec différentes configs jusqu'à ce que tout rentre : on privilégie
+    // 3 colonnes (une ligne pour les 3 actions habituelles), puis 2, puis 1.
     const configs = [
-      {cols:2, fszT:7.5, fszC:6.5, lhC:3.5, gap:4},
+      {cols:3, fszT:7.5, fszC:6.5, lhC:3.5, gap:4},
+      {cols:3, fszT:6.5, fszC:5.5, lhC:3.2, gap:3},
+      {cols:3, fszT:6,   fszC:5,   lhC:3.0, gap:2.5},
+      {cols:3, fszT:5.5, fszC:4.8, lhC:2.8, gap:2},
       {cols:2, fszT:6.5, fszC:5.5, lhC:3.2, gap:3},
       {cols:2, fszT:6,   fszC:5,   lhC:3.0, gap:2.5},
       {cols:2, fszT:5.5, fszC:4.8, lhC:2.8, gap:2},
@@ -2971,14 +2986,12 @@ async function generatePDF(data, humeurSliderImg) {
       {cols:1, fszT:5,   fszC:4.5, lhC:2.5, gap:1},
     ];
 
-    // La config de dernier recours force tout en 2 colonnes ultra-compact
-    let chosen = {cols:2, fszT:5.5, fszC:5, lhC:2.8, gap:1.5};
+    // La config de dernier recours force tout en 3 colonnes ultra-compact
+    let chosen = {cols:3, fszT:5, fszC:4.5, lhC:2.5, gap:1};
     for (const cfg of configs) {
-      const colW = cfg.cols === 2 ? (contentRight-col1-8)/2 : (contentRight-col1-8);
-      const perCol = cfg.cols === 2 ? Math.ceil(data.actions.length/2) : data.actions.length;
-      const colActions = cfg.cols === 2
-        ? [data.actions.slice(0, perCol), data.actions.slice(perCol)]
-        : [data.actions];
+      const effCols = Math.min(cfg.cols, data.actions.length);
+      const colW = actionColWidth(effCols);
+      const colActions = splitActionsIntoCols(data.actions, effCols);
 
       let fits = true;
       for (const colActs of colActions) {
@@ -2991,19 +3004,18 @@ async function generatePDF(data, humeurSliderImg) {
 
     // Ajuster actY selon la hauteur réelle des actions avec la config choisie
     if (data.actions.length) {
-      const aColW_r = chosen.cols === 2 ? (contentRight-col1-8)/2 : (contentRight-col1-8);
-      const perCol_r = chosen.cols === 2 ? Math.ceil(data.actions.length/2) : data.actions.length;
-      const cols_r = chosen.cols === 2
-        ? [data.actions.slice(0, perCol_r), data.actions.slice(perCol_r)]
-        : [data.actions];
+      const effCols_r = Math.min(chosen.cols, data.actions.length);
+      const aColW_r = actionColWidth(effCols_r);
+      const cols_r = splitActionsIntoCols(data.actions, effCols_r);
       let realH = 7 + 4;
       for (const ca of cols_r) {
         let ch = 0;
         ca.forEach(a => { ch += calcActionH(a, aColW_r, chosen.fszT, chosen.fszC, chosen.lhC) + chosen.gap; });
         realH = Math.max(realH, ch + 7 + 4);
       }
-      // Si la hauteur réelle nécessaire est plus grande, remonter actY
-      actY = Math.min(actY, footerY - realH);
+      // Si la hauteur réelle nécessaire est plus grande, remonter actY — mais
+      // jamais au-dessus du bas réel du contenu des colonnes (pas de recouvrement)
+      actY = Math.max(Math.min(actY, footerY - realH), realContentBottom);
     }
 
     // Recalculer actTotalH/actBodyH avec le actY final
@@ -3022,11 +3034,9 @@ async function generatePDF(data, humeurSliderImg) {
     doc.setLineWidth(0.2);
 
     // Rendu avec la config choisie
-    const aColW = chosen.cols === 2 ? (contentRight-col1-8)/2 : (contentRight-col1-8);
-    const perCol = chosen.cols === 2 ? Math.ceil(data.actions.length/2) : data.actions.length;
-    const columns = chosen.cols === 2
-      ? [data.actions.slice(0, perCol), data.actions.slice(perCol)]
-      : [data.actions];
+    const effCols = Math.min(chosen.cols, data.actions.length);
+    const aColW = actionColWidth(effCols);
+    const columns = splitActionsIntoCols(data.actions, effCols);
 
     columns.forEach((colActs, ci) => {
       let ax = col1+4 + ci*(aColW+8);
