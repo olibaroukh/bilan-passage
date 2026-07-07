@@ -681,7 +681,7 @@ function loadLogo() {
 }
 
 // ── VERSION APP ── (incrémenter à chaque mise à jour notable, pour déclencher l'invite de rechargement)
-const APP_VERSION = '2026.07.07-6';
+const APP_VERSION = '2026.07.07-7';
 
 // ── DICTÉE VOCALE ──
 let micRecognition = null;
@@ -2071,14 +2071,12 @@ async function sendBilan() {
     if (extraPdfInput && extraPdfInput.files[0]) {
       showToast('3b/4 — Upload pièce jointe supplémentaire...');
       const extraFile = extraPdfInput.files[0];
-      const extraBytes = await extraFile.arrayBuffer();
+      const extraForm = new FormData();
+      extraForm.append('file', extraFile, extraFile.name);
       const exUpResp = await fetch(relay + '/upload?fmt=raw', {
         method: 'POST',
-        headers: {
-          'X-Zimbra-Auth-Token': token,
-          'Content-Type': extraFile.type || 'application/pdf'
-        },
-        body: extraBytes
+        headers: { 'X-Zimbra-Auth-Token': token },
+        body: extraForm
       });
       const exUpText = await exUpResp.text();
       const exMatch = exUpText.match(/^\s*(\d+)\s*,\s*'([^']*)'\s*,\s*'([^']*)'/);
