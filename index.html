@@ -681,7 +681,7 @@ function loadLogo() {
 }
 
 // ── VERSION APP ── (incrémenter à chaque mise à jour notable, pour déclencher l'invite de rechargement)
-const APP_VERSION = '2026.07.07-8';
+const APP_VERSION = '2026.07.07-9';
 
 // ── DICTÉE VOCALE ──
 let micRecognition = null;
@@ -2068,13 +2068,13 @@ async function sendBilan() {
     }
     const attachId = upMatch[3];
 
-    // Upload PJ supplémentaire si fournie
+    // Upload PJ supplémentaire si fournie (on utilise le File capturé lors de la
+    // sélection, car iOS/Safari peut vider input.files entre-temps — bug WebKit)
     let extraAttachId = null;
-    const extraPdfInput = document.getElementById('modal-extra-pdf');
-    console.log('sendBilan - extraPdfInput:', extraPdfInput, 'files:', extraPdfInput?.files?.length, extraPdfInput?.files?.[0]?.name);
-    if (extraPdfInput && extraPdfInput.files[0]) {
+    console.log('sendBilan - selectedExtraPdfFile:', selectedExtraPdfFile?.name);
+    if (selectedExtraPdfFile) {
       showToast('3b/4 — Upload pièce jointe supplémentaire...');
-      const extraFile = extraPdfInput.files[0];
+      const extraFile = selectedExtraPdfFile;
       const extraForm = new FormData();
       extraForm.append('file', extraFile, extraFile.name);
       const exUpResp = await fetch(relay + '/upload?fmt=raw', {
@@ -2147,7 +2147,8 @@ async function sendBilan() {
       t.style.cssText = 'background:#1a7a45;color:#fff;border-color:#1a7a45;font-size:15px;font-weight:600;padding:14px 24px;';
       t.classList.add('show');
       setTimeout(() => { t.classList.remove('show'); t.style.cssText = ''; }, 4000);
-      if (extraPdfInput) extraPdfInput.value = '';
+      if (document.getElementById('modal-extra-pdf')) document.getElementById('modal-extra-pdf').value = '';
+      selectedExtraPdfFile = null;
       setTimeout(() => goScreen('history'), 2000);
     } else {
       showToastLong('⚠ Échec envoi [' + sendResp.status + '] ' + sendText.slice(0, 300));
@@ -3285,6 +3286,7 @@ function importHistory(input) {
   reader.readAsText(file);
 }
 
+let selectedExtraPdfFile = null;
 let lastExtraPdfChange = 0;
 function updateExtraPdfLabel() {
   lastExtraPdfChange = Date.now();
@@ -3293,17 +3295,24 @@ function updateExtraPdfLabel() {
   const btn = document.getElementById('modal-extra-pdf-clear');
   console.log('updateExtraPdfLabel files:', input.files.length, input.files[0]?.name);
   if (input.files[0]) {
-    label.textContent = '📎 ' + input.files[0].name;
+    // On capture le File tout de suite : sur iOS/Safari, input.files peut être
+    // vidé juste après par le navigateur (bug WebKit lié aux conteneurs
+    // position:fixed) même si la sélection était valide.
+    selectedExtraPdfFile = input.files[0];
+    label.textContent = '📎 ' + selectedExtraPdfFile.name;
     btn.style.display = '';
-  } else {
+  } else if (!selectedExtraPdfFile) {
     label.textContent = '';
     btn.style.display = 'none';
   }
+  // Si input.files est vide mais qu'on a déjà capturé un fichier, on ne touche
+  // ni au label ni au bouton : on garde l'affichage et le fichier capturé.
 }
 
 function clearExtraPdf() {
   const input = document.getElementById('modal-extra-pdf');
   input.value = '';
+  selectedExtraPdfFile = null;
   updateExtraPdfLabel();
 }
 
