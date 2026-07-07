@@ -678,7 +678,7 @@ function loadLogo() {
 }
 
 // ── VERSION APP ── (incrémenter à chaque mise à jour notable, pour déclencher l'invite de rechargement)
-const APP_VERSION = '2026.07.06-7';
+const APP_VERSION = '2026.07.07-1';
 
 // ── DICTÉE VOCALE ──
 let micRecognition = null;
@@ -2227,6 +2227,7 @@ async function reformulateWithClaude(rawMail, data) {
   const humeurLabel = ['difficile', 'mitigé', 'correct', 'bien', 'top'][Math.min(Math.max(humeur, 0), 4)];
   const ar = data.ar || 'l\'animateur réseau';
   const mag = data.magasin?.libelle || 'le magasin';
+  const relay = params.relay || 'https://zimbra-relay.oli-baroukh.workers.dev';
 
   const prompt = `Tu es ${ar}, animateur réseau chez Optical Center. Tu viens de visiter le magasin ${mag}. L'humeur du passage était : ${humeurLabel}.
 
@@ -2245,14 +2246,10 @@ Réécris ce mail dans un style narratif, chaleureux et professionnel. Règles i
 - Longueur similaire au mail original
 - Pas de mise en forme markdown, texte brut uniquement`;
 
-  const response = await fetch('https://api.anthropic.com/v1/messages', {
+  const response = await fetch(relay + '/claude', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 1500,
-      messages: [{ role: 'user', content: prompt }]
-    })
+    body: JSON.stringify({ prompt })
   });
   const result = await response.json();
   const text = result?.content?.[0]?.text || '';
