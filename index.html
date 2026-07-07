@@ -681,7 +681,7 @@ function loadLogo() {
 }
 
 // ── VERSION APP ── (incrémenter à chaque mise à jour notable, pour déclencher l'invite de rechargement)
-const APP_VERSION = '2026.07.07-7';
+const APP_VERSION = '2026.07.07-8';
 
 // ── DICTÉE VOCALE ──
 let micRecognition = null;
@@ -1963,6 +1963,10 @@ function finalizeBilan() {
 }
 
 function closeModal() {
+  // Garde-fou : iOS déclenche parfois un clic fantôme sur l'overlay juste après
+  // la fermeture du sélecteur de fichier natif, ce qui fermait la modale et
+  // vidait la PJ qu'on venait de choisir. On ignore la fermeture dans ce cas.
+  if (Date.now() - lastExtraPdfChange < 600) return;
   document.getElementById('modal-send').classList.remove('open');
   document.getElementById('modal-pwd').value = '';
   clearExtraPdf();
@@ -3281,7 +3285,9 @@ function importHistory(input) {
   reader.readAsText(file);
 }
 
+let lastExtraPdfChange = 0;
 function updateExtraPdfLabel() {
+  lastExtraPdfChange = Date.now();
   const input = document.getElementById('modal-extra-pdf');
   const label = document.getElementById('modal-extra-pdf-name');
   const btn = document.getElementById('modal-extra-pdf-clear');
