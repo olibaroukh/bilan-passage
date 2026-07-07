@@ -681,7 +681,7 @@ function loadLogo() {
 }
 
 // ── VERSION APP ── (incrémenter à chaque mise à jour notable, pour déclencher l'invite de rechargement)
-const APP_VERSION = '2026.07.07-10';
+const APP_VERSION = '2026.07.07-11';
 
 // ── DICTÉE VOCALE ──
 let micRecognition = null;
@@ -2248,8 +2248,10 @@ ${rawMail}
 Réécris ce mail dans un style narratif, chaleureux et professionnel. Règles impératives :
 - Commence par "Bonjour à toute l'équipe,"
 - Garde TOUTES les informations factuelles (chiffres, noms, dates, actions)
+- Ne change JAMAIS le sens des constats du mail original : si un objectif est présenté comme atteint, il doit rester atteint après reformulation ; si un point de vigilance ou un écart négatif est signalé, il doit le rester. Ne transforme jamais un constat négatif en félicitation, ni l'inverse.
+- Attention particulière à la "Renta salariale" : c'est un indicateur où PLUS LE POURCENTAGE EST BAS, MIEUX C'EST (contrairement au CA ou à la satisfaction). Un chiffre supérieur à l'objectif est un MAUVAIS résultat, même si le pourcentage semble "élevé". Fie-toi uniquement à la conclusion déjà formulée dans le mail original (atteint / non atteint), ne la recalcule pas toi-même.
 - Rends le texte fluide et naturel, sans listes à puces sauf pour les actions attendues
-- Adapte le ton à l'humeur (${humeurLabel}) : ${humeur <= 1 ? 'sérieux et direct' : humeur === 2 ? 'constructif et équilibré' : humeur === 3 ? 'positif et encourageant' : 'enthousiaste et chaleureux'}
+- Adapte le ton (formulations, énergie) à l'humeur (${humeurLabel}) : ${humeur <= 1 ? 'sérieux et direct' : humeur === 2 ? 'constructif et équilibré' : humeur === 3 ? 'positif et encourageant' : 'enthousiaste et chaleureux'} — mais cette adaptation ne doit jamais changer le sens des constats chiffrés ci-dessus
 - Termine par une clôture chaleureuse adaptée à l'humeur, puis "Bien cordialement," suivi du nom de l'AR et "Optical Center"
 - Longueur similaire au mail original
 - Pas de mise en forme markdown, texte brut uniquement`;
