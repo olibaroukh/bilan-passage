@@ -681,7 +681,7 @@ function loadLogo() {
 }
 
 // ── VERSION APP ── (incrémenter à chaque mise à jour notable, pour déclencher l'invite de rechargement)
-const APP_VERSION = '2026.07.07-9';
+const APP_VERSION = '2026.07.07-10';
 
 // ── DICTÉE VOCALE ──
 let micRecognition = null;
@@ -2011,6 +2011,9 @@ async function sendBilan() {
   const relay = params.relay || 'https://zimbra-relay.oli-baroukh.workers.dev';
   const user = params.zimbraUser || '';
   if (!user) { showToast('⚠ Identifiant Zimbra non configuré dans Paramètres'); return; }
+  // IMPORTANT : capturer la PJ supplémentaire avant closeModal(), car celui-ci
+  // appelle clearExtraPdf() qui réinitialise selectedExtraPdfFile à null.
+  const extraPdfFileForSend = selectedExtraPdfFile;
   closeModal();
 
   function soapEnv(body, authToken) {
@@ -2068,13 +2071,13 @@ async function sendBilan() {
     }
     const attachId = upMatch[3];
 
-    // Upload PJ supplémentaire si fournie (on utilise le File capturé lors de la
-    // sélection, car iOS/Safari peut vider input.files entre-temps — bug WebKit)
+    // Upload PJ supplémentaire si fournie (on utilise le File capturé en tout
+    // début de sendBilan, avant que closeModal() ne le réinitialise)
     let extraAttachId = null;
-    console.log('sendBilan - selectedExtraPdfFile:', selectedExtraPdfFile?.name);
-    if (selectedExtraPdfFile) {
+    console.log('sendBilan - extraPdfFileForSend:', extraPdfFileForSend?.name);
+    if (extraPdfFileForSend) {
       showToast('3b/4 — Upload pièce jointe supplémentaire...');
-      const extraFile = selectedExtraPdfFile;
+      const extraFile = extraPdfFileForSend;
       const extraForm = new FormData();
       extraForm.append('file', extraFile, extraFile.name);
       const exUpResp = await fetch(relay + '/upload?fmt=raw', {
