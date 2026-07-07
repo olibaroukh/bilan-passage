@@ -681,7 +681,7 @@ function loadLogo() {
 }
 
 // ── VERSION APP ── (incrémenter à chaque mise à jour notable, pour déclencher l'invite de rechargement)
-const APP_VERSION = '2026.07.07-5';
+const APP_VERSION = '2026.07.07-6';
 
 // ── DICTÉE VOCALE ──
 let micRecognition = null;
@@ -2067,6 +2067,7 @@ async function sendBilan() {
     // Upload PJ supplémentaire si fournie
     let extraAttachId = null;
     const extraPdfInput = document.getElementById('modal-extra-pdf');
+    console.log('sendBilan - extraPdfInput:', extraPdfInput, 'files:', extraPdfInput?.files?.length, extraPdfInput?.files?.[0]?.name);
     if (extraPdfInput && extraPdfInput.files[0]) {
       showToast('3b/4 — Upload pièce jointe supplémentaire...');
       const extraFile = extraPdfInput.files[0];
@@ -3286,6 +3287,7 @@ function updateExtraPdfLabel() {
   const input = document.getElementById('modal-extra-pdf');
   const label = document.getElementById('modal-extra-pdf-name');
   const btn = document.getElementById('modal-extra-pdf-clear');
+  console.log('updateExtraPdfLabel files:', input.files.length, input.files[0]?.name);
   if (input.files[0]) {
     label.textContent = '📎 ' + input.files[0].name;
     btn.style.display = '';
