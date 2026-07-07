@@ -625,7 +625,10 @@ input[type=date]{color-scheme:dark}
     <div class="field-group">
       <div class="field-label-row"><label>Texte du mail (modifiable avant envoi)</label><button type="button" class="mic-btn" onclick="startMicFor('modal-mailbody')" title="Dicter">🎤</button></div>
       <textarea id="modal-mailbody" rows="10" style="font-family:'Barlow',sans-serif;font-size:12.5px;line-height:1.5"></textarea>
-      <button type="button" class="btn-secondary" style="margin-top:6px;width:100%;font-size:12px;padding:8px" onclick="regenerateMailBody()">↺ Revenir au texte généré</button>
+      <div style="display:flex;gap:8px;margin-top:6px">
+        <button type="button" class="btn-secondary" style="flex:1;font-size:12px;padding:8px" onclick="resetMailBody()">↺ Texte brut</button>
+        <button type="button" class="btn-secondary" style="flex:1;font-size:12px;padding:8px" onclick="regenerateMailBody()">✨ Reformuler</button>
+      </div>
     </div>
     <div class="field-group"><label>Mot de passe Zimbra</label>
       <input type="password" id="modal-pwd" placeholder="Mot de passe..."></div>
@@ -678,7 +681,7 @@ function loadLogo() {
 }
 
 // ── VERSION APP ── (incrémenter à chaque mise à jour notable, pour déclencher l'invite de rechargement)
-const APP_VERSION = '2026.07.07-1';
+const APP_VERSION = '2026.07.07-3';
 
 // ── DICTÉE VOCALE ──
 let micRecognition = null;
@@ -1955,18 +1958,8 @@ function finalizeBilan() {
   });
   document.getElementById('modal-send').classList.add('open');
   pendingBilanData = data;
-  // Afficher spinner pendant la reformulation
-  const textarea = document.getElementById('modal-mailbody');
-  textarea.value = '✍️ Reformulation en cours...';
-  textarea.disabled = true;
-  const rawMail = buildEmailBody(data);
-  reformulateWithClaude(rawMail, data).then(improved => {
-    textarea.value = improved;
-    textarea.disabled = false;
-  }).catch(() => {
-    textarea.value = rawMail;
-    textarea.disabled = false;
-  });
+  document.getElementById('modal-mailbody').value = buildEmailBody(data);
+  document.getElementById('modal-mailbody').disabled = false;
 }
 
 function closeModal() {
@@ -2209,16 +2202,16 @@ function summarizeDataForPrompt(d) {
   ].filter(Boolean).join('\n');
 }
 
+function resetMailBody() {
+  if (pendingBilanData) {
+    document.getElementById('modal-mailbody').value = buildEmailBody(pendingBilanData);
+  }
+}
+
 function regenerateMailBody() {
   if (pendingBilanData) {
-    const ta = document.getElementById('modal-mailbody');
-    ta.value = '✍️ Reformulation en cours...';
-    ta.disabled = true;
-    reformulateWithClaude(buildEmailBody(pendingBilanData), pendingBilanData).then(improved => {
-      ta.value = improved; ta.disabled = false;
-    }).catch(() => {
-      ta.value = buildEmailBody(pendingBilanData); ta.disabled = false;
-    });
+    document.getElementById('modal-mailbody').value = buildEmailBody(pendingBilanData);
+    document.getElementById('modal-mailbody').disabled = false;
   }
 }
 
