@@ -379,12 +379,18 @@ input[type=date]{color-scheme:dark}
         <select class="select-box" id="kpi-select" style="flex:1">
           <option value="">Choisir un indicateur...</option>
         </select>
-        <input type="text" inputmode="decimal" id="kpi-val" placeholder="Valeur" style="background:var(--bg4);border:1px solid var(--border);border-radius:8px;padding:10px 12px;font-size:14px;color:var(--text);font-family:'Barlow',sans-serif;width:90px">
+        <div style="position:relative;display:flex;align-items:center">
+          <input type="text" inputmode="decimal" id="kpi-val" placeholder="Valeur" style="background:var(--bg4);border:1px solid var(--border);border-radius:8px;padding:10px 32px 10px 12px;font-size:14px;color:var(--text);font-family:'Barlow',sans-serif;width:90px">
+          <button type="button" onclick="toggleSign('kpi-val')" title="Inverser le signe" style="position:absolute;right:2px;width:26px;height:26px;border-radius:6px;border:1px solid var(--border);background:var(--bg3);color:var(--text);font-size:14px;font-weight:700;line-height:1;cursor:pointer">±</button>
+        </div>
         <button class="btn-add" onclick="addKpi()">+ Ajouter</button>
       </div>
       <div style="display:flex;gap:8px;margin-top:6px;align-items:center">
         <input type="text" id="kpi-custom-name" placeholder="Nouvel indicateur..." style="background:var(--bg4);border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:13px;color:var(--text);font-family:'Barlow',sans-serif;flex:1">
-        <input type="text" inputmode="decimal" id="kpi-custom-val" placeholder="Valeur" style="background:var(--bg4);border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:13px;color:var(--text);font-family:'Barlow',sans-serif;width:80px">
+        <div style="position:relative;display:flex;align-items:center">
+          <input type="text" inputmode="decimal" id="kpi-custom-val" placeholder="Valeur" style="background:var(--bg4);border:1px solid var(--border);border-radius:8px;padding:8px 28px 8px 10px;font-size:13px;color:var(--text);font-family:'Barlow',sans-serif;width:80px">
+          <button type="button" onclick="toggleSign('kpi-custom-val')" title="Inverser le signe" style="position:absolute;right:2px;width:22px;height:22px;border-radius:5px;border:1px solid var(--border);background:var(--bg3);color:var(--text);font-size:12px;font-weight:700;line-height:1;cursor:pointer">±</button>
+        </div>
         <button class="btn-add" style="font-size:12px;padding:8px 10px" onclick="addKpiCustomInline()">+ Créer</button>
       </div>
       <div class="kpi-chips" id="kpi-chips"></div>
@@ -681,7 +687,7 @@ function loadLogo() {
 }
 
 // ── VERSION APP ── (incrémenter à chaque mise à jour notable, pour déclencher l'invite de rechargement)
-const APP_VERSION = '2026.07.07-12';
+const APP_VERSION = '2026.07.07-15';
 
 // ── DICTÉE VOCALE ──
 let micRecognition = null;
@@ -731,6 +737,7 @@ function startMicFor(fieldId) {
   micRecognition.maxAlternatives = 1;
 
   let interimStart = -1; // position de début de la transcription provisoire dans le champ
+  let afterText = '';    // texte fixe situé après le point d'insertion, jamais retouché pendant la dictée
 
   micRecognition.onstart = () => {
     micActive = true;
@@ -749,28 +756,32 @@ function startMicFor(fieldId) {
     const transcript = event.results[0][0].transcript;
     const isFinal = event.results[0].isFinal;
 
-    const start = field.selectionStart;
-    const end = field.selectionEnd;
-    const val = field.value;
-
     if (interimStart === -1) {
-      // 1er résultat : insérer au curseur
+      // 1er résultat de cette phrase : on fige la position d'insertion et le
+      // texte qui se trouve après (il ne sera plus jamais recalculé pendant
+      // que la dictée de cette phrase est en cours, pour éviter tout
+      // décalage/duplication au fil des mises à jour provisoires)
+      const start = field.selectionStart;
+      const end = field.selectionEnd;
       interimStart = start;
-      field.value = val.slice(0, start) + transcript + val.slice(end);
+      afterText = field.value.slice(end);
+      field.value = field.value.slice(0, start) + transcript + afterText;
     } else {
-      // Mise à jour : remplacer le texte provisoire
-      field.value = val.slice(0, interimStart) + transcript + val.slice(interimStart + (field.value.length - val.length + transcript.length));
-      // Reconstruire proprement
-      const before = val.slice(0, interimStart);
-      const after = field.value.slice(interimStart + field.value.length - val.length);
-      field.value = before + transcript + (isFinal ? ' ' : '');
+      // Mise à jour : on reconstruit intégralement depuis les valeurs figées
+      // (avant + transcript actuel + après), jamais de calcul incrémental
+      const before = field.value.slice(0, interimStart);
+      field.value = before + transcript + afterText;
     }
 
     if (isFinal) {
-      // Ajouter un espace après et positionner le curseur
-      const newPos = interimStart + transcript.length + 1;
+      // Ajouter un espace de séparation avant le texte fixe suivant (s'il y en a)
+      const sep = (afterText && !/^\s/.test(afterText)) ? ' ' : '';
+      const before = field.value.slice(0, interimStart);
+      field.value = before + transcript + sep + afterText;
+      const newPos = interimStart + transcript.length + sep.length;
       field.setSelectionRange(newPos, newPos);
       interimStart = -1;
+      afterText = '';
       field.dispatchEvent(new Event('input'));
     }
   };
@@ -949,7 +960,17 @@ async function loadKpiDefaults() {
         text = new TextDecoder('utf-8').decode(buf);
       } else {
         try { text = new TextDecoder('utf-8', {fatal:true}).decode(buf); }
-        catch(e) { text = new TextDecoder('iso-8859-1').decode(buf); }
+        catch(e) {
+          // NE PAS rebasculer tout le fichier en Latin-1 : un seul octet
+          // invalide (ex. accent collé avec un vieil outil Mac) ferait
+          // échouer le décodage strict, et un fallback global en Latin-1
+          // corromprait TOUS les accents/€ pourtant valides ailleurs dans
+          // le fichier. On isole l'octet fautif à la place (remplacé par �)
+          // et on garde le reste du fichier intact.
+          text = new TextDecoder('utf-8', {fatal:false}).decode(buf);
+          console.warn('Référentiel KPI : octet(s) non-UTF-8 détecté(s) dans le fichier source — à corriger sur GitHub.');
+          showToast('⚠ Référentiel KPI : encodage invalide détecté, fichier source à corriger');
+        }
       }
       const trimmed = text.trim();
       const remote = trimmed.startsWith('[') ? JSON.parse(trimmed) : parseKpiCSV(text);
@@ -1296,11 +1317,16 @@ async function loadMagasins() {
       if (bytes[0]===0xEF && bytes[1]===0xBB && bytes[2]===0xBF) {
         text = new TextDecoder('utf-8').decode(buf);
       } else {
-        // Essayer UTF-8, fallback latin-1
+        // Essayer UTF-8 strict ; en cas d'octet(s) invalide(s) isolé(s), ne
+        // JAMAIS rebasculer tout le fichier en Latin-1 (ça corromprait tous
+        // les accents/€ valides ailleurs) — on isole l'octet fautif avec un
+        // décodage UTF-8 tolérant à la place.
         try {
           text = new TextDecoder('utf-8', {fatal:true}).decode(buf);
         } catch(e) {
-          text = new TextDecoder('iso-8859-1').decode(buf);
+          text = new TextDecoder('utf-8', {fatal:false}).decode(buf);
+          console.warn('Référentiel magasins : octet(s) non-UTF-8 détecté(s) dans le fichier source — à corriger sur GitHub.');
+          showToast('⚠ Référentiel magasins : encodage invalide détecté, fichier source à corriger');
         }
       }
       const trimmed = text.trim();
@@ -1527,6 +1553,24 @@ function addKpiCustomInline() {
       }).then(() => showToast('Notification envoyée à Olivier ✓')).catch(() => {});
     }
   }
+}
+
+function toggleSign(inputId) {
+  const input = document.getElementById(inputId);
+  const v = input.value.trim();
+  if (!v) {
+    // Champ vide : rien à inverser, on laisse vide par défaut
+    input.focus();
+    return;
+  }
+  if (v.startsWith('-')) {
+    input.value = v.slice(1);
+  } else if (v.startsWith('+')) {
+    input.value = '-' + v.slice(1);
+  } else {
+    input.value = '-' + v;
+  }
+  input.focus();
 }
 
 function addKpi() {
@@ -1838,6 +1882,19 @@ function renderCaptions() {
 }
 
 // ── DRAFT ──
+function dedupeActions(list) {
+  // Filet de sécurité : supprime les actions strictement identiques
+  // (même texte + commentaire + responsable + date), quelle qu'en soit
+  // l'origine (report automatique + ressaisie manuelle par ex.)
+  const seen = new Set();
+  const out = [];
+  (list || []).forEach(a => {
+    const key = [a.text||'', a.comment||'', a.who||'', a.date||''].join('\u0001');
+    if (!seen.has(key)) { seen.add(key); out.push(a); }
+  });
+  return out;
+}
+
 function collectData() {
   return {
     magasin: currentMag,
@@ -1860,7 +1917,7 @@ function collectData() {
     process: document.getElementById('f-process').value,
     forts: fortsList,
     diff: diffList,
-    actions,
+    actions: dedupeActions(actions),
     photos,
     photoCaptions,
     mot_intro: document.getElementById('f-mot-intro').value,
