@@ -2,20 +2,20 @@ name;unit;obj;dir
 SOP;%;40;gte
 TC;%;95;gte
 PC %;%;50;gte
-PC ‚Ç¨;‚Ç¨;80;gte
+PC €;€;80;gte
 Seuil PC;;4000;gte
-Panier Moyen;‚Ç¨;450;gte
+Panier Moyen;€;450;gte
 NDV;;50;gte
 MdC/Intemporelle;%;66;gte
 Lukkas;%;20;gte
-PM Paire 1;‚Ç¨;135;gte
+PM Paire 1;€;135;gte
 Lyleoo;;6;gte
 Retour Verres;%;5;lte
-Audio d√©pistage;%;30;gte
+Audio depistage;%;30;gte
 Vente add;%;12;gte
-PM Proth√®se;‚Ç¨;1200;gte
-PM Vente Audio;‚Ç¨;2350;gte
-Nb de Proth√®se;;25;gte
+PM Prothese;€;1200;gte
+PM Vente Audio;€;2350;gte
+Nb de Prothese;;25;gte
 Nb d'avis Google;;500;gte
 Note Google;;4,5;gte
 Transition;%;20;gte
