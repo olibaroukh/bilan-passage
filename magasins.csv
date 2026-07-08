@@ -10,7 +10,7 @@ code;libelle;email;manager;eff_opt;eff_audio;eff_theo;animateur
 1011;LYON - PART-DIEU;lyon2@optical-center.com;FRANCOIS GUILLON-COTTARD;5;0,9;4,4;CYRIL GAUTHIER
 1012;TOULOUSE - CAPITOLE;toulouse@optical-center.com;SYLVAIN MEZAILLES;8;1;5,9;MICKAEL BENICHOU
 1013;CRÉTEIL;creteil@optical-center.com;ARI FELLOUS;2,9;0,9;3,5;AURELIE SUBRENAT
-1014;VILLENEUVE-D'ASCQ;v2@optical-center.com;ADRIEN DULAC;9,5;1;5,9;DAVID BARRAULT
+1014;VILLENEUVE-D'ASCQ;v2@optical-center.com;ADRIEN DULAC;8,5;2;5,9;DAVID BARRAULT
 1015;CERGY-PONTOISE;cergy@optical-center.com;ALEXANDRE BERTIN;3;0,7;3,5;AURELIE SUBRENAT
 1016;NEUILLY-SUR-SEINE;neuilly2@optical-center.com;DAVID MAROSELLI;5;0,4;4,5;LESLIE NAKAM
 1017;GRENOBLE;grenoble@optical-center.com;0;4;0;3,5;CYRIL GAUTHIER
@@ -65,14 +65,14 @@ code;libelle;email;manager;eff_opt;eff_audio;eff_theo;animateur
 1078;PLAISIR - LES CLAYES-SOUS-BOIS;lesclayessousbois@optical-center.com;MORGANE LASSAUZET;4,5;1,5;5,6;LESLIE NAKAM
 1079;SAINT-BONNET-DE-MURE;stbonnetdemure@optical-center.com;BENJAMIN BERETVAS;4;0,8;3,6;CYRIL GAUTHIER
 1080;TOULOUSE - BALMA;toulouse-balma@optical-center.com;LESLIE MOULIS;6;0,4;3,7;MICKAEL BENICHOU
-1081;RENNES - SAINT-GRÉGOIRE;rennes-saintgregoire@optical-center.com;MAUD MARTIN;5,8;1;4,2;DAVID BARRAULT
-1082;ANGERS - GRAND-MAINE;angersgrandmaine@optical-center.com;ANNE-SOPHIE TOURNE;6;0,7;5,5;DAVID BARRAULT
+1081;RENNES - SAINT-GRÉGOIRE;rennes-saintgregoire@optical-center.com;MAUD MARTIN;5,2;1,6;4,2;DAVID BARRAULT
+1082;ANGERS - GRAND-MAINE;angersgrandmaine@optical-center.com;ANNE-SOPHIE TOURNE;5;1,7;5,5;DAVID BARRAULT
 1083;SAINT-ÉTIENNE - MONTHIEU;st.etienne-monthieu@optical-center.com;MARION BONNIDAL;4;0,5;3,6;CYRIL GAUTHIER
 1085;ESSEY-LÈS-NANCY;esseylesnancy@optical-center.com;FABIEN ALCARAZ;6;0,3;5,5;NIKOLA KOCEV
 1086;NANTES - LA BEAUJOIRE;nantes-beaujoire@optical-center.com;OLIVIER MIGNOT;6,8;1;6,9;DAVID BARRAULT
 1087;SHOPPING PARC - CARRÉ SÉNART;carre-senart@optical-center.com;EROL SULEYMAN;7;1;7;AURELIE SUBRENAT
-1088;LESQUIN;lesquin@optical-center.com;MATHILDE LACROIX;7;1;5,5;DAVID BARRAULT
-1089;LOMME - M.I.N;lomme-min@optical-center.com;LOUIS LEBRUN;7,8;1;7,3;DAVID BARRAULT
+1088;LESQUIN;lesquin@optical-center.com;MATHILDE LACROIX;6;2;5,5;DAVID BARRAULT
+1089;LOMME - M.I.N;lomme-min@optical-center.com;LOUIS LEBRUN;6,8;2;7,3;DAVID BARRAULT
 1090;SAINT-MARTIN-D'HÈRES;st-martin-dheres@optical-center.com;FRANCOISE PORTA;6,6;0,5;5,8;CYRIL GAUTHIER
 1091;VANDOEUVRE-LÈS-NANCY;vandoeuvre@optical-center.com;JONATHAN PRASEUTH;7;0,6;6,2;NIKOLA KOCEV
 1092;PESSAC;pessac@optical-center.com;CHLOE CELLIER;5;0,4;3,8;MICKAEL BENICHOU
