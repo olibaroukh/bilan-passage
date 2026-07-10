@@ -687,7 +687,7 @@ function loadLogo() {
 }
 
 // ── VERSION APP ── (incrémenter à chaque mise à jour notable, pour déclencher l'invite de rechargement)
-const APP_VERSION = '2026.07.07-16';
+const APP_VERSION = '2026.07.07-17';
 
 // ── DICTÉE VOCALE ──
 let micRecognition = null;
@@ -2032,6 +2032,13 @@ function finalizeBilan() {
   if (!caAnnuel) { showToast('⚠ Positionnement CA annuel N/N-1 obligatoire'); toggleBloc('b2'); document.getElementById('f-ca-annuel').focus(); return; }
   if (!caAnnuel) { showToast('⚠ Positionnement CA annuel obligatoire'); toggleBloc('b2'); document.getElementById('f-ca-annuel').focus(); return; }
   if (!humeurTouched) { showToast('⚠ Humeur du passage obligatoire'); document.getElementById('f-humeur').scrollIntoView({behavior:'smooth',block:'center'}); return; }
+  if (data.actions.length < 3) {
+    showToast('⚠ 3 actions attendues obligatoires (actuellement ' + data.actions.length + ')');
+    const b8 = document.getElementById('b8');
+    if (b8 && !b8.classList.contains('open')) toggleBloc('b8');
+    document.getElementById('act-text')?.scrollIntoView({behavior:'smooth',block:'center'});
+    return;
+  }
   params.myEmail = document.getElementById('p-my-email').value || params.myEmail || '';
   const recips = document.getElementById('modal-recipients');
   recips.innerHTML = '';
