@@ -611,10 +611,11 @@ input[type=date]{color-scheme:dark}
   <h2 style="margin:0 0 4px">Analyse IA</h2>
 
   <div id="analyse-login-block" style="display:none;background:rgba(20,16,16,0.85);border:1px solid var(--border);border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:10px">
-    <div style="font-size:12px;color:var(--muted)">Connecte-toi avec ton identifiant Zimbra pour accéder à tes magasins. Rien n'est stocké — seule une session temporaire (12h) est conservée sur ce téléphone.</div>
-    <input type="text" id="analyse-login-user" placeholder="prenom.nom@opticalcenter.fr" style="background:var(--bg4);border:1px solid var(--border);border-radius:8px;padding:10px;font-size:13px;color:var(--text);font-family:'Barlow',sans-serif">
+    <div style="font-size:12px;color:var(--muted)">Connecte-toi avec ton mot de passe Zimbra pour accéder à tes magasins. Rien n'est stocké — seule une session temporaire (12h) est conservée sur ce téléphone.</div>
+    <div id="analyse-login-user-display" style="font-size:13px;color:var(--text);background:var(--bg4);border:1px solid var(--border);border-radius:8px;padding:10px"></div>
+    <div id="analyse-login-nouser" style="display:none;font-size:12px;color:var(--red)">Aucun identifiant Zimbra configuré. Va d'abord dans <b>Paramètres → Identifiant Zimbra</b>.</div>
     <input type="password" id="analyse-login-pass" placeholder="Mot de passe Zimbra" style="background:var(--bg4);border:1px solid var(--border);border-radius:8px;padding:10px;font-size:13px;color:var(--text);font-family:'Barlow',sans-serif">
-    <button class="btn-primary" onclick="doArLogin()">Se connecter</button>
+    <button class="btn-primary" id="analyse-login-btn" onclick="doArLogin()">Se connecter</button>
     <div id="analyse-login-error" style="display:none;color:var(--red);font-size:12px"></div>
   </div>
 
@@ -731,7 +732,7 @@ function loadLogo() {
 }
 
 // ── VERSION APP ── (incrémenter à chaque mise à jour notable, pour déclencher l'invite de rechargement)
-const APP_VERSION = '2026.07.13-21';
+const APP_VERSION = '2026.07.13-22';
 
 // Token pour la route /store-bilan du Worker (persistance D1, doit correspondre à STORE_SECRET dans worker.js)
 const STORE_SECRET = 'OC-bilan-store-2026';
@@ -3627,11 +3628,10 @@ function arLogout() {
 async function doArLogin() {
   const errEl = document.getElementById('analyse-login-error');
   errEl.style.display = 'none';
-  const zimbraUser = document.getElementById('analyse-login-user').value.trim();
+  const zimbraUser = (params.zimbraUser || '').trim();
   const zimbraPass = document.getElementById('analyse-login-pass').value;
-  if (!zimbraUser || !zimbraPass) {
-    errEl.textContent = 'Identifiant et mot de passe requis'; errEl.style.display = 'block'; return;
-  }
+  if (!zimbraUser) { errEl.textContent = 'Configure d\'abord ton identifiant Zimbra dans Paramètres'; errEl.style.display = 'block'; return; }
+  if (!zimbraPass) { errEl.textContent = 'Mot de passe requis'; errEl.style.display = 'block'; return; }
   const relay = params.relay || 'https://zimbra-relay.oli-baroukh.workers.dev';
   try {
     const resp = await fetch(relay + '/ar-login', {
@@ -3661,7 +3661,15 @@ function initAnalyseScreen() {
   loadArSession();
   document.getElementById('analyse-login-block').style.display = arSession ? 'none' : 'flex';
   document.getElementById('analyse-content').style.display = arSession ? 'flex' : 'none';
-  if (!arSession) return;
+  if (!arSession) {
+    const hasUser = !!(params.zimbraUser || '').trim();
+    document.getElementById('analyse-login-user-display').style.display = hasUser ? 'block' : 'none';
+    document.getElementById('analyse-login-user-display').textContent = hasUser ? params.zimbraUser : '';
+    document.getElementById('analyse-login-nouser').style.display = hasUser ? 'none' : 'block';
+    document.getElementById('analyse-login-pass').style.display = hasUser ? 'block' : 'none';
+    document.getElementById('analyse-login-btn').style.display = hasUser ? 'block' : 'none';
+    return;
+  }
 
   document.getElementById('analyse-session-info').textContent = 'Connecté : ' + (arSession.ar === 'ALL' ? 'tout le réseau' : arSession.ar);
 
