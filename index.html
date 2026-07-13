@@ -732,7 +732,7 @@ function loadLogo() {
 }
 
 // ── VERSION APP ── (incrémenter à chaque mise à jour notable, pour déclencher l'invite de rechargement)
-const APP_VERSION = '2026.07.13-22';
+const APP_VERSION = '2026.07.13-23';
 
 // Token pour la route /store-bilan du Worker (persistance D1, doit correspondre à STORE_SECRET dans worker.js)
 const STORE_SECRET = 'OC-bilan-store-2026';
@@ -3706,9 +3706,9 @@ function setAnalyseMode(mode) {
   document.getElementById('analyse-result').style.display = 'none';
 }
 
-async function fetchBilansRelay(magasinCode) {
+async function fetchBilansRelay(magasinCode, limit) {
   const relay = params.relay || 'https://zimbra-relay.oli-baroukh.workers.dev';
-  const resp = await fetch(relay + '/bilans?magasin_code=' + encodeURIComponent(magasinCode) + '&limit=20', {
+  const resp = await fetch(relay + '/bilans?magasin_code=' + encodeURIComponent(magasinCode) + '&limit=' + (limit || 20), {
     headers: { 'X-Store-Token': STORE_SECRET, 'X-AR-Session': arSession?.token || '' }
   });
   const rawText = await resp.text();
@@ -3759,7 +3759,7 @@ async function runAnalyse(mode) {
       if (!codes.length) throw new Error('Sélectionne au moins un magasin');
       const groups = [];
       for (const code of codes) {
-        const bilans = await fetchBilansRelay(code);
+        const bilans = await fetchBilansRelay(code, 5);
         if (bilans.length) groups.push(bilans);
       }
       if (!groups.length) throw new Error('Aucun historique trouvé pour les magasins sélectionnés');
