@@ -571,14 +571,6 @@ input[type=date]{color-scheme:dark}
 <!-- SCREEN 4 : PARAMÈTRES -->
 <div id="screen-params" class="screen">
   <div class="params-section">
-    <div class="params-section-title">Mon profil</div>
-    <div class="field-group"><label>Je suis (détermine ce que tu vois dans l'onglet Analyse)</label>
-      <select class="select-box" id="p-my-ar" onchange="saveParams()">
-        <option value="">Sélectionner...</option>
-      </select>
-    </div>
-  </div>
-  <div class="params-section">
     <div class="params-section-title">Objectifs KPI</div>
     <div id="kpi-params-list"></div>
     <span style="font-size:10px;color:var(--muted)">Vert = objectif atteint · Orange = proche · Rouge = éloigné</span>
@@ -617,10 +609,20 @@ input[type=date]{color-scheme:dark}
 <!-- SCREEN 5 : ANALYSE -->
 <div id="screen-analyse" class="screen" style="padding:20px 16px 90px;gap:12px;overflow-y:auto">
   <h2 style="margin:0 0 4px">Analyse IA</h2>
-  <div id="analyse-noprofil" style="display:none;background:rgba(204,23,25,0.12);border:1px solid var(--red);border-radius:10px;padding:12px;font-size:13px;">
-    Sélectionne d'abord ton profil dans <b>Paramètres → Mon profil</b> pour accéder à tes magasins.
+
+  <div id="analyse-login-block" style="display:none;background:rgba(20,16,16,0.85);border:1px solid var(--border);border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:10px">
+    <div style="font-size:12px;color:var(--muted)">Connecte-toi avec ton identifiant Zimbra pour accéder à tes magasins. Rien n'est stocké — seule une session temporaire (12h) est conservée sur ce téléphone.</div>
+    <input type="text" id="analyse-login-user" placeholder="prenom.nom@opticalcenter.fr" style="background:var(--bg4);border:1px solid var(--border);border-radius:8px;padding:10px;font-size:13px;color:var(--text);font-family:'Barlow',sans-serif">
+    <input type="password" id="analyse-login-pass" placeholder="Mot de passe Zimbra" style="background:var(--bg4);border:1px solid var(--border);border-radius:8px;padding:10px;font-size:13px;color:var(--text);font-family:'Barlow',sans-serif">
+    <button class="btn-primary" onclick="doArLogin()">Se connecter</button>
+    <div id="analyse-login-error" style="display:none;color:var(--red);font-size:12px"></div>
   </div>
+
   <div id="analyse-content" style="display:none;flex-direction:column;gap:12px">
+    <div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;color:var(--muted)">
+      <span id="analyse-session-info"></span>
+      <button class="btn-secondary" style="font-size:11px;padding:4px 10px" onclick="arLogout()">Se déconnecter</button>
+    </div>
     <div style="display:flex;gap:8px">
       <button class="btn-secondary" id="analyse-mode-single" style="flex:1;font-size:12px;padding:8px" onclick="setAnalyseMode('single')">📍 Un magasin</button>
       <button class="btn-secondary" id="analyse-mode-group" style="flex:1;font-size:12px;padding:8px" onclick="setAnalyseMode('group')">🗺️ Tournée (plusieurs)</button>
@@ -729,7 +731,7 @@ function loadLogo() {
 }
 
 // ── VERSION APP ── (incrémenter à chaque mise à jour notable, pour déclencher l'invite de rechargement)
-const APP_VERSION = '2026.07.13-19';
+const APP_VERSION = '2026.07.13-21';
 
 // Token pour la route /store-bilan du Worker (persistance D1, doit correspondre à STORE_SECRET dans worker.js)
 const STORE_SECRET = 'OC-bilan-store-2026';
@@ -1276,7 +1278,6 @@ function loadParams() {
   if (params.rentaTarget) document.getElementById('p-renta-target').value = params.rentaTarget;
   if (params.jsonUrl) document.getElementById('p-json-url').value = params.jsonUrl;
   if (params.kpiUrl) document.getElementById('p-kpi-url').value = params.kpiUrl;
-  if (params.myAR) document.getElementById('p-my-ar').value = params.myAR;
   if (params.kpiObjectives) {
     KPI_DEFAULTS.forEach(k => {
       if (params.kpiObjectives[k.name] !== undefined) k.obj = params.kpiObjectives[k.name];
@@ -1291,25 +1292,13 @@ function saveParams() {
   params.rentaTarget = document.getElementById('p-renta-target').value || '28';
   params.jsonUrl = document.getElementById('p-json-url').value;
   params.kpiUrl = document.getElementById('p-kpi-url').value;
-  const myArEl = document.getElementById('p-my-ar');
-  params.myAR = myArEl ? myArEl.value : (params.myAR || '');
   params.kpiObjectives = {};
   KPI_DEFAULTS.forEach(k => { params.kpiObjectives[k.name] = k.obj; });
   localStorage.setItem('bilan_params', JSON.stringify(params));
 };
 
 function populateMyARSelect() {
-  const sel = document.getElementById('p-my-ar');
-  if (!sel) return;
-  const current = params.myAR || '';
-  sel.innerHTML = '<option value="">Sélectionner...</option>';
-  getARList().forEach(ar => {
-    const opt = document.createElement('option');
-    opt.value = ar;
-    opt.textContent = ar;
-    sel.appendChild(opt);
-  });
-  if (current) sel.value = current;
+  // conservé pour compatibilité, ne fait plus rien (remplacé par l'authentification Zimbra réelle)
 }
 
 function initParamsUI() {
@@ -3613,28 +3602,71 @@ async function resendBilan(e, code, idx) {
   } catch(ex) { showToast('Erreur renvoi : ' + ex.message); }
 }
 
-// ── ANALYSE IA ──
+// ── ANALYSE IA (accès protégé par authentification Zimbra réelle) ──
 let analyseMode = 'single';
-let analyseGroupCache = {}; // code magasin -> bilans[]
 let analyseLastSingleCode = null;
 let analyseLastSingleBilans = [];
+let arSession = null; // { token, ar, exp }
+
+function loadArSession() {
+  try {
+    const s = JSON.parse(localStorage.getItem('bilan_ar_session') || 'null');
+    if (s && s.exp > Date.now()) { arSession = s; return s; }
+  } catch(e) {}
+  arSession = null;
+  localStorage.removeItem('bilan_ar_session');
+  return null;
+}
+
+function arLogout() {
+  arSession = null;
+  localStorage.removeItem('bilan_ar_session');
+  initAnalyseScreen();
+}
+
+async function doArLogin() {
+  const errEl = document.getElementById('analyse-login-error');
+  errEl.style.display = 'none';
+  const zimbraUser = document.getElementById('analyse-login-user').value.trim();
+  const zimbraPass = document.getElementById('analyse-login-pass').value;
+  if (!zimbraUser || !zimbraPass) {
+    errEl.textContent = 'Identifiant et mot de passe requis'; errEl.style.display = 'block'; return;
+  }
+  const relay = params.relay || 'https://zimbra-relay.oli-baroukh.workers.dev';
+  try {
+    const resp = await fetch(relay + '/ar-login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Store-Token': STORE_SECRET },
+      body: JSON.stringify({ zimbraUser, zimbraPass })
+    });
+    const rawText = await resp.text();
+    let data; try { data = JSON.parse(rawText); } catch(e) { data = { error: rawText }; }
+    if (!resp.ok || data.error) throw new Error(data.error || ('Erreur ' + resp.status));
+    arSession = { token: data.sessionToken, ar: data.ar, exp: Date.now() + data.expiresInMs };
+    localStorage.setItem('bilan_ar_session', JSON.stringify(arSession));
+    document.getElementById('analyse-login-pass').value = '';
+    initAnalyseScreen();
+  } catch(e) {
+    errEl.textContent = e.message; errEl.style.display = 'block';
+  }
+}
 
 function analyseMyStores() {
-  const myAR = params.myAR || '';
-  if (!myAR) return [];
-  if (myAR.includes('tout le réseau')) return magasins.slice().sort((a,b) => a.libelle.localeCompare(b.libelle));
-  return magasins.filter(m => m.animateur === myAR).sort((a,b) => a.libelle.localeCompare(b.libelle));
+  if (!arSession) return [];
+  if (arSession.ar === 'ALL') return magasins.slice().sort((a,b) => a.libelle.localeCompare(b.libelle));
+  return magasins.filter(m => m.animateur === arSession.ar).sort((a,b) => a.libelle.localeCompare(b.libelle));
 }
 
 function initAnalyseScreen() {
-  const myAR = params.myAR || '';
-  document.getElementById('analyse-noprofil').style.display = myAR ? 'none' : 'block';
-  document.getElementById('analyse-content').style.display = myAR ? 'flex' : 'none';
-  if (!myAR) return;
+  loadArSession();
+  document.getElementById('analyse-login-block').style.display = arSession ? 'none' : 'flex';
+  document.getElementById('analyse-content').style.display = arSession ? 'flex' : 'none';
+  if (!arSession) return;
+
+  document.getElementById('analyse-session-info').textContent = 'Connecté : ' + (arSession.ar === 'ALL' ? 'tout le réseau' : arSession.ar);
 
   const stores = analyseMyStores();
 
-  // Sélecteur mode "un magasin"
   const sel = document.getElementById('analyse-mag-select');
   sel.innerHTML = '<option value="">Sélectionner un magasin...</option>';
   stores.forEach(m => {
@@ -3644,7 +3676,6 @@ function initAnalyseScreen() {
     sel.appendChild(opt);
   });
 
-  // Liste à cocher mode "tournée"
   const list = document.getElementById('analyse-group-list');
   list.innerHTML = '';
   stores.forEach(m => {
@@ -3670,10 +3701,14 @@ function setAnalyseMode(mode) {
 async function fetchBilansRelay(magasinCode) {
   const relay = params.relay || 'https://zimbra-relay.oli-baroukh.workers.dev';
   const resp = await fetch(relay + '/bilans?magasin_code=' + encodeURIComponent(magasinCode) + '&limit=20', {
-    headers: { 'X-Store-Token': STORE_SECRET }
+    headers: { 'X-Store-Token': STORE_SECRET, 'X-AR-Session': arSession?.token || '' }
   });
-  if (!resp.ok) throw new Error('Erreur récupération historique (' + resp.status + ')');
-  const data = await resp.json();
+  const rawText = await resp.text();
+  let data; try { data = JSON.parse(rawText); } catch(e) { data = { error: rawText }; }
+  if (!resp.ok || data.error) {
+    if (resp.status === 401) { arLogout(); throw new Error('Session expirée, reconnecte-toi.'); }
+    throw new Error(data.error || ('Erreur récupération historique (' + resp.status + ')'));
+  }
   return (data.results || []).map(r => { try { return JSON.parse(r.data_json); } catch(e) { return r; } });
 }
 
@@ -3724,10 +3759,13 @@ async function runAnalyse(mode) {
     }
     const resp = await fetch(relay + '/analyze', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Store-Token': STORE_SECRET },
+      headers: { 'Content-Type': 'application/json', 'X-Store-Token': STORE_SECRET, 'X-AR-Session': arSession?.token || '' },
       body: JSON.stringify(body)
     });
-    const data = await resp.json();
+    const rawText = await resp.text();
+    let data;
+    try { data = JSON.parse(rawText); } catch(e) { data = { error: rawText || ('Réponse invalide (HTTP ' + resp.status + ')') }; }
+    if (resp.status === 401) { arLogout(); throw new Error('Session expirée, reconnecte-toi.'); }
     if (!resp.ok || data.error) throw new Error(data.error?.error?.message || data.error || ('Erreur ' + resp.status));
     result.textContent = data.analysis || 'Pas de réponse.';
     result.style.display = 'block';

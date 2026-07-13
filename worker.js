@@ -16,12 +16,76 @@ const NOTIFY_SECRET = 'OC-bilan-notify-2026';
 // À changer si compromis — doit correspondre à STORE_SECRET dans index.html / dashboard
 const STORE_SECRET = 'OC-bilan-store-2026';
 
+// Clé de signature interne des sessions animateur (HMAC), jamais exposée côté client
+const AR_SESSION_SECRET = 'OC-bilan-arsession-2026-signing-key';
+const AR_SESSION_TTL_MS = 12 * 60 * 60 * 1000; // 12h
+const MAGASINS_CSV_URL = 'https://raw.githubusercontent.com/olibaroukh/bilan-passage/main/magasins.csv';
+
+let _magasinsCache = null;
+let _magasinsCacheAt = 0;
+
+async function getMagasinsServerSide() {
+  const now = Date.now();
+  if (_magasinsCache && (now - _magasinsCacheAt) < 10 * 60 * 1000) return _magasinsCache;
+  const resp = await fetch(MAGASINS_CSV_URL + '?v=' + now);
+  const text = await resp.text();
+  const lines = text.split(/\r?\n/).filter(Boolean);
+  const header = lines[0].split(';').map(h => h.trim());
+  const idxAnimateur = header.indexOf('animateur');
+  const idxCode = header.indexOf('code');
+  const rows = lines.slice(1).map(line => {
+    const cols = line.split(';');
+    return { code: (cols[idxCode] || '').trim(), animateur: (cols[idxAnimateur] || '').trim() };
+  }).filter(r => r.code);
+  _magasinsCache = rows;
+  _magasinsCacheAt = now;
+  return rows;
+}
+
+function normalizeName(s) {
+  return (s || '')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '.')
+    .replace(/^\.+|\.+$/g, '');
+}
+
+async function hmacSign(payloadStr) {
+  const enc = new TextEncoder();
+  const key = await crypto.subtle.importKey('raw', enc.encode(AR_SESSION_SECRET), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  const sig = await crypto.subtle.sign('HMAC', key, enc.encode(payloadStr));
+  return [...new Uint8Array(sig)].map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+async function createArSession(ar) {
+  const payload = JSON.stringify({ ar, exp: Date.now() + AR_SESSION_TTL_MS });
+  const b64 = btoa(unescape(encodeURIComponent(payload)));
+  const sig = await hmacSign(b64);
+  return b64 + '.' + sig;
+}
+
+async function verifyArSession(token) {
+  if (!token || !token.includes('.')) return null;
+  const [b64, sig] = token.split('.');
+  const expectedSig = await hmacSign(b64);
+  if (sig !== expectedSig) return null;
+  let payload;
+  try { payload = JSON.parse(decodeURIComponent(escape(atob(b64)))); } catch(e) { return null; }
+  if (!payload || !payload.ar || !payload.exp || payload.exp < Date.now()) return null;
+  return payload.ar;
+}
+
+function jsonError(msg, status, corsHeaders) {
+  return new Response(JSON.stringify({ error: msg }), { status, headers: { 'Content-Type': 'application/json', ...corsHeaders } });
+}
+
 export default {
   async fetch(request, env) {
     const corsHeaders = {
       'Access-Control-Allow-Origin': ALLOWED_ORIGIN,
       'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, X-Zimbra-Auth-Token, X-Notify-Token, X-Store-Token',
+      'Access-Control-Allow-Headers': 'Content-Type, X-Zimbra-Auth-Token, X-Notify-Token, X-Store-Token, X-AR-Session',
       'Access-Control-Max-Age': '86400',
     };
 
@@ -116,6 +180,55 @@ export default {
         });
       }
 
+      if (url.pathname === '/ar-login') {
+        const storeToken = request.headers.get('X-Store-Token');
+        if (storeToken !== STORE_SECRET) return jsonError('Non autorisé', 401, corsHeaders);
+
+        const { zimbraUser, zimbraPass } = await request.json();
+        if (!zimbraUser || !zimbraPass) return jsonError('Identifiant et mot de passe requis', 400, corsHeaders);
+
+        // Authentification réelle auprès de Zimbra (preuve de possession du compte)
+        const authResp = await fetch(ZIMBRA_SOAP_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            Header: { context: { _jsns: 'urn:zimbra', format: { _content: 'js', type: 'js' } } },
+            Body: {
+              AuthRequest: {
+                _jsns: 'urn:zimbraAccount',
+                account: { by: 'name', _content: zimbraUser },
+                password: { _content: zimbraPass }
+              }
+            }
+          })
+        });
+        const authData = await authResp.json();
+        const zimbraToken = authData?.Body?.AuthResponse?.authToken?.[0]?._content;
+        if (!zimbraToken) return jsonError('Identifiants Zimbra invalides', 401, corsHeaders);
+
+        // Résolution serveur de l'identité AR à partir du référentiel magasins.csv
+        // (jamais depuis des données envoyées par le téléphone)
+        const localPart = zimbraUser.split('@')[0];
+        const normalizedLogin = normalizeName(localPart);
+        let ar = null;
+        if (normalizedLogin.includes('baroukh')) {
+          ar = 'ALL';
+        } else {
+          const stores = await getMagasinsServerSide();
+          const uniqueARs = [...new Set(stores.map(s => s.animateur).filter(Boolean))];
+          ar = uniqueARs.find(a => normalizeName(a) === normalizedLogin) || null;
+        }
+        if (!ar) {
+          return jsonError("Identifiants valides mais aucun animateur ne correspond à '" + zimbraUser + "' dans le référentiel magasins. Vérifie l'orthographe du login vs le nom animateur dans magasins.csv.", 403, corsHeaders);
+        }
+
+        const sessionToken = await createArSession(ar);
+        return new Response(JSON.stringify({ ok: true, sessionToken, ar, expiresInMs: AR_SESSION_TTL_MS }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      }
+
       if (url.pathname === '/store-bilan') {
         const storeToken = request.headers.get('X-Store-Token');
         if (storeToken !== STORE_SECRET) {
@@ -153,22 +266,35 @@ export default {
 
       if (url.pathname === '/bilans') {
         const storeToken = request.headers.get('X-Store-Token');
-        if (storeToken !== STORE_SECRET) {
-          return new Response('Non autorisé', { status: 401, headers: corsHeaders });
+        if (storeToken !== STORE_SECRET) return jsonError('Non autorisé', 401, corsHeaders);
+        if (!env.DB) return jsonError('Base D1 non liée au Worker', 500, corsHeaders);
+
+        const sessionAr = await verifyArSession(request.headers.get('X-AR-Session'));
+        if (!sessionAr) return jsonError('Session animateur invalide ou expirée, reconnecte-toi.', 401, corsHeaders);
+
+        let allowedCodes = null;
+        if (sessionAr !== 'ALL') {
+          const stores = await getMagasinsServerSide();
+          allowedCodes = stores.filter(s => s.animateur === sessionAr).map(s => s.code);
         }
-        if (!env.DB) {
-          return new Response('Base D1 non liée au Worker', { status: 500, headers: corsHeaders });
-        }
+
         const magasinCode = url.searchParams.get('magasin_code');
-        const ar = url.searchParams.get('ar');
-        const from = url.searchParams.get('from'); // date ISO
-        const to = url.searchParams.get('to');     // date ISO
+        if (magasinCode && allowedCodes && !allowedCodes.includes(magasinCode)) {
+          return jsonError('Accès non autorisé à ce magasin', 403, corsHeaders);
+        }
+        const from = url.searchParams.get('from');
+        const to = url.searchParams.get('to');
         const limit = Math.min(parseInt(url.searchParams.get('limit') || '200'), 1000);
 
         let query = 'SELECT id, magasin_code, magasin_libelle, ar, date, passage, humeur, ca_mensuel, ca_annuel, renta, data_json, created_at FROM bilans WHERE 1=1';
         const binds = [];
-        if (magasinCode) { query += ' AND magasin_code = ?'; binds.push(magasinCode); }
-        if (ar) { query += ' AND ar = ?'; binds.push(ar); }
+        if (magasinCode) {
+          query += ' AND magasin_code = ?'; binds.push(magasinCode);
+        } else if (allowedCodes) {
+          if (!allowedCodes.length) return new Response(JSON.stringify({ ok: true, results: [] }), { status: 200, headers: { 'Content-Type': 'application/json', ...corsHeaders } });
+          query += ' AND magasin_code IN (' + allowedCodes.map(() => '?').join(',') + ')';
+          binds.push(...allowedCodes);
+        }
         if (from) { query += ' AND date >= ?'; binds.push(from); }
         if (to) { query += ' AND date <= ?'; binds.push(to); }
         query += ' ORDER BY date DESC LIMIT ?';
@@ -184,14 +310,16 @@ export default {
       if (url.pathname === '/analyze') {
         const storeToken = request.headers.get('X-Store-Token');
         if (storeToken !== STORE_SECRET) {
-          return new Response('Non autorisé', { status: 401, headers: corsHeaders });
+          return new Response(JSON.stringify({ error: 'Non autorisé' }), { status: 401, headers: { 'Content-Type': 'application/json', ...corsHeaders } });
         }
+        const sessionAr = await verifyArSession(request.headers.get('X-AR-Session'));
+        if (!sessionAr) return jsonError('Session animateur invalide ou expirée, reconnecte-toi.', 401, corsHeaders);
         if (!env.ANTHROPIC_API_KEY) {
-          return new Response('Clé API Anthropic non configurée sur le Worker', { status: 500, headers: corsHeaders });
+          return new Response(JSON.stringify({ error: 'Clé API Anthropic non configurée sur le Worker (secret ANTHROPIC_API_KEY manquant ou non déployé)' }), { status: 500, headers: { 'Content-Type': 'application/json', ...corsHeaders } });
         }
         const { mode, bilans } = await request.json();
         if (!Array.isArray(bilans) || !bilans.length) {
-          return new Response('Aucune donnée à analyser', { status: 400, headers: corsHeaders });
+          return new Response(JSON.stringify({ error: 'Aucune donnée à analyser' }), { status: 400, headers: { 'Content-Type': 'application/json', ...corsHeaders } });
         }
 
         function resumeBilan(b) {
