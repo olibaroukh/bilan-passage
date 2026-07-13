@@ -687,7 +687,10 @@ function loadLogo() {
 }
 
 // ── VERSION APP ── (incrémenter à chaque mise à jour notable, pour déclencher l'invite de rechargement)
-const APP_VERSION = '2026.07.07-17';
+const APP_VERSION = '2026.07.13-18';
+
+// Token pour la route /store-bilan du Worker (persistance D1, doit correspondre à STORE_SECRET dans worker.js)
+const STORE_SECRET = 'OC-bilan-store-2026';
 
 // ── DICTÉE VOCALE ──
 let micRecognition = null;
@@ -2239,6 +2242,17 @@ async function sendBilan() {
       saveToHistory(data);
     }
     if (draftKey) localStorage.removeItem(draftKey);
+
+    // Persistance centrale D1 (fire-and-forget) : alimente le dashboard d'analyse
+    // transverse d'Olivier, indépendamment du localStorage de chaque animateur.
+    // Ne doit jamais bloquer ni faire échouer l'envoi du bilan lui-même.
+    if (sendOk) {
+      fetch(relay + '/store-bilan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Store-Token': STORE_SECRET },
+        body: JSON.stringify(data)
+      }).catch(e => console.warn('store-bilan (persistance centrale) échouée :', e));
+    }
 
     if (sendOk) {
       const t = document.getElementById('toast');
