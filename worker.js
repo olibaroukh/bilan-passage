@@ -181,6 +181,75 @@ export default {
         });
       }
 
+      if (url.pathname === '/analyze') {
+        const storeToken = request.headers.get('X-Store-Token');
+        if (storeToken !== STORE_SECRET) {
+          return new Response('Non autorisé', { status: 401, headers: corsHeaders });
+        }
+        if (!env.ANTHROPIC_API_KEY) {
+          return new Response('Clé API Anthropic non configurée sur le Worker', { status: 500, headers: corsHeaders });
+        }
+        const { mode, bilans } = await request.json();
+        if (!Array.isArray(bilans) || !bilans.length) {
+          return new Response('Aucune donnée à analyser', { status: 400, headers: corsHeaders });
+        }
+
+        function resumeBilan(b) {
+          const actions = (b.actions || []).map(a => `- [${a.status || 'en cours'}] ${a.label || a.text || JSON.stringify(a)}`).join('\n') || 'Aucune action notée';
+          return [
+            `Date: ${b.date}${b.passage ? ' (passage n°' + b.passage + ')' : ''}`,
+            `Magasin: ${b.magasin?.libelle || b.magasin_libelle || '?'} (${b.magasin?.code || b.magasin_code || '?'})`,
+            `Animateur: ${b.ar || '?'}`,
+            b.humeur !== undefined && b.humeur !== null ? `Humeur/ambiance (0-10): ${b.humeur}` : '',
+            b.renta ? `Rentabilité: ${b.renta}%` : '',
+            b.ca_mensuel ? `CA mensuel: ${b.ca_mensuel}` : '',
+            b.forts ? `Points forts: ${b.forts}` : '',
+            b.diff ? `Difficultés: ${b.diff}` : '',
+            `Actions:\n${actions}`,
+            b.manager_obs ? `Observations manager: ${b.manager_obs}` : '',
+            b.remarque_libre ? `Remarque libre: ${b.remarque_libre}` : '',
+          ].filter(Boolean).join('\n');
+        }
+
+        let systemPrompt, userContent;
+        if (mode === 'group') {
+          systemPrompt = `Tu es un assistant qui aide un animateur réseau (AR) d'Optical Center à préparer sa tournée terrain. On te donne l'historique récent de plusieurs magasins. Pour chaque magasin, produis une synthèse courte et actionnable : tendance générale, actions non résolues qui traînent, et 1 à 2 points de vigilance prioritaires. Reste factuel, base-toi uniquement sur les données fournies, sois concis (pas de blabla). Structure ta réponse par magasin avec un titre clair.`;
+          userContent = bilans.map((storeBilans, i) =>
+            `=== Magasin ${i + 1} ===\n` + storeBilans.map(resumeBilan).join('\n\n---\n\n')
+          ).join('\n\n\n');
+        } else {
+          systemPrompt = `Tu es un assistant qui aide un animateur réseau (AR) d'Optical Center à analyser l'historique d'un magasin. On te donne les bilans de passage successifs. Identifie les tendances (amélioration/dégradation), les actions récurrentes qui ne sont jamais résolues, et les points d'alerte. Reste factuel, base-toi uniquement sur les données fournies, sois concis et actionnable.`;
+          userContent = bilans.map(resumeBilan).join('\n\n---\n\n');
+        }
+
+        const claudeResp = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': env.ANTHROPIC_API_KEY,
+            'anthropic-version': '2023-06-01',
+          },
+          body: JSON.stringify({
+            model: 'claude-sonnet-5',
+            max_tokens: 1500,
+            system: systemPrompt,
+            messages: [{ role: 'user', content: userContent }],
+          }),
+        });
+        const claudeData = await claudeResp.json();
+        if (!claudeResp.ok) {
+          return new Response(JSON.stringify({ error: claudeData }), {
+            status: claudeResp.status,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        }
+        const analysis = (claudeData.content || []).filter(c => c.type === 'text').map(c => c.text).join('\n');
+        return new Response(JSON.stringify({ ok: true, analysis }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      }
+
       // par défaut : relais SOAP (AuthRequest, SendMsgRequest, ...)
       const body = await request.text();
       const zimbraResponse = await fetch(ZIMBRA_SOAP_URL, {

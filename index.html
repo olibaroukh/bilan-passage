@@ -571,6 +571,14 @@ input[type=date]{color-scheme:dark}
 <!-- SCREEN 4 : PARAMÈTRES -->
 <div id="screen-params" class="screen">
   <div class="params-section">
+    <div class="params-section-title">Mon profil</div>
+    <div class="field-group"><label>Je suis (détermine ce que tu vois dans l'onglet Analyse)</label>
+      <select class="select-box" id="p-my-ar" onchange="saveParams()">
+        <option value="">Sélectionner...</option>
+      </select>
+    </div>
+  </div>
+  <div class="params-section">
     <div class="params-section-title">Objectifs KPI</div>
     <div id="kpi-params-list"></div>
     <span style="font-size:10px;color:var(--muted)">Vert = objectif atteint · Orange = proche · Rouge = éloigné</span>
@@ -606,6 +614,37 @@ input[type=date]{color-scheme:dark}
   </div>
 </div>
 
+<!-- SCREEN 5 : ANALYSE -->
+<div id="screen-analyse" class="screen" style="padding:20px 16px 90px;gap:12px;overflow-y:auto">
+  <h2 style="margin:0 0 4px">Analyse IA</h2>
+  <div id="analyse-noprofil" style="display:none;background:rgba(204,23,25,0.12);border:1px solid var(--red);border-radius:10px;padding:12px;font-size:13px;">
+    Sélectionne d'abord ton profil dans <b>Paramètres → Mon profil</b> pour accéder à tes magasins.
+  </div>
+  <div id="analyse-content" style="display:none;flex-direction:column;gap:12px">
+    <div style="display:flex;gap:8px">
+      <button class="btn-secondary" id="analyse-mode-single" style="flex:1;font-size:12px;padding:8px" onclick="setAnalyseMode('single')">📍 Un magasin</button>
+      <button class="btn-secondary" id="analyse-mode-group" style="flex:1;font-size:12px;padding:8px" onclick="setAnalyseMode('group')">🗺️ Tournée (plusieurs)</button>
+    </div>
+
+    <div id="analyse-single-block">
+      <select class="select-box" id="analyse-mag-select" onchange="onAnalyseMagChange()">
+        <option value="">Sélectionner un magasin...</option>
+      </select>
+      <div id="analyse-mag-history" style="margin-top:10px;font-size:12px;color:var(--muted)"></div>
+      <button class="btn-primary" id="analyse-btn-single" style="width:100%;margin-top:10px;display:none" onclick="runAnalyse('single')">✨ Analyser ce magasin</button>
+    </div>
+
+    <div id="analyse-group-block" style="display:none">
+      <div style="font-size:12px;color:var(--muted);margin-bottom:6px">Sélectionne les magasins de ta tournée :</div>
+      <div id="analyse-group-list" style="display:flex;flex-direction:column;gap:6px;max-height:260px;overflow-y:auto"></div>
+      <button class="btn-primary" id="analyse-btn-group" style="width:100%;margin-top:10px" onclick="runAnalyse('group')">✨ Analyser la tournée</button>
+    </div>
+
+    <div id="analyse-loading" style="display:none;text-align:center;padding:20px;color:var(--muted);font-size:13px">⏳ Analyse en cours...</div>
+    <div id="analyse-result" style="display:none;background:rgba(20,16,16,0.85);border:1px solid var(--border);border-radius:12px;padding:16px;font-size:13px;line-height:1.6;white-space:pre-wrap"></div>
+  </div>
+</div>
+
 <!-- BOTTOM NAV -->
 <div id="bottom-nav">
   <button class="nav-item active" id="nav-nouveau" onclick="goScreen('select')">
@@ -613,6 +652,9 @@ input[type=date]{color-scheme:dark}
   </button>
   <button class="nav-item" id="nav-history" onclick="goScreen('history')">
     <span class="nav-item-icon">🗂️</span>Historique
+  </button>
+  <button class="nav-item" id="nav-analyse" onclick="goScreen('analyse')">
+    <span class="nav-item-icon">📊</span>Analyse
   </button>
   <button class="nav-item" id="nav-params" onclick="goScreen('params')">
     <span class="nav-item-icon">⚙️</span>Paramètres
@@ -687,7 +729,7 @@ function loadLogo() {
 }
 
 // ── VERSION APP ── (incrémenter à chaque mise à jour notable, pour déclencher l'invite de rechargement)
-const APP_VERSION = '2026.07.13-18';
+const APP_VERSION = '2026.07.13-19';
 
 // Token pour la route /store-bilan du Worker (persistance D1, doit correspondre à STORE_SECRET dans worker.js)
 const STORE_SECRET = 'OC-bilan-store-2026';
@@ -1234,6 +1276,7 @@ function loadParams() {
   if (params.rentaTarget) document.getElementById('p-renta-target').value = params.rentaTarget;
   if (params.jsonUrl) document.getElementById('p-json-url').value = params.jsonUrl;
   if (params.kpiUrl) document.getElementById('p-kpi-url').value = params.kpiUrl;
+  if (params.myAR) document.getElementById('p-my-ar').value = params.myAR;
   if (params.kpiObjectives) {
     KPI_DEFAULTS.forEach(k => {
       if (params.kpiObjectives[k.name] !== undefined) k.obj = params.kpiObjectives[k.name];
@@ -1248,10 +1291,26 @@ function saveParams() {
   params.rentaTarget = document.getElementById('p-renta-target').value || '28';
   params.jsonUrl = document.getElementById('p-json-url').value;
   params.kpiUrl = document.getElementById('p-kpi-url').value;
+  const myArEl = document.getElementById('p-my-ar');
+  params.myAR = myArEl ? myArEl.value : (params.myAR || '');
   params.kpiObjectives = {};
   KPI_DEFAULTS.forEach(k => { params.kpiObjectives[k.name] = k.obj; });
   localStorage.setItem('bilan_params', JSON.stringify(params));
 };
+
+function populateMyARSelect() {
+  const sel = document.getElementById('p-my-ar');
+  if (!sel) return;
+  const current = params.myAR || '';
+  sel.innerHTML = '<option value="">Sélectionner...</option>';
+  getARList().forEach(ar => {
+    const opt = document.createElement('option');
+    opt.value = ar;
+    opt.textContent = ar;
+    sel.appendChild(opt);
+  });
+  if (current) sel.value = current;
+}
 
 function initParamsUI() {
   const list = document.getElementById('kpi-params-list');
@@ -1391,6 +1450,7 @@ async function loadMagasins() {
   }
   populateARSelect();
   populateHistoryFilter();
+  populateMyARSelect();
 }
 
 async function reloadMagasins() {
@@ -3553,17 +3613,144 @@ async function resendBilan(e, code, idx) {
   } catch(ex) { showToast('Erreur renvoi : ' + ex.message); }
 }
 
+// ── ANALYSE IA ──
+let analyseMode = 'single';
+let analyseGroupCache = {}; // code magasin -> bilans[]
+let analyseLastSingleCode = null;
+let analyseLastSingleBilans = [];
+
+function analyseMyStores() {
+  const myAR = params.myAR || '';
+  if (!myAR) return [];
+  if (myAR.includes('tout le réseau')) return magasins.slice().sort((a,b) => a.libelle.localeCompare(b.libelle));
+  return magasins.filter(m => m.animateur === myAR).sort((a,b) => a.libelle.localeCompare(b.libelle));
+}
+
+function initAnalyseScreen() {
+  const myAR = params.myAR || '';
+  document.getElementById('analyse-noprofil').style.display = myAR ? 'none' : 'block';
+  document.getElementById('analyse-content').style.display = myAR ? 'flex' : 'none';
+  if (!myAR) return;
+
+  const stores = analyseMyStores();
+
+  // Sélecteur mode "un magasin"
+  const sel = document.getElementById('analyse-mag-select');
+  sel.innerHTML = '<option value="">Sélectionner un magasin...</option>';
+  stores.forEach(m => {
+    const opt = document.createElement('option');
+    opt.value = m.code;
+    opt.textContent = m.libelle;
+    sel.appendChild(opt);
+  });
+
+  // Liste à cocher mode "tournée"
+  const list = document.getElementById('analyse-group-list');
+  list.innerHTML = '';
+  stores.forEach(m => {
+    const row = document.createElement('label');
+    row.style.cssText = 'display:flex;align-items:center;gap:8px;font-size:13px;background:var(--bg4);border:1px solid var(--border);border-radius:8px;padding:8px 10px;';
+    row.innerHTML = `<input type="checkbox" value="${m.code}" class="analyse-group-check"> ${m.libelle}`;
+    list.appendChild(row);
+  });
+
+  document.getElementById('analyse-result').style.display = 'none';
+  setAnalyseMode(analyseMode);
+}
+
+function setAnalyseMode(mode) {
+  analyseMode = mode;
+  document.getElementById('analyse-mode-single').style.cssText = 'flex:1;font-size:12px;padding:8px' + (mode==='single' ? ';background:var(--red);border-color:var(--red);color:#fff' : '');
+  document.getElementById('analyse-mode-group').style.cssText = 'flex:1;font-size:12px;padding:8px' + (mode==='group' ? ';background:var(--red);border-color:var(--red);color:#fff' : '');
+  document.getElementById('analyse-single-block').style.display = mode === 'single' ? 'block' : 'none';
+  document.getElementById('analyse-group-block').style.display = mode === 'group' ? 'block' : 'none';
+  document.getElementById('analyse-result').style.display = 'none';
+}
+
+async function fetchBilansRelay(magasinCode) {
+  const relay = params.relay || 'https://zimbra-relay.oli-baroukh.workers.dev';
+  const resp = await fetch(relay + '/bilans?magasin_code=' + encodeURIComponent(magasinCode) + '&limit=20', {
+    headers: { 'X-Store-Token': STORE_SECRET }
+  });
+  if (!resp.ok) throw new Error('Erreur récupération historique (' + resp.status + ')');
+  const data = await resp.json();
+  return (data.results || []).map(r => { try { return JSON.parse(r.data_json); } catch(e) { return r; } });
+}
+
+async function onAnalyseMagChange() {
+  const code = document.getElementById('analyse-mag-select').value;
+  const histEl = document.getElementById('analyse-mag-history');
+  const btn = document.getElementById('analyse-btn-single');
+  document.getElementById('analyse-result').style.display = 'none';
+  if (!code) { histEl.textContent = ''; btn.style.display = 'none'; return; }
+  histEl.textContent = 'Chargement de l\'historique...';
+  btn.style.display = 'none';
+  try {
+    const bilans = await fetchBilansRelay(code);
+    analyseLastSingleCode = code;
+    analyseLastSingleBilans = bilans;
+    if (!bilans.length) {
+      histEl.textContent = 'Aucun bilan trouvé pour ce magasin dans la base centrale.';
+      return;
+    }
+    histEl.innerHTML = bilans.length + ' bilan(s) trouvé(s) — du ' + bilans[bilans.length-1].date + ' au ' + bilans[0].date;
+    btn.style.display = 'block';
+  } catch(e) {
+    histEl.textContent = 'Erreur : ' + e.message;
+  }
+}
+
+async function runAnalyse(mode) {
+  const loading = document.getElementById('analyse-loading');
+  const result = document.getElementById('analyse-result');
+  const relay = params.relay || 'https://zimbra-relay.oli-baroukh.workers.dev';
+  result.style.display = 'none';
+  loading.style.display = 'block';
+  try {
+    let body;
+    if (mode === 'single') {
+      if (!analyseLastSingleBilans.length) throw new Error('Sélectionne un magasin avec de l\'historique');
+      body = { mode: 'single', bilans: analyseLastSingleBilans };
+    } else {
+      const codes = Array.from(document.querySelectorAll('.analyse-group-check:checked')).map(c => c.value);
+      if (!codes.length) throw new Error('Sélectionne au moins un magasin');
+      const groups = [];
+      for (const code of codes) {
+        const bilans = await fetchBilansRelay(code);
+        if (bilans.length) groups.push(bilans);
+      }
+      if (!groups.length) throw new Error('Aucun historique trouvé pour les magasins sélectionnés');
+      body = { mode: 'group', bilans: groups };
+    }
+    const resp = await fetch(relay + '/analyze', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Store-Token': STORE_SECRET },
+      body: JSON.stringify(body)
+    });
+    const data = await resp.json();
+    if (!resp.ok || data.error) throw new Error(data.error?.error?.message || data.error || ('Erreur ' + resp.status));
+    result.textContent = data.analysis || 'Pas de réponse.';
+    result.style.display = 'block';
+  } catch(e) {
+    result.textContent = '❌ ' + e.message;
+    result.style.display = 'block';
+  } finally {
+    loading.style.display = 'none';
+  }
+}
+
 // ── NAVIGATION ──
 function goScreen(name) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-  const map = {select:'screen-select',saisie:'screen-saisie',history:'screen-history',params:'screen-params'};
-  const navMap = {select:'nav-nouveau',saisie:'nav-nouveau',history:'nav-history',params:'nav-params'};
+  const map = {select:'screen-select',saisie:'screen-saisie',history:'screen-history',params:'screen-params',analyse:'screen-analyse'};
+  const navMap = {select:'nav-nouveau',saisie:'nav-nouveau',history:'nav-history',params:'nav-params',analyse:'nav-analyse'};
   document.getElementById(map[name]).classList.add('active');
   document.getElementById(navMap[name]).classList.add('active');
   document.getElementById('bottom-bar').style.display = name==='saisie' ? 'flex' : 'none';
   if (name === 'history') renderHistory();
   if (name === 'saisie') initKpiSelect();
+  if (name === 'analyse') initAnalyseScreen();
 }
 
 // ── TOAST ──
