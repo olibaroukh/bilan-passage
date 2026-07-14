@@ -33,13 +33,23 @@ async function getMagasinsServerSide() {
   const header = lines[0].split(';').map(h => h.trim());
   const idxAnimateur = header.indexOf('animateur');
   const idxCode = header.indexOf('code');
+  const idxEmail = header.indexOf('animateur_email');
   const rows = lines.slice(1).map(line => {
     const cols = line.split(';');
-    return { code: (cols[idxCode] || '').trim(), animateur: (cols[idxAnimateur] || '').trim() };
+    return {
+      code: (cols[idxCode] || '').trim(),
+      animateur: (cols[idxAnimateur] || '').trim(),
+      animateurEmail: idxEmail >= 0 ? (cols[idxEmail] || '').trim() : '',
+    };
   }).filter(r => r.code);
   _magasinsCache = rows;
   _magasinsCacheAt = now;
   return rows;
+}
+
+function getArEmail(stores, arName) {
+  const match = stores.find(s => s.animateur === arName && s.animateurEmail);
+  return match ? match.animateurEmail : null;
 }
 
 function normalizeName(s) {
@@ -80,6 +90,306 @@ function jsonError(msg, status, corsHeaders) {
   return new Response(JSON.stringify({ error: msg }), { status, headers: { 'Content-Type': 'application/json', ...corsHeaders } });
 }
 
+function resumeBilan(b) {
+  const actions = (b.actions || []).map(a => `- [${a.status || 'en cours'}] ${a.label || a.text || JSON.stringify(a)}`).join('\n') || 'Aucune action notée';
+  return [
+    `Date: ${b.date}${b.passage ? ' (passage n°' + b.passage + ')' : ''}`,
+    `Magasin: ${b.magasin?.libelle || b.magasin_libelle || '?'} (${b.magasin?.code || b.magasin_code || '?'})`,
+    `Animateur: ${b.ar || '?'}`,
+    b.humeur !== undefined && b.humeur !== null ? `Humeur/ambiance (0-10): ${b.humeur}` : '',
+    b.renta ? `Rentabilité: ${b.renta}%` : '',
+    b.ca_mensuel ? `CA mensuel: ${b.ca_mensuel}` : '',
+    b.forts ? `Points forts: ${b.forts}` : '',
+    b.diff ? `Difficultés: ${b.diff}` : '',
+    `Actions:\n${actions}`,
+    b.manager_obs ? `Observations manager: ${b.manager_obs}` : '',
+    b.remarque_libre ? `Remarque libre: ${b.remarque_libre}` : '',
+  ].filter(Boolean).join('\n');
+}
+
+const OLIVIER_EMAIL = 'olivier.baroukh@optical-center.com';
+const VANESSA_EMAIL = 'vanessa.baroukh@optical-center.com';
+
+async function purgeWeeklySources(env) {
+  // Purge des données brutes hebdomadaires (observations, futur pour_etre_dans_le_vert).
+  // La table `bilans` (Bilan de Passage) n'est JAMAIS purgée — elle alimente l'historique
+  // long de l'onglet Analyse et le futur bilan mensuel.
+  try { await env.DB.prepare('DELETE FROM observations').run(); } catch(e) { console.error('Purge observations échouée:', e); }
+}
+
+async function generateObsComHebdo(obsList, env) {
+  if (!Array.isArray(obsList) || !obsList.length) throw new Error('Aucune observation à traiter');
+  if (!env.ANTHROPIC_API_KEY) throw new Error('Clé API Anthropic non configurée sur le Worker');
+
+  const lines = obsList.map(o => `[${o.dl}][${o.m}][${o.th}][${o.t === 'p' ? '+' : '-'}] ${o.tx}`).join('\n');
+
+  const systemPrompt = `Tu aides à préparer la communication hebdomadaire pour 4 magasins Optical Center (Montgeron, Vitry, Quincy, Fresnes) à partir d'observations terrain.
+
+RÈGLES DE STYLE (à respecter strictement) :
+- Ton motivant, jamais alarmiste.
+- Ne JAMAIS pointer un magasin par son nom sur un point négatif — rester général plutôt que de nommer un magasin en difficulté.
+- Convention interne : pour Montgeron, utilise le prénom "Eitan" (son manager) à la place du nom du magasin. Pour Vitry, utilise "Dan". Quincy et Fresnes peuvent être cités normalement.
+- Français.
+
+FORMATS ATTENDUS (réponds uniquement en JSON valide, sans texte avant/après, sans balises markdown) :
+{
+  "slack1": {"titre": "emoji + titre court", "contenu": "2-4 phrases", "conclusion": "1 phrase très courte et percutante"},
+  "slack2": {"titre": "emoji + titre court (angle différent de slack1)", "contenu": "2-4 phrases", "conclusion": "1 phrase très courte et percutante"},
+  "slack3": {"titre": "emoji + titre court (angle différent de slack1 et slack2)", "contenu": "2-4 phrases", "conclusion": "1 phrase très courte et percutante"},
+  "message_general": "message autonome avec emojis, indépendant des 3 Slack (pas de redite), 4-8 phrases, ton motivant",
+  "elements_mail": "liste des éléments terrain à intégrer dans le mail (PAS un mail complet rédigé — juste les points/faits marquants de la semaine, en quelques lignes, que l'auteur complètera avec le ton général, les chiffres et infos supplémentaires)"
+}`;
+
+  const userPrompt = `Voici les observations terrain de la semaine :\n\n${lines}`;
+
+  const claudeResp = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-api-key': env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
+    body: JSON.stringify({ model: 'claude-sonnet-5', max_tokens: 1800, system: systemPrompt, messages: [{ role: 'user', content: userPrompt }] }),
+  });
+  const claudeData = await claudeResp.json();
+  if (!claudeResp.ok) throw new Error('Erreur API Claude : ' + JSON.stringify(claudeData));
+
+  const rawText = (claudeData.content || []).filter(c => c.type === 'text').map(c => c.text).join('\n');
+  try {
+    return JSON.parse(stripJsonFences(rawText));
+  } catch (e) {
+    throw new Error('Réponse IA non-JSON, impossible à parser : ' + rawText.slice(0, 300));
+  }
+}
+
+function formatObsEmail(fields) {
+  return [
+    `--- SLACK 1 ---`, fields.slack1, ``,
+    `--- SLACK 2 ---`, fields.slack2, ``,
+    `--- SLACK 3 ---`, fields.slack3, ``,
+    `--- MESSAGE GÉNÉRAL ---`, fields.messageGeneral, ``,
+    `--- ÉLÉMENTS POUR LE MAIL ---`, fields.elementsMail,
+    fields.infosSupplementaires ? `\n--- INFOS SUPPLÉMENTAIRES ---\n${fields.infosSupplementaires}` : '',
+  ].filter(x => x !== undefined && x !== '').join('\n');
+}
+
+function mostRecentWeekRange() {
+  // Couvre le lundi -> vendredi le plus récent, peu importe le jour d'exécution (samedi ou dimanche)
+  const now = new Date();
+  const day = now.getUTCDay(); // 0=dim, 1=lun, ..., 5=ven, 6=sam
+  const diffToFriday = ((day - 5) + 7) % 7 || 7; // nombre de jours depuis le dernier vendredi (jamais 0 ici : on tourne sam/dim)
+  const friday = new Date(now); friday.setUTCDate(now.getUTCDate() - diffToFriday);
+  const monday = new Date(friday); monday.setUTCDate(friday.getUTCDate() - 4);
+  const fmt = d => d.toISOString().slice(0, 10);
+  return { from: fmt(monday), to: fmt(friday) };
+}
+
+async function getWeekData(env) {
+  const { from, to } = mostRecentWeekRange();
+  const { results } = await env.DB.prepare(
+    'SELECT * FROM bilans WHERE date >= ? AND date <= ? ORDER BY ar, date'
+  ).bind(from, to).all();
+  const bilans = results.map(r => { try { return JSON.parse(r.data_json); } catch(e) { return r; } });
+
+  const stores = await getMagasinsServerSide();
+  const allARs = [...new Set(stores.map(s => s.animateur).filter(Boolean))].sort();
+
+  const byAR = {};
+  allARs.forEach(a => byAR[a] = []);
+  bilans.forEach(b => {
+    const ar = b.ar || 'Non renseigné';
+    if (!byAR[ar]) byAR[ar] = [];
+    byAR[ar].push(b);
+  });
+
+  return { from, to, bilans, allARs, byAR };
+}
+
+async function zimbraSendMail(env, { to, subject, bodyText }) {
+  const authResp = await fetch(ZIMBRA_SOAP_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      Header: { context: { _jsns: 'urn:zimbra', format: { _content: 'js', type: 'js' } } },
+      Body: {
+        AuthRequest: {
+          _jsns: 'urn:zimbraAccount',
+          account: { by: 'name', _content: env.ZIMBRA_CRON_USER },
+          password: { _content: env.ZIMBRA_CRON_PASS }
+        }
+      }
+    })
+  });
+  const authData = await authResp.json();
+  const token = authData?.Body?.AuthResponse?.authToken?.[0]?._content;
+  if (!token) throw new Error('Authentification Zimbra (compte cron) échouée');
+
+  const sendResp = await fetch(ZIMBRA_SOAP_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Cookie': `ZM_AUTH_TOKEN=${token}` },
+    body: JSON.stringify({
+      Header: { context: { _jsns: 'urn:zimbra', format: { _content: 'js', type: 'js' }, authToken: [{ _content: token }] } },
+      Body: {
+        SendMsgRequest: {
+          _jsns: 'urn:zimbraMail',
+          m: { su: { _content: subject }, e: [{ t: 't', a: to }], mp: { ct: 'text/plain', content: { _content: bodyText } } }
+        }
+      }
+    })
+  });
+  if (!sendResp.ok) throw new Error('Envoi email échoué (' + sendResp.status + ')');
+}
+
+async function generateWeeklyReport(env) {
+  const { from, to, bilans, byAR } = await getWeekData(env);
+
+  const sections = Object.entries(byAR).map(([ar, list]) => {
+    if (!list.length) return `=== ${ar} ===\nAucun bilan de passage enregistré cette semaine.`;
+    return `=== ${ar} (${list.length} bilan(s)) ===\n` + list.map(resumeBilan).join('\n\n---\n\n');
+  }).join('\n\n\n');
+
+  const systemPrompt = `Tu prépares le bilan hebdomadaire du réseau Optical Center. Pour CHAQUE animateur listé (même ceux sans bilan cette semaine), produis un texte avec : (1) les sujets les plus souvent abordés ou contrôlés durant les passages de la semaine, (2) les résultats relevés (chiffres, tendances, points notables). Si un animateur n'a aucun bilan, dis-le simplement en une phrase. Reste factuel, base-toi uniquement sur les données fournies, sois concis et actionnable.
+
+Réponds uniquement en JSON valide, sans texte avant/après, sans balises markdown, sous la forme :
+{ "Nom Animateur 1": "texte de sa synthèse", "Nom Animateur 2": "texte de sa synthèse", ... }
+Utilise exactement les noms d'animateurs tels que donnés en entrée, comme clés.`;
+
+  let byArText = {};
+  const debugInfo = { from, to, totalBilans: bilans.length, byAR: Object.fromEntries(Object.entries(byAR).map(([k,v]) => [k, v.length])) };
+
+  if (bilans.length && env.ANTHROPIC_API_KEY) {
+    const claudeResp = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
+      body: JSON.stringify({ model: 'claude-sonnet-5', max_tokens: 2500, system: systemPrompt, messages: [{ role: 'user', content: sections }] }),
+    });
+    const claudeData = await claudeResp.json();
+    if (claudeResp.ok) {
+      const rawText = (claudeData.content || []).filter(c => c.type === 'text').map(c => c.text).join('\n');
+      try { byArText = JSON.parse(stripJsonFences(rawText)); }
+      catch(e) { byArText = { 'Erreur': 'Réponse IA non-JSON : ' + rawText.slice(0, 300) }; }
+    } else {
+      byArText = { 'Erreur': 'Erreur génération synthèse IA : ' + JSON.stringify(claudeData) };
+    }
+  }
+
+  const subject = `Bilan hebdomadaire réseau — semaine du ${from.split('-').reverse().join('/')} au ${to.split('-').reverse().join('/')}`;
+  const fullText = Object.entries(byArText).map(([ar, txt]) => `=== ${ar} ===\n${txt}`).join('\n\n\n') || '(Aucune donnée cette semaine.)';
+  return { subject, from, to, byArText, fullText, debugInfo };
+}
+
+async function sendWeeklyReport(env) {
+  const { subject, byArText, fullText } = await generateWeeklyReport(env);
+  await zimbraSendMail(env, { to: OLIVIER_EMAIL, subject, bodyText: fullText });
+
+  const stores = await getMagasinsServerSide();
+  for (const [ar, txt] of Object.entries(byArText)) {
+    if (ar === 'Erreur') continue;
+    const arEmail = getArEmail(stores, ar);
+    if (!arEmail) continue;
+    try {
+      await zimbraSendMail(env, { to: arEmail, subject: `Bilan hebdomadaire — ${ar}`, bodyText: txt });
+    } catch(e) { console.error('Envoi bilan hebdo échoué pour', ar, e); }
+  }
+}
+
+function stripJsonFences(text) {
+  return text.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/i, '').trim();
+}
+
+async function generateComHebdoCore(contentSource, framing, env) {
+  if (!env.ANTHROPIC_API_KEY) throw new Error('Clé API Anthropic non configurée sur le Worker');
+
+  const systemPrompt = `Tu aides à rédiger une communication hebdomadaire interne à partir des observations terrain (bilans de passage) de la semaine, ${framing}.
+
+RÈGLES DE STYLE (à respecter strictement) :
+- Ton motivant, jamais alarmiste.
+- Ne JAMAIS pointer un magasin par son nom sur un point négatif — rester général ou parler de tendances plutôt que de nommer un magasin en difficulté.
+- Convention interne : quand tu évoques le magasin de Montgeron, utilise le prénom "Eitan" (son manager) à la place du nom du magasin. Quand tu évoques Vitry, utilise "Dan". Pour tous les autres magasins, tu peux les citer par leur nom si c'est positif.
+- Tu écris en français.
+
+FORMATS ATTENDUS (réponds uniquement en JSON valide, sans texte avant/après, sans balises markdown) :
+{
+  "slack1": {"titre": "emoji + titre court", "contenu": "2-4 phrases", "conclusion": "1 phrase percutante"},
+  "slack2": {"titre": "emoji + titre court (angle différent de slack1)", "contenu": "2-4 phrases", "conclusion": "1 phrase percutante"},
+  "slack3": {"titre": "emoji + titre court (angle différent de slack1 et slack2)", "contenu": "2-4 phrases", "conclusion": "1 phrase percutante"},
+  "message_general": "message autonome avec emojis, 4-8 phrases, ton motivant, à poster tel quel",
+  "email_objet": "objet de l'email, sans emoji",
+  "email_corps": "email narratif plus long (8-15 phrases), SANS AUCUN EMOJI (contrainte technique Zimbra), ton professionnel et motivant"
+}
+
+Les 3 messages Slack doivent couvrir des angles différents (ex: un fait marquant de la semaine, un point de vigilance sans nommer de magasin, un encouragement/objectif pour la semaine à venir) — évite les répétitions entre eux.`;
+
+  const userPrompt = `Voici les observations terrain (bilans de passage) de la semaine :\n\n${contentSource}`;
+
+  const claudeResp = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-api-key': env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
+    body: JSON.stringify({ model: 'claude-sonnet-5', max_tokens: 2500, system: systemPrompt, messages: [{ role: 'user', content: userPrompt }] }),
+  });
+  const claudeData = await claudeResp.json();
+  if (!claudeResp.ok) throw new Error('Erreur API Claude : ' + JSON.stringify(claudeData));
+
+  const rawText = (claudeData.content || []).filter(c => c.type === 'text').map(c => c.text).join('\n');
+  try {
+    return JSON.parse(stripJsonFences(rawText));
+  } catch (e) {
+    throw new Error('Réponse IA non-JSON, impossible à parser : ' + rawText.slice(0, 300));
+  }
+}
+
+async function generateComHebdo(env) {
+  const { from, to, byAR } = await getWeekData(env);
+  const sections = Object.entries(byAR)
+    .filter(([, list]) => list.length)
+    .map(([ar, list]) => `=== ${ar} (${list.length} bilan(s)) ===\n` + list.map(resumeBilan).join('\n\n---\n\n'))
+    .join('\n\n\n');
+  const contentSource = sections || '(Aucun bilan de passage enregistré cette semaine sur le réseau.)';
+  const blocks = await generateComHebdoCore(contentSource, 'pour le directeur réseau qui communique sur l\'ensemble du réseau Optical Center', env);
+  return { from, to, blocks };
+}
+
+async function generateComHebdoForAR(arName, arBilans, env) {
+  const contentSource = arBilans.length
+    ? arBilans.map(resumeBilan).join('\n\n---\n\n')
+    : '(Aucun bilan de passage enregistré cette semaine pour ces magasins.)';
+  const blocks = await generateComHebdoCore(contentSource, `pour l'animateur réseau ${arName} qui communique à son équipe sur ses propres magasins`, env);
+  return blocks;
+}
+
+function formatComHebdoAsEmail(blocks) {
+  return [
+    `--- SLACK 1 ---`,
+    `${blocks.slack1?.titre}\n${blocks.slack1?.contenu}\n${blocks.slack1?.conclusion}`,
+    ``,
+    `--- SLACK 2 ---`,
+    `${blocks.slack2?.titre}\n${blocks.slack2?.contenu}\n${blocks.slack2?.conclusion}`,
+    ``,
+    `--- SLACK 3 ---`,
+    `${blocks.slack3?.titre}\n${blocks.slack3?.contenu}\n${blocks.slack3?.conclusion}`,
+    ``,
+    `--- MESSAGE GÉNÉRAL ---`,
+    blocks.message_general,
+    ``,
+    `--- EMAIL (objet: ${blocks.email_objet}) ---`,
+    blocks.email_corps,
+  ].join('\n');
+}
+
+async function sendComHebdo(env) {
+  const { from, to, blocks } = await generateComHebdo(env);
+  const subjectPrefix = `Com hebdo (brouillon) — semaine du ${from.split('-').reverse().join('/')} au ${to.split('-').reverse().join('/')}`;
+  await zimbraSendMail(env, { to: OLIVIER_EMAIL, subject: subjectPrefix + ' — réseau complet', bodyText: formatComHebdoAsEmail(blocks) });
+
+  const { byAR } = await getWeekData(env);
+  const stores = await getMagasinsServerSide();
+  for (const [ar, arBilans] of Object.entries(byAR)) {
+    if (!arBilans.length) continue; // rien à communiquer pour cet AR cette semaine
+    const arEmail = getArEmail(stores, ar);
+    if (!arEmail) continue;
+    try {
+      const arBlocks = await generateComHebdoForAR(ar, arBilans, env);
+      await zimbraSendMail(env, { to: arEmail, subject: subjectPrefix + ` — ${ar}`, bodyText: formatComHebdoAsEmail(arBlocks) });
+    } catch(e) { console.error('Envoi com hebdo échoué pour', ar, e); }
+  }
+}
+
 export default {
   async fetch(request, env) {
     const corsHeaders = {
@@ -95,7 +405,7 @@ export default {
 
     const url = new URL(request.url);
 
-    if (request.method !== 'POST' && !(request.method === 'GET' && url.pathname === '/bilans')) {
+    if (request.method !== 'POST' && !(request.method === 'GET' && (url.pathname === '/bilans' || url.pathname === '/test-weekly-report' || url.pathname === '/com-hebdo' || url.pathname === '/test-com-hebdo'))) {
       return new Response('Méthode non autorisée', { status: 405, headers: corsHeaders });
     }
 
@@ -322,23 +632,6 @@ export default {
           return new Response(JSON.stringify({ error: 'Aucune donnée à analyser' }), { status: 400, headers: { 'Content-Type': 'application/json', ...corsHeaders } });
         }
 
-        function resumeBilan(b) {
-          const actions = (b.actions || []).map(a => `- [${a.status || 'en cours'}] ${a.label || a.text || JSON.stringify(a)}`).join('\n') || 'Aucune action notée';
-          return [
-            `Date: ${b.date}${b.passage ? ' (passage n°' + b.passage + ')' : ''}`,
-            `Magasin: ${b.magasin?.libelle || b.magasin_libelle || '?'} (${b.magasin?.code || b.magasin_code || '?'})`,
-            `Animateur: ${b.ar || '?'}`,
-            b.humeur !== undefined && b.humeur !== null ? `Humeur/ambiance (0-10): ${b.humeur}` : '',
-            b.renta ? `Rentabilité: ${b.renta}%` : '',
-            b.ca_mensuel ? `CA mensuel: ${b.ca_mensuel}` : '',
-            b.forts ? `Points forts: ${b.forts}` : '',
-            b.diff ? `Difficultés: ${b.diff}` : '',
-            `Actions:\n${actions}`,
-            b.manager_obs ? `Observations manager: ${b.manager_obs}` : '',
-            b.remarque_libre ? `Remarque libre: ${b.remarque_libre}` : '',
-          ].filter(Boolean).join('\n');
-        }
-
         let systemPrompt, userContent;
         if (mode === 'group') {
           systemPrompt = `Tu es un assistant qui aide un animateur réseau (AR) d'Optical Center à préparer sa tournée terrain. On te donne l'historique récent de plusieurs magasins. Pour chaque magasin, produis une synthèse courte et actionnable : tendance générale, actions non résolues qui traînent, et 1 à 2 points de vigilance prioritaires. Reste factuel, base-toi uniquement sur les données fournies, sois concis (pas de blabla). Structure ta réponse par magasin avec un titre clair.`;
@@ -378,6 +671,105 @@ export default {
         });
       }
 
+      if (url.pathname === '/store-observation') {
+        const storeToken = request.headers.get('X-Store-Token');
+        if (storeToken !== STORE_SECRET) return jsonError('Non autorisé', 401, corsHeaders);
+        if (!env.DB) return jsonError('Base D1 non liée au Worker', 500, corsHeaders);
+        try {
+          const o = await request.json();
+          if (!o.m || !o.th || !o.tx || !o.t || !o.d) return jsonError('Champs requis manquants', 400, corsHeaders);
+          await env.DB.prepare(
+            `INSERT INTO observations (obs_id, magasin, theme, tone, texte, jour_label, date_key)
+             VALUES (?, ?, ?, ?, ?, ?, ?)`
+          ).bind(o.id || null, o.m, o.th, o.t, o.tx, o.dl || null, o.d).run();
+          return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { 'Content-Type': 'application/json', ...corsHeaders } });
+        } catch (e) {
+          return jsonError('Erreur enregistrement : ' + String(e), 500, corsHeaders);
+        }
+      }
+
+      if (url.pathname === '/obs-generate') {
+        const storeToken = request.headers.get('X-Store-Token');
+        if (storeToken !== STORE_SECRET) return jsonError('Non autorisé', 401, corsHeaders);
+        try {
+          const { obs } = await request.json();
+          const blocks = await generateObsComHebdo(obs, env);
+          return new Response(JSON.stringify({ ok: true, blocks }), { status: 200, headers: { 'Content-Type': 'application/json', ...corsHeaders } });
+        } catch (e) {
+          return jsonError('Erreur génération : ' + String(e), 500, corsHeaders);
+        }
+      }
+
+      if (url.pathname === '/obs-send') {
+        const storeToken = request.headers.get('X-Store-Token');
+        if (storeToken !== STORE_SECRET) return jsonError('Non autorisé', 401, corsHeaders);
+        try {
+          const fields = await request.json();
+          if (!fields.slack1 && !fields.messageGeneral) return jsonError('Contenu manquant', 400, corsHeaders);
+          const bodyText = formatObsEmail(fields);
+          const subject = `Com hebdo — Montgeron / Vitry / Quincy / Fresnes`;
+          await zimbraSendMail(env, { to: OLIVIER_EMAIL, subject, bodyText });
+          await zimbraSendMail(env, { to: VANESSA_EMAIL, subject, bodyText });
+          return new Response(JSON.stringify({ ok: true, sentTo: [OLIVIER_EMAIL, VANESSA_EMAIL] }), { status: 200, headers: { 'Content-Type': 'application/json', ...corsHeaders } });
+        } catch (e) {
+          return jsonError('Erreur envoi : ' + String(e), 500, corsHeaders);
+        }
+      }
+
+      if (url.pathname === '/com-hebdo') {
+        const storeToken = request.headers.get('X-Store-Token');
+        if (storeToken !== STORE_SECRET) return jsonError('Non autorisé', 401, corsHeaders);
+        const sessionAr = await verifyArSession(request.headers.get('X-AR-Session'));
+        if (!sessionAr) return jsonError('Session animateur invalide ou expirée, reconnecte-toi.', 401, corsHeaders);
+        if (sessionAr !== 'ALL') return jsonError('Fonctionnalité réservée au profil réseau complet', 403, corsHeaders);
+        if (!env.DB) return jsonError('Base D1 non liée au Worker', 500, corsHeaders);
+        try {
+          const { from, to, blocks } = await generateComHebdo(env);
+          return new Response(JSON.stringify({ ok: true, from, to, blocks }), { status: 200, headers: { 'Content-Type': 'application/json', ...corsHeaders } });
+        } catch (e) {
+          return jsonError('Erreur génération com hebdo : ' + String(e), 500, corsHeaders);
+        }
+      }
+
+      if (url.pathname === '/test-com-hebdo') {
+        const storeToken = request.headers.get('X-Store-Token') || url.searchParams.get('token');
+        if (storeToken !== STORE_SECRET) return jsonError('Non autorisé', 401, corsHeaders);
+        if (!env.DB) return jsonError('Base D1 non liée au Worker', 500, corsHeaders);
+        const sendMode = url.searchParams.get('send'); // absent = prévisualisation, '1' = Olivier seul, 'all' = réseau + chaque AR
+        try {
+          const { from, to, blocks } = await generateComHebdo(env);
+          if (sendMode === 'all') {
+            await sendComHebdo(env); // réseau complet + version par AR à chacun avec email configuré
+          } else if (sendMode === '1') {
+            const subject = `Com hebdo réseau (brouillon) — semaine du ${from.split('-').reverse().join('/')} au ${to.split('-').reverse().join('/')}`;
+            await zimbraSendMail(env, { to: OLIVIER_EMAIL, subject, bodyText: formatComHebdoAsEmail(blocks) });
+          }
+          return new Response(JSON.stringify({ ok: true, sendMode: sendMode || 'preview', from, to, blocks }, null, 2), { status: 200, headers: { 'Content-Type': 'application/json', ...corsHeaders } });
+        } catch (e) {
+          return jsonError('Erreur génération/envoi com hebdo : ' + String(e), 500, corsHeaders);
+        }
+      }
+
+      if (url.pathname === '/test-weekly-report') {
+        const storeToken = request.headers.get('X-Store-Token') || url.searchParams.get('token');
+        if (storeToken !== STORE_SECRET) return jsonError('Non autorisé', 401, corsHeaders);
+        if (!env.DB) return jsonError('Base D1 non liée au Worker', 500, corsHeaders);
+        const sendEmail = url.searchParams.get('send') === '1'; // explicite : par défaut on ne fait que prévisualiser
+        try {
+          const { subject, byArText, fullText, debugInfo } = await generateWeeklyReport(env);
+          let sentTo = [];
+          if (sendEmail) {
+            await sendWeeklyReport(env); // régénère et envoie réellement (Olivier + chaque AR avec email)
+            sentTo = [OLIVIER_EMAIL];
+          }
+          return new Response(JSON.stringify({
+            ok: true, emailSent: sendEmail, sentTo, subject, byArText, fullText, debugInfo
+          }, null, 2), { status: 200, headers: { 'Content-Type': 'application/json', ...corsHeaders } });
+        } catch (e) {
+          return jsonError('Erreur génération/envoi du rapport : ' + String(e), 500, corsHeaders);
+        }
+      }
+
       // par défaut : relais SOAP (AuthRequest, SendMsgRequest, ...)
       const body = await request.text();
       const zimbraResponse = await fetch(ZIMBRA_SOAP_URL, {
@@ -395,6 +787,19 @@ export default {
         status: 502,
         headers: { 'Content-Type': 'application/json', ...corsHeaders },
       });
+    }
+  },
+
+  async scheduled(event, env, ctx) {
+    const cron = event.cron;
+    if (cron === '0 14 * * SUN' || cron === '0 7 * * SUN') {
+      ctx.waitUntil(sendComHebdo(env).catch(e => console.error('Erreur com hebdo:', e)));
+    } else if (cron === '0 20 * * SUN' || cron === '0 22 * * SUN') {
+      ctx.waitUntil(purgeWeeklySources(env).catch(e => console.error('Erreur purge hebdomadaire:', e)));
+    } else if (cron === '0 6 * * SAT') {
+      ctx.waitUntil(sendWeeklyReport(env).catch(e => console.error('Erreur rapport hebdomadaire:', e)));
+    } else {
+      console.error('Cron non reconnu, aucune action déclenchée:', cron);
     }
   }
 };
