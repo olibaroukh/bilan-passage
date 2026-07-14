@@ -626,7 +626,13 @@ input[type=date]{color-scheme:dark}
     </div>
     <div style="display:flex;gap:8px">
       <button class="btn-secondary" id="analyse-mode-single" style="flex:1;font-size:12px;padding:8px" onclick="setAnalyseMode('single')">📍 Un magasin</button>
-      <button class="btn-secondary" id="analyse-mode-group" style="flex:1;font-size:12px;padding:8px" onclick="setAnalyseMode('group')">🗺️ Tournée (plusieurs)</button>
+      <button class="btn-secondary" id="analyse-mode-group" style="flex:1;font-size:12px;padding:8px" onclick="setAnalyseMode('group')">🗺️ Tournée</button>
+      <button class="btn-secondary" id="analyse-mode-comhebdo" style="flex:1;font-size:12px;padding:8px;display:none" onclick="setAnalyseMode('comhebdo')">📣 Com hebdo</button>
+    </div>
+
+    <div id="analyse-comhebdo-block" style="display:none">
+      <button class="btn-primary" style="width:100%" onclick="runComHebdo()">✨ Générer la com de la semaine</button>
+      <div id="analyse-comhebdo-result" style="display:none;margin-top:12px;display:flex;flex-direction:column;gap:12px"></div>
     </div>
 
     <div id="analyse-single-block">
@@ -732,7 +738,7 @@ function loadLogo() {
 }
 
 // ── VERSION APP ── (incrémenter à chaque mise à jour notable, pour déclencher l'invite de rechargement)
-const APP_VERSION = '2026.07.13-23';
+const APP_VERSION = '2026.07.14-1';
 
 // Token pour la route /store-bilan du Worker (persistance D1, doit correspondre à STORE_SECRET dans worker.js)
 const STORE_SECRET = 'OC-bilan-store-2026';
@@ -1208,11 +1214,14 @@ async function applyUpdate() {
     } catch(e) {}
   }
 
-  // Rechargement simple : sur PWA iOS, manipuler l'URL (paramètres) peut faire
-  // sortir l'app de son contexte standalone. On recharge donc l'URL telle quelle ;
-  // la désinscription du Service Worker + le vidage de cache suffisent à garantir
-  // que le prochain chargement ira chercher la version fraîche sur le réseau.
-  window.location.reload();
+  // Rechargement "dur" : URL avec paramètre anti-cache pour forcer une vraie
+  // requête réseau. Ajouter un paramètre ne fait PAS sortir une PWA de son
+  // mode plein écran — le "scope" d'une PWA se base sur le chemin, pas sur
+  // les paramètres de requête ni l'ancre. Un simple reload() peut resservir
+  // une version mise en cache par le système sur une PWA installée sur
+  // l'écran d'accueil iOS, d'où ce contournement.
+  const base = window.location.href.split('?')[0].split('#')[0];
+  window.location.href = base + '?_u=' + Date.now();
 }
 
 function registerServiceWorker() {
@@ -3672,6 +3681,7 @@ function initAnalyseScreen() {
   }
 
   document.getElementById('analyse-session-info').textContent = 'Connecté : ' + (arSession.ar === 'ALL' ? 'tout le réseau' : arSession.ar);
+  document.getElementById('analyse-mode-comhebdo').style.display = arSession.ar === 'ALL' ? 'block' : 'none';
 
   const stores = analyseMyStores();
 
@@ -3701,8 +3711,10 @@ function setAnalyseMode(mode) {
   analyseMode = mode;
   document.getElementById('analyse-mode-single').style.cssText = 'flex:1;font-size:12px;padding:8px' + (mode==='single' ? ';background:var(--red);border-color:var(--red);color:#fff' : '');
   document.getElementById('analyse-mode-group').style.cssText = 'flex:1;font-size:12px;padding:8px' + (mode==='group' ? ';background:var(--red);border-color:var(--red);color:#fff' : '');
+  document.getElementById('analyse-mode-comhebdo').style.cssText = 'flex:1;font-size:12px;padding:8px' + (mode==='comhebdo' ? ';background:var(--red);border-color:var(--red);color:#fff' : '') + (arSession?.ar === 'ALL' ? '' : ';display:none');
   document.getElementById('analyse-single-block').style.display = mode === 'single' ? 'block' : 'none';
   document.getElementById('analyse-group-block').style.display = mode === 'group' ? 'block' : 'none';
+  document.getElementById('analyse-comhebdo-block').style.display = mode === 'comhebdo' ? 'block' : 'none';
   document.getElementById('analyse-result').style.display = 'none';
 }
 
@@ -3785,6 +3797,41 @@ async function runAnalyse(mode) {
   }
 }
 
+async function runComHebdo() {
+  const relay = params.relay || 'https://zimbra-relay.oli-baroukh.workers.dev';
+  const resultEl = document.getElementById('analyse-comhebdo-result');
+  const loading = document.getElementById('analyse-loading');
+  resultEl.style.display = 'none';
+  loading.style.display = 'block';
+  try {
+    const resp = await fetch(relay + '/com-hebdo', {
+      headers: { 'X-Store-Token': STORE_SECRET, 'X-AR-Session': arSession?.token || '' }
+    });
+    const rawText = await resp.text();
+    let data; try { data = JSON.parse(rawText); } catch(e) { data = { error: rawText }; }
+    if (resp.status === 401) { arLogout(); throw new Error('Session expirée, reconnecte-toi.'); }
+    if (!resp.ok || data.error) throw new Error(data.error || ('Erreur ' + resp.status));
+
+    const b = data.blocks;
+    const card = (title, content) => `<div style="background:var(--bg4);border:1px solid var(--border);border-radius:10px;padding:12px">
+      <div style="font-size:11px;color:var(--red);font-weight:600;margin-bottom:6px;text-transform:uppercase">${title}</div>
+      <div style="font-size:13px;line-height:1.6;white-space:pre-wrap">${content}</div>
+    </div>`;
+
+    resultEl.innerHTML =
+      card('Slack 1', `${b.slack1?.titre}\n\n${b.slack1?.contenu}\n\n${b.slack1?.conclusion}`) +
+      card('Slack 2', `${b.slack2?.titre}\n\n${b.slack2?.contenu}\n\n${b.slack2?.conclusion}`) +
+      card('Slack 3', `${b.slack3?.titre}\n\n${b.slack3?.contenu}\n\n${b.slack3?.conclusion}`) +
+      card('Message général', b.message_general) +
+      card('Email — objet : ' + b.email_objet, b.email_corps);
+    resultEl.style.display = 'flex';
+  } catch(e) {
+    resultEl.innerHTML = '❌ ' + e.message;
+    resultEl.style.display = 'flex';
+  } finally {
+    loading.style.display = 'none';
+  }
+}
 // ── NAVIGATION ──
 function goScreen(name) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
