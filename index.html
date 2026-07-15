@@ -769,7 +769,7 @@ function loadLogo() {
 }
 
 // ── VERSION APP ── (incrémenter à chaque mise à jour notable, pour déclencher l'invite de rechargement)
-const APP_VERSION = '2026.07.15-1';
+const APP_VERSION = '2026.07.15-2';
 
 // Token pour la route /store-bilan du Worker (persistance D1, doit correspondre à STORE_SECRET dans worker.js)
 const STORE_SECRET = 'OC-bilan-store-2026';
@@ -2921,30 +2921,33 @@ async function generatePDF(data, humeurSliderImg) {
   }
 
   // Groupes séparés par des traits verticaux : Effectif | Renta | Positionnement
+  // Chaque item peut porter un poids (4e élément) pour la largeur relative de sa colonne ;
+  // par défaut 1. Positionnement a des libellés longs → poids renforcé.
   const shGroups = [
     {
       items: [
         ['Effectif présent', `${mag.eff_present || '—'}`],
         ['Effectif théo.', `${mag.eff_theo || '—'}`],
         ['Eff. réel Opt./Audio', `${mag.eff_opt || '—'}/${mag.eff_audio || '—'}`,
-          (parseFloat(mag.eff_opt||0) + parseFloat(mag.eff_audio||0)) <= parseFloat(mag.eff_theo||99) ? 'ok' : 'bad'],
+          (parseFloat(mag.eff_opt||0) + parseFloat(mag.eff_audio||0)) <= parseFloat(mag.eff_theo||99) ? 'ok' : 'bad', 1.2],
       ]
     },
     {
       items: [
-        ['Renta salariale', data.renta ? data.renta + '%' : '—', data.renta && parseFloat(data.renta) <= parseFloat(data.renta_obj||28) ? 'ok' : 'bad'],
+        ['Renta salariale', data.renta ? data.renta + '%' : '—', data.renta && parseFloat(data.renta) <= parseFloat(data.renta_obj||28) ? 'ok' : 'bad', 1.15],
         ['Objectif renta', (data.renta_obj || '28') + '%'],
       ]
     },
     {
       items: [
-        ['Positionnement mensuel', data.ca_mensuel ? data.ca_mensuel + '%' : '—'],
-        ['Positionnement annuel', data.ca_annuel ? data.ca_annuel + '%' : '—'],
+        ['Positionnement mensuel', data.ca_mensuel ? data.ca_mensuel + '%' : '—', null, 2],
+        ['Positionnement annuel', data.ca_annuel ? data.ca_annuel + '%' : '—', null, 2],
       ]
     },
   ];
   // Tour de péniches : uniquement les zones renseignées (n > 0), max 3 (garde-fou,
   // le plafond est déjà appliqué côté saisie). Vert par défaut, rouge si tag "vigilance".
+  // Libellés courts + poids réduit : on donne la priorité de place à Positionnement.
   const PENICHES_SHORT_LABEL = {attente:'Pén. attente', attenteVerres:'Pén. verres', livraison:'Pén. livraison', sav:'Pén. SAV', autre:'Pén. autre'};
   const penZonesFilled = PENICHES_ZONES
     .filter(z => (data.peniches?.[z.key]?.n || 0) > 0)
@@ -2953,13 +2956,31 @@ async function generatePDF(data, humeurSliderImg) {
     shGroups.push({
       items: penZonesFilled.map(z => {
         const zone = data.peniches[z.key];
-        return [PENICHES_SHORT_LABEL[z.key], String(zone.n), zone.type === 'vigilance' ? 'bad' : 'ok'];
+        return [PENICHES_SHORT_LABEL[z.key], String(zone.n), zone.type === 'vigilance' ? 'bad' : 'ok', 0.8];
       })
     });
   }
   const shZoneW = photoCol - mar - 5;
-  const totalItems = shGroups.reduce((s,g) => s + g.items.length, 0);
-  const shColW = shZoneW / totalItems;
+  const totalWeight = shGroups.reduce((s,g) => s + g.items.reduce((s2,it) => s2 + (it[3] || 1), 0), 0);
+
+  // Garde-fou anti-débordement : force le texte sur une seule ligne en réduisant la police
+  // si besoin, puis tronque avec … en dernier recours. Empêche tout retour à la ligne
+  // qui chevaucherait la valeur affichée juste en dessous.
+  function fitOneLine(text, maxW, baseSize, minSize) {
+    let size = baseSize;
+    doc.setFontSize(size);
+    while (doc.getTextWidth(text) > maxW && size > minSize) {
+      size -= 0.25;
+      doc.setFontSize(size);
+    }
+    if (doc.getTextWidth(text) > maxW) {
+      let t = text;
+      while (t.length > 1 && doc.getTextWidth(t + '…') > maxW) t = t.slice(0, -1);
+      text = t + '…';
+    }
+    return { text, size };
+  }
+
   let shX = mar;
   shGroups.forEach((group, gi) => {
     if (gi > 0) {
@@ -2968,17 +2989,18 @@ async function generatePDF(data, humeurSliderImg) {
       doc.line(shX - 3, headerH + 2, shX - 3, headerH + 10);
       doc.setLineWidth(0.2);
     }
-    group.items.forEach(([l, v, status]) => {
+    group.items.forEach(([l, v, status, weight]) => {
+      const colW = shZoneW * ((weight || 1) / totalWeight);
       doc.setTextColor(140,140,140);
       doc.setFont('helvetica','normal');
-      doc.setFontSize(6.5);
-      doc.text(l, shX, headerH + 5, { maxWidth: shColW - 2 });
+      const lblFit = fitOneLine(l, colW - 2, 6.5, 5);
+      doc.text(lblFit.text, shX, headerH + 5);
       const color = status === 'ok' ? [42,158,42] : status === 'bad' ? [204,23,25] : [40,40,40];
       doc.setTextColor(...color);
       doc.setFont('helvetica','bold');
-      doc.setFontSize(8.5);
-      doc.text(v, shX, headerH + 9, { maxWidth: shColW - 3 });
-      shX += shColW;
+      const valFit = fitOneLine(v, colW - 3, 8.5, 6.5);
+      doc.text(valFit.text, shX, headerH + 9);
+      shX += colW;
     });
   });
 
