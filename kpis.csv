@@ -22,3 +22,5 @@ Transition;%;20;gte
 SAP;%;70;gte
 Seuil de Perf;;42750;gte
 Fréquentation;%;5;gte
+Evol CA Audio;%;10;gte
+Evol CA Contacto;%;10;gte
