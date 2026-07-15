@@ -87,6 +87,22 @@ html,body{height:100%;background:linear-gradient(160deg,#1A1210 0%,#0D0D0D 40%,#
 .action-item-text{font-size:13px;color:var(--text)}
 .action-item-meta{display:flex;gap:8px;font-size:11px;color:var(--muted)}
 .action-item-del{cursor:pointer;color:var(--muted);font-size:12px;padding:2px}
+/* Tour de péniches */
+.peniche-card{background:var(--bg4);border:1px solid var(--border);border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:8px}
+.peniche-top{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.peniche-label{font-size:13px;font-weight:600;color:var(--text)}
+.peniche-counter{display:flex;align-items:center;gap:8px}
+.peniche-btn{width:30px;height:30px;border-radius:8px;border:1px solid var(--border);background:var(--bg3);color:var(--text);font-size:16px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.peniche-btn:disabled{opacity:0.35;cursor:not-allowed}
+.peniche-val{min-width:22px;text-align:center;font-size:15px;font-weight:700}
+.peniche-val.ok{color:var(--green)}
+.peniche-comment-toggle{font-size:11px;color:var(--muted);cursor:pointer;text-decoration:underline;text-underline-offset:2px}
+.peniche-comment-box{display:none;flex-direction:column;gap:6px}
+.peniche-comment-box.open{display:flex}
+.peniche-tags{display:flex;gap:6px}
+.peniche-tag{flex:1;border-radius:8px;border:1px solid var(--border);background:var(--bg3);color:var(--muted);font-size:11px;font-weight:600;padding:6px 8px;cursor:pointer;text-align:center}
+.peniche-tag.active-positif{background:rgba(42,158,42,0.15);border-color:var(--green);color:var(--green)}
+.peniche-tag.active-vigilance{background:var(--red2);border-color:var(--red3);color:var(--red)}
 .action-add-form{display:flex;flex-direction:column;gap:6px;background:var(--bg3);border-radius:8px;padding:10px}
 .action-add-form input{background:var(--bg4);border:1px solid var(--border);border-radius:6px;padding:8px 10px;font-size:13px;color:var(--text);font-family:'Barlow',sans-serif;width:100%}
 .action-add-row{display:flex;gap:6px}
@@ -440,6 +456,21 @@ input[type=date]{color-scheme:dark}
     </div>
   </div>
 
+  <!-- Bloc 6bis : Tour de péniches -->
+  <div class="bloc-accordion">
+    <div class="bloc-head" onclick="toggleBloc('bpen')">
+      <div class="bloc-head-icon">📁</div>
+      <span class="bloc-head-label">Tour de péniches</span>
+      <span class="bloc-head-chevron" id="chev-bpen">▼</span>
+    </div>
+    <div class="bloc-body" id="bpen">
+      <div style="font-size:12px;color:var(--muted);margin-bottom:6px">
+        Contrôlez au moins 5 dossiers clients dans une zone (max 3 zones par passage).
+      </div>
+      <div id="peniches-list" style="display:flex;flex-direction:column;gap:10px"></div>
+    </div>
+  </div>
+
   <!-- Bloc 7 : Photos -->
   <div class="bloc-accordion">
     <div class="bloc-head" onclick="toggleBloc('b7')">
@@ -738,7 +769,7 @@ function loadLogo() {
 }
 
 // ── VERSION APP ── (incrémenter à chaque mise à jour notable, pour déclencher l'invite de rechargement)
-const APP_VERSION = '2026.07.14-1';
+const APP_VERSION = '2026.07.15-1';
 
 // Token pour la route /store-bilan du Worker (persistance D1, doit correspondre à STORE_SECRET dans worker.js)
 const STORE_SECRET = 'OC-bilan-store-2026';
@@ -873,6 +904,19 @@ let actions = [];
 let fortsList = [];
 let diffList = [];
 let entretiens = [];
+const PENICHES_ZONES = [
+  {key:'attente', label:'En attente'},
+  {key:'attenteVerres', label:'Attente verres'},
+  {key:'livraison', label:'Livraison'},
+  {key:'sav', label:'SAV'},
+  {key:'autre', label:'Autre'},
+];
+function emptyPeniches() {
+  const o = {};
+  PENICHES_ZONES.forEach(z => { o[z.key] = {n:0, comment:'', type:null}; });
+  return o;
+}
+let peniches = emptyPeniches();
 let previousActions = []; // actions du dernier bilan du même magasin
 let previousActionsStatus = {}; // {index: 'done'|'ongoing'|'todo'}
 
@@ -1523,8 +1567,8 @@ function resetSaisie() {
   if (draftKey) localStorage.removeItem(draftKey);
   previousActions = []; previousActionsStatus = {};
   actions = []; kpisAdded = []; photos = [null,null,null]; photoCaptions = ['','',''];
-  fortsList = []; diffList = []; entretiens = [];
-  renderPoints('forts'); renderPoints('diff'); renderEntretiens();
+  fortsList = []; diffList = []; entretiens = []; peniches = emptyPeniches();
+  renderPoints('forts'); renderPoints('diff'); renderEntretiens(); renderPeniches();
   humeurTouched = false; document.getElementById('f-humeur').value = 2; updateHumeur();
   ['f-date','f-duree','f-presents','f-renta','f-rh','f-formation','f-manager-obs',
    'f-kpi-comment','f-process','f-ca-mensuel','f-ca-annuel','f-ca-mensuel-detail',
@@ -1561,8 +1605,8 @@ function startBilan() {
   document.getElementById('f-renta-obj').value = (params.rentaTarget || '28') + '%';
   previousActions = []; previousActionsStatus = {};
   actions = []; kpisAdded = []; photos = [null,null,null]; photoCaptions = ['','',''];
-  fortsList = []; diffList = []; entretiens = [];
-  renderPoints('forts'); renderPoints('diff'); renderEntretiens();
+  fortsList = []; diffList = []; entretiens = []; peniches = emptyPeniches();
+  renderPoints('forts'); renderPoints('diff'); renderEntretiens(); renderPeniches();
   humeurTouched = false; document.getElementById('f-humeur').value = 2; updateHumeur();
   ['f-date','f-duree','f-presents','f-renta','f-rh','f-formation','f-manager-obs',
    'f-kpi-comment','f-process','f-ca-mensuel','f-ca-annuel','f-ca-mensuel-detail',
@@ -1799,6 +1843,93 @@ function renderPoints(kind) {
   });
 }
 
+// Routage des commentaires du Tour de péniches vers les blocs existants :
+// tag "positif" → Points forts, tag "vigilance" → Difficultés, pas de tag → Remarque libre.
+function penicheRouting(pen) {
+  const routing = {forts: [], diff: [], remarque: []};
+  if (!pen) return routing;
+  PENICHES_ZONES.forEach(z => {
+    const zone = pen[z.key];
+    if (!zone || !zone.comment) return;
+    const line = `Péniches – ${z.label} : ${zone.comment}`;
+    if (zone.type === 'positif') routing.forts.push(line);
+    else if (zone.type === 'vigilance') routing.diff.push(line);
+    else routing.remarque.push(line);
+  });
+  return routing;
+}
+
+// ── TOUR DE PÉNICHES ──
+function penicheZonesFilledCount() {
+  return PENICHES_ZONES.filter(z => (peniches[z.key]?.n || 0) > 0).length;
+}
+
+function penicheChange(key, delta) {
+  const zone = peniches[key];
+  if (!zone) return;
+  const next = zone.n + delta;
+  if (next < 0) return;
+  // Plafond : pas plus de 3 zones renseignées en simultané (bloc option A, temps réel)
+  if (delta > 0 && zone.n === 0 && penicheZonesFilledCount() >= 3) {
+    showToast('⚠ Maximum 3 zones contrôlées par passage');
+    return;
+  }
+  zone.n = next;
+  if (zone.n === 0) { zone.comment = ''; zone.type = null; } // zone désactivée = on efface le détail
+  renderPeniches();
+}
+
+function penicheToggleComment(key) {
+  const box = document.getElementById('pen-comment-' + key);
+  if (box) box.classList.toggle('open');
+}
+
+function penicheSetType(key, type) {
+  const zone = peniches[key];
+  if (!zone) return;
+  zone.type = (zone.type === type) ? null : type; // re-clic = désélectionne
+  renderPeniches();
+}
+
+function penicheCommentInput(key, value) {
+  const zone = peniches[key];
+  if (!zone) return;
+  zone.comment = value;
+}
+
+function renderPeniches() {
+  const el = document.getElementById('peniches-list');
+  if (!el) return;
+  const filled = penicheZonesFilledCount();
+  el.innerHTML = '';
+  PENICHES_ZONES.forEach(z => {
+    const zone = peniches[z.key];
+    const capReached = filled >= 3 && zone.n === 0;
+    const card = document.createElement('div');
+    card.className = 'peniche-card';
+    card.innerHTML = `
+      <div class="peniche-top">
+        <span class="peniche-label">${z.label}</span>
+        <div class="peniche-counter">
+          <button type="button" class="peniche-btn" onclick="penicheChange('${z.key}', -1)" ${zone.n === 0 ? 'disabled' : ''}>−</button>
+          <span class="peniche-val ${zone.n >= 5 ? 'ok' : ''}">${zone.n}</span>
+          <button type="button" class="peniche-btn" onclick="penicheChange('${z.key}', 1)" ${capReached ? 'disabled title="Maximum 3 zones par passage"' : ''}>+</button>
+        </div>
+      </div>
+      ${zone.n > 0 ? `
+      <div class="peniche-comment-toggle" onclick="penicheToggleComment('${z.key}')">🗨️ ${zone.comment ? 'Modifier le commentaire' : 'Ajouter un commentaire'}</div>
+      <div class="peniche-comment-box${zone.comment ? ' open' : ''}" id="pen-comment-${z.key}">
+        <textarea id="pen-comment-text-${z.key}" rows="2" placeholder="Ce que vous avez constaté..." onfocus="setMicTarget('pen-comment-text-${z.key}')" oninput="penicheCommentInput('${z.key}', this.value)">${zone.comment}</textarea>
+        <div class="peniche-tags">
+          <div class="peniche-tag${zone.type === 'positif' ? ' active-positif' : ''}" onclick="penicheSetType('${z.key}', 'positif')">✅ Positif</div>
+          <div class="peniche-tag${zone.type === 'vigilance' ? ' active-vigilance' : ''}" onclick="penicheSetType('${z.key}', 'vigilance')">⚠️ Vigilance</div>
+        </div>
+      </div>` : ''}
+    `;
+    el.appendChild(card);
+  });
+}
+
 function renderActions() {
   const list = document.getElementById('action-list');
   list.innerHTML = '';
@@ -2011,6 +2142,7 @@ function collectData() {
     process: document.getElementById('f-process').value,
     forts: fortsList,
     diff: diffList,
+    peniches,
     actions: dedupeActions(actions),
     photos,
     photoCaptions,
@@ -2063,6 +2195,7 @@ function loadDraft() {
     if (d.process) document.getElementById('f-process').value = d.process;
     if (d.forts) { fortsList = Array.isArray(d.forts) ? d.forts : [d.forts]; renderPoints('forts'); }
     if (d.diff) { diffList = Array.isArray(d.diff) ? d.diff : [d.diff]; renderPoints('diff'); }
+    if (d.peniches) { peniches = {...emptyPeniches(), ...d.peniches}; renderPeniches(); }
     if (d.actions) { actions = d.actions; renderActions(); }
     if (d.photos) {
       photos = d.photos;
@@ -2099,6 +2232,14 @@ function finalizeBilan() {
     const b8 = document.getElementById('b8');
     if (b8 && !b8.classList.contains('open')) toggleBloc('b8');
     document.getElementById('act-text')?.scrollIntoView({behavior:'smooth',block:'center'});
+    return;
+  }
+  const penMax = Math.max(0, ...PENICHES_ZONES.map(z => data.peniches[z.key]?.n || 0));
+  if (penMax < 5) {
+    showToast('⚠ Tour de péniches obligatoire : au moins 5 dossiers contrôlés dans une zone');
+    const bpen = document.getElementById('bpen');
+    if (bpen && !bpen.classList.contains('open')) toggleBloc('bpen');
+    document.getElementById('peniches-list')?.scrollIntoView({behavior:'smooth',block:'center'});
     return;
   }
   params.myEmail = document.getElementById('p-my-email').value || params.myEmail || '';
@@ -2561,8 +2702,9 @@ function buildEmailBody(d) {
   function stripDot(s) { return s.trim().replace(/\.+$/, ''); }
   function cap(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
   function low(s) { return s.charAt(0).toLowerCase() + s.slice(1); }
-  const fortsArr = Array.isArray(d.forts) ? d.forts : (d.forts ? [d.forts] : []);
-  const diffArr  = Array.isArray(d.diff)  ? d.diff  : (d.diff  ? [d.diff]  : []);
+  const penRouting = penicheRouting(d.peniches);
+  const fortsArr = [...(Array.isArray(d.forts) ? d.forts : (d.forts ? [d.forts] : [])), ...penRouting.forts];
+  const diffArr  = [...(Array.isArray(d.diff)  ? d.diff  : (d.diff  ? [d.diff]  : [])), ...penRouting.diff];
   const ptsSentences = [];
   if (fortsArr.length) {
     const intro = pick(['Quelques points positifs tout de même :', 'À noter côté points forts :', 'Côté points forts,', 'Parmi les points forts :', 'De vrais points forts à souligner :']);
@@ -2608,7 +2750,8 @@ function buildEmailBody(d) {
   }
 
   // ── Remarque libre ──
-  if (d.remarque_libre) paragraphs.push(d.remarque_libre);
+  const remarqueFull = [d.remarque_libre, ...penRouting.remarque].filter(Boolean).join('\n');
+  if (remarqueFull) paragraphs.push(remarqueFull);
 
   // ── Closing ──
   let closing = d.mot_conclusion || pick([
@@ -2800,6 +2943,20 @@ async function generatePDF(data, humeurSliderImg) {
       ]
     },
   ];
+  // Tour de péniches : uniquement les zones renseignées (n > 0), max 3 (garde-fou,
+  // le plafond est déjà appliqué côté saisie). Vert par défaut, rouge si tag "vigilance".
+  const PENICHES_SHORT_LABEL = {attente:'Pén. attente', attenteVerres:'Pén. verres', livraison:'Pén. livraison', sav:'Pén. SAV', autre:'Pén. autre'};
+  const penZonesFilled = PENICHES_ZONES
+    .filter(z => (data.peniches?.[z.key]?.n || 0) > 0)
+    .slice(0, 3);
+  if (penZonesFilled.length) {
+    shGroups.push({
+      items: penZonesFilled.map(z => {
+        const zone = data.peniches[z.key];
+        return [PENICHES_SHORT_LABEL[z.key], String(zone.n), zone.type === 'vigilance' ? 'bad' : 'ok'];
+      })
+    });
+  }
   const shZoneW = photoCol - mar - 5;
   const totalItems = shGroups.reduce((s,g) => s + g.items.length, 0);
   const shColW = shZoneW / totalItems;
@@ -2815,7 +2972,7 @@ async function generatePDF(data, humeurSliderImg) {
       doc.setTextColor(140,140,140);
       doc.setFont('helvetica','normal');
       doc.setFontSize(6.5);
-      doc.text(l, shX, headerH + 5);
+      doc.text(l, shX, headerH + 5, { maxWidth: shColW - 2 });
       const color = status === 'ok' ? [42,158,42] : status === 'bad' ? [204,23,25] : [40,40,40];
       doc.setTextColor(...color);
       doc.setFont('helvetica','bold');
@@ -2959,13 +3116,15 @@ async function generatePDF(data, humeurSliderImg) {
   ].filter(Boolean);
 
   // Pré-calculer les contenus de col2 (hors KPI qui ont hauteur fixe)
-  const fortsArrEst = Array.isArray(data.forts) ? data.forts : (data.forts ? [data.forts] : []);
-  const diffArrEst  = Array.isArray(data.diff)  ? data.diff  : (data.diff  ? [data.diff]  : []);
+  const penRoutingEst = penicheRouting(data.peniches);
+  const fortsArrEst = [...(Array.isArray(data.forts) ? data.forts : (data.forts ? [data.forts] : [])), ...penRoutingEst.forts];
+  const diffArrEst  = [...(Array.isArray(data.diff)  ? data.diff  : (data.diff  ? [data.diff]  : [])), ...penRoutingEst.diff];
   const pfdEst = [...fortsArrEst.map(t => '(+) '+t), ...diffArrEst.map(t => '(-) '+t)].join('\n');
+  const remarqueEst = [data.remarque_libre, ...penRoutingEst.remarque].filter(Boolean).join('\n');
   const col2Blocs = [
     data.kpi_comment ? [colW2, data.kpi_comment, null] : null,
     (fortsArrEst.length || diffArrEst.length) ? [colW2, pfdEst, null] : null,
-    data.remarque_libre ? [colW2, data.remarque_libre, null] : null,
+    remarqueEst ? [colW2, remarqueEst, null] : null,
   ].filter(Boolean);
   const kpiFixedH = data.kpis.length ? (6.5 + Math.ceil(data.kpis.length/3)*11 + 4 + 3) : 0;
 
@@ -3069,16 +3228,18 @@ async function generatePDF(data, humeurSliderImg) {
     yc2 += 3;
   }
 
-  const fortsArr = Array.isArray(data.forts) ? data.forts : (data.forts ? [data.forts] : []);
-  const diffArr = Array.isArray(data.diff) ? data.diff : (data.diff ? [data.diff] : []);
+  const penRoutingFinal = penicheRouting(data.peniches);
+  const fortsArr = [...(Array.isArray(data.forts) ? data.forts : (data.forts ? [data.forts] : [])), ...penRoutingFinal.forts];
+  const diffArr = [...(Array.isArray(data.diff) ? data.diff : (data.diff ? [data.diff] : [])), ...penRoutingFinal.diff];
   if (fortsArr.length || diffArr.length) {
     const pfdContent = [...fortsArr.map(t => '(+) ' + t), ...diffArr.map(t => '(-) ' + t)].join('\n');
     yc2 = drawBloc(col2Pos, yc2, colW2, 'Points forts & Difficult\u00e9s', pfdContent, cPfd.title, null, adaptLineH, cPfd.bg);
     yc2 += 3;
   }
 
-  if (data.remarque_libre) {
-    yc2 = drawBloc(col2Pos, yc2, colW2, 'Remarque libre', data.remarque_libre, cRemarque.title, null, adaptLineH, cRemarque.bg);
+  const remarqueFinal = [data.remarque_libre, ...penRoutingFinal.remarque].filter(Boolean).join('\n');
+  if (remarqueFinal) {
+    yc2 = drawBloc(col2Pos, yc2, colW2, 'Remarque libre', remarqueFinal, cRemarque.title, null, adaptLineH, cRemarque.bg);
     yc2 += 3;
   }
 
