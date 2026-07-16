@@ -769,7 +769,7 @@ function loadLogo() {
 }
 
 // ── VERSION APP ── (incrémenter à chaque mise à jour notable, pour déclencher l'invite de rechargement)
-const APP_VERSION = '2026.07.15-2';
+const APP_VERSION = '2026.07.16-1';
 
 // Token pour la route /store-bilan du Worker (persistance D1, doit correspondre à STORE_SECRET dans worker.js)
 const STORE_SECRET = 'OC-bilan-store-2026';
@@ -3374,33 +3374,125 @@ async function generatePDF(data, humeurSliderImg) {
     const actTotalH2 = footerY - actY;
     const actBodyH2 = actTotalH2 - actHeaderH;
 
-    // Dessiner le cadre actions maintenant qu'actY est définitif
-    doc.setFillColor(204, 23, 25);
-    doc.rect(col1, actY, contentRight - col1, actHeaderH, 'F');
-    doc.setTextColor(255,255,255); doc.setFont('helvetica','bold'); doc.setFontSize(6.5);
-    doc.text('ACTIONS ATTENDUES \u2014 PROCHAIN PASSAGE', col1+3, actY+5);
-    doc.setFillColor(255,255,255);
-    doc.rect(col1, actY+actHeaderH, contentRight-col1, actBodyH2, 'F');
-    doc.setDrawColor(204,23,25); doc.setLineWidth(0.5);
-    doc.rect(col1, actY, contentRight-col1, actTotalH2, 'S');
-    doc.setLineWidth(0.2);
-
-    // Rendu avec la config choisie
-    const effCols = Math.min(chosen.cols, data.actions.length);
-    const aColW = actionColWidth(effCols);
-    const columns = splitActionsIntoCols(data.actions, effCols);
-
-    columns.forEach((colActs, ci) => {
-      let ax = col1+4 + ci*(aColW+8);
-      let ay = actY+actHeaderH+4;
-      colActs.forEach(a => {
-        const h = calcActionH(a, aColW, chosen.fszT, chosen.fszC, chosen.lhC);
-        // Ne pas dessiner si on dépasse la zone (footer - 2mm de marge)
-        if (ay + h > footerY - 2) return;
-        drawAction(a, ax, ay, aColW, chosen.fszT, chosen.fszC, chosen.lhC);
-        ay += h + chosen.gap;
+    // Détection de débordement : même avec la config choisie (la plus compacte
+    // possible), est-ce que TOUTES les actions rentrent réellement dans la
+    // zone disponible ? Si non, on ne les dessine plus en silence à moitié —
+    // on bascule l'intégralité du bloc Actions sur une page 2 dédiée, avec
+    // une mise en page large qui garantit qu'elles sont toutes visibles.
+    let actionsOverflow = false;
+    {
+      const effCols_t = Math.min(chosen.cols, data.actions.length);
+      const aColW_t = actionColWidth(effCols_t);
+      const cols_t = splitActionsIntoCols(data.actions, effCols_t);
+      cols_t.forEach(colActs => {
+        let ayT = actY + actHeaderH + 4;
+        colActs.forEach(a => {
+          const h = calcActionH(a, aColW_t, chosen.fszT, chosen.fszC, chosen.lhC);
+          if (ayT + h > footerY - 2) actionsOverflow = true;
+          ayT += h + chosen.gap;
+        });
       });
-    });
+    }
+
+    if (actionsOverflow) {
+      // Page 1 : cadre avec renvoi explicite (jamais de contenu tronqué en silence)
+      doc.setFillColor(204, 23, 25);
+      doc.rect(col1, actY, contentRight - col1, actHeaderH, 'F');
+      doc.setTextColor(255,255,255); doc.setFont('helvetica','bold'); doc.setFontSize(6.5);
+      doc.text('ACTIONS ATTENDUES \u2014 PROCHAIN PASSAGE', col1+3, actY+5);
+      doc.setFillColor(255,255,255);
+      doc.rect(col1, actY+actHeaderH, contentRight-col1, actBodyH2, 'F');
+      doc.setDrawColor(204,23,25); doc.setLineWidth(0.5);
+      doc.rect(col1, actY, contentRight-col1, actTotalH2, 'S');
+      doc.setLineWidth(0.2);
+      doc.setTextColor(204,23,25); doc.setFont('helvetica','bolditalic'); doc.setFontSize(7);
+      doc.text('\u2192 Voir page 2 (pas assez de place sur cette page)', col1+4, actY+actHeaderH+8);
+
+      // Page 2 : rendu généreux (aucune contrainte de place restante)
+      doc.addPage();
+      doc.setFillColor(204, 23, 25);
+      doc.rect(0, 0, W, 14, 'F');
+      doc.setTextColor(255,255,255); doc.setFont('helvetica','bold'); doc.setFontSize(11);
+      doc.text(`ACTIONS ATTENDUES \u2014 ${pdfSafe(mag.libelle)} \u2014 Passage n°${data.passage || '?'}`, mar, 9.5);
+      const p2ActY = 20, p2FooterY = H - 9;
+      const p2HeaderH = 8;
+      doc.setFillColor(204, 23, 25);
+      doc.rect(mar, p2ActY, W - 2*mar, p2HeaderH, 'F');
+      doc.setTextColor(255,255,255); doc.setFont('helvetica','bold'); doc.setFontSize(7);
+      doc.text('PROCHAIN PASSAGE', mar+3, p2ActY+5.5);
+      doc.setFillColor(255,255,255);
+      doc.rect(mar, p2ActY+p2HeaderH, W - 2*mar, p2FooterY - (p2ActY+p2HeaderH), 'F');
+      doc.setDrawColor(204,23,25); doc.setLineWidth(0.5);
+      doc.rect(mar, p2ActY, W - 2*mar, p2FooterY - p2ActY, 'S');
+      doc.setLineWidth(0.2);
+
+      // Config large : on repart des configs les plus confortables, la page entière est disponible
+      const p2AvailH = (p2FooterY - 2) - (p2ActY + p2HeaderH + 4);
+      const p2Configs = [
+        {cols:3, fszT:10, fszC:8, lhC:4.5, gap:6},
+        {cols:3, fszT:9,  fszC:7, lhC:4,   gap:5},
+        {cols:2, fszT:9,  fszC:7, lhC:4,   gap:5},
+        {cols:1, fszT:9,  fszC:7, lhC:4,   gap:4},
+        {cols:1, fszT:7.5,fszC:6, lhC:3.2, gap:3},
+      ];
+      let p2Chosen = p2Configs[p2Configs.length - 1];
+      for (const cfg of p2Configs) {
+        const effCols = Math.min(cfg.cols, data.actions.length);
+        const colW_p2 = (W - 2*mar - 8*(effCols-1)) / effCols;
+        const cols_p2 = splitActionsIntoCols(data.actions, effCols);
+        let fits = true;
+        cols_p2.forEach(colActs => {
+          let totalH = 0;
+          colActs.forEach(a => { totalH += calcActionH(a, colW_p2, cfg.fszT, cfg.fszC, cfg.lhC) + cfg.gap; });
+          if (totalH > p2AvailH) fits = false;
+        });
+        if (fits) { p2Chosen = cfg; break; }
+      }
+      const effCols_p2 = Math.min(p2Chosen.cols, data.actions.length);
+      const colW_p2 = (W - 2*mar - 8*(effCols_p2-1)) / effCols_p2;
+      const columns_p2 = splitActionsIntoCols(data.actions, effCols_p2);
+      columns_p2.forEach((colActs, ci) => {
+        let ax = mar+4 + ci*(colW_p2+8);
+        let ay = p2ActY+p2HeaderH+6;
+        colActs.forEach(a => {
+          const h = calcActionH(a, colW_p2, p2Chosen.fszT, p2Chosen.fszC, p2Chosen.lhC);
+          drawAction(a, ax, ay, colW_p2, p2Chosen.fszT, p2Chosen.fszC, p2Chosen.lhC);
+          ay += h + p2Chosen.gap;
+        });
+      });
+      doc.setFillColor(249,249,249);
+      doc.rect(0, H-7, W, 7, 'F');
+      doc.setDrawColor(220,220,220);
+      doc.line(0, H-7, W, H-7);
+      doc.setTextColor(150,150,150); doc.setFont('helvetica','normal'); doc.setFontSize(6.5);
+      doc.text('Optical Center — Document confidentiel', mar, H-3);
+      doc.text('Page 2/2 — Actions attendues', W/2, H-3, {align:'center'});
+    } else {
+      // Cas nominal : tout rentre sur la page 1 avec la config choisie
+      doc.setFillColor(204, 23, 25);
+      doc.rect(col1, actY, contentRight - col1, actHeaderH, 'F');
+      doc.setTextColor(255,255,255); doc.setFont('helvetica','bold'); doc.setFontSize(6.5);
+      doc.text('ACTIONS ATTENDUES \u2014 PROCHAIN PASSAGE', col1+3, actY+5);
+      doc.setFillColor(255,255,255);
+      doc.rect(col1, actY+actHeaderH, contentRight-col1, actBodyH2, 'F');
+      doc.setDrawColor(204,23,25); doc.setLineWidth(0.5);
+      doc.rect(col1, actY, contentRight-col1, actTotalH2, 'S');
+      doc.setLineWidth(0.2);
+
+      const effCols = Math.min(chosen.cols, data.actions.length);
+      const aColW = actionColWidth(effCols);
+      const columns = splitActionsIntoCols(data.actions, effCols);
+
+      columns.forEach((colActs, ci) => {
+        let ax = col1+4 + ci*(aColW+8);
+        let ay = actY+actHeaderH+4;
+        colActs.forEach(a => {
+          const h = calcActionH(a, aColW, chosen.fszT, chosen.fszC, chosen.lhC);
+          drawAction(a, ax, ay, aColW, chosen.fszT, chosen.fszC, chosen.lhC);
+          ay += h + chosen.gap;
+        });
+      });
+    }
   } else {
     // Cas sans actions : dessiner le cadre maintenant
     doc.setFillColor(204, 23, 25);
