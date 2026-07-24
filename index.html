@@ -245,6 +245,7 @@ input[type=date]{color-scheme:dark}
       <span class="magasin-card-title" id="card-title">Infos magasin</span>
       <span style="font-size:10px;color:var(--muted)">Modifiable localement</span>
     </div>
+    <div id="card-google-rating" style="font-size:12px;color:var(--muted);margin:2px 0 4px"></div>
     <div class="magasin-grid">
       <div class="magasin-field"><label>Manager</label><input type="text" id="fi-manager" placeholder="Nom du manager"></div>
       <div class="magasin-field"><label>Email magasin</label><input type="email" id="fi-email" placeholder="email@opticalcenter.fr"></div>
@@ -769,7 +770,7 @@ function loadLogo() {
 }
 
 // ── VERSION APP ── (incrémenter à chaque mise à jour notable, pour déclencher l'invite de rechargement)
-const APP_VERSION = '2026.07.16-1';
+const APP_VERSION = '2026.07.24-1';
 
 // Token pour la route /store-bilan du Worker (persistance D1, doit correspondre à STORE_SECRET dans worker.js)
 const STORE_SECRET = 'OC-bilan-store-2026';
@@ -1494,6 +1495,34 @@ async function loadMagasins() {
   populateARSelect();
   populateHistoryFilter();
   populateMyARSelect();
+  loadGoogleRatings(); // fire-and-forget : enrichit `magasins` avec note/avis Google déjà en cache côté Worker (D1), rafraîchis par un cron hebdo — jamais d'appel Google direct ici
+}
+
+// Récupère les notes/avis Google déjà mis en cache par le Worker (table D1 google_ratings,
+// alimentée par un cron hebdomadaire). Aucun appel à l'API Google ici : uniquement une
+// lecture D1 côté Worker, donc rapide et sans risque de bloquer/ralentir l'appli.
+async function loadGoogleRatings() {
+  const relay = params.relay || 'https://zimbra-relay.oli-baroukh.workers.dev';
+  try {
+    const r = await fetch(relay + '/google-ratings', { headers: { 'X-Store-Token': STORE_SECRET } });
+    if (!r.ok) return;
+    const data = await r.json();
+    if (data.ok && data.ratings) {
+      magasins.forEach(m => {
+        const g = data.ratings[m.code];
+        if (g && g.rating) { m.google_rating = g.rating; m.google_reviews = g.reviewsCount; }
+      });
+      if (currentMag) updateGoogleRatingDisplay(currentMag); // rafraîchit la fiche déjà ouverte, le cas échéant
+    }
+  } catch(e) { console.warn('Chargement notes Google:', e); }
+}
+
+function updateGoogleRatingDisplay(mag) {
+  const el = document.getElementById('card-google-rating');
+  if (!el) return;
+  el.textContent = (mag && mag.google_rating)
+    ? `★ ${Number(mag.google_rating).toFixed(1)} · ${mag.google_reviews || 0} avis Google`
+    : '';
 }
 
 async function reloadMagasins() {
@@ -1556,6 +1585,7 @@ function onMagChange() {
   document.getElementById('fi-eff-audio').value = currentMag.eff_audio || '';
   document.getElementById('fi-eff-theo').value = currentMag.eff_theo || '';
   document.getElementById('fi-eff-present').value = '';
+  updateGoogleRatingDisplay(currentMag);
   document.getElementById('magasin-card').classList.add('visible');
   document.getElementById('sec-passage').style.display = 'flex';
   document.getElementById('btn-start').style.display = 'block';
@@ -2905,7 +2935,9 @@ async function generatePDF(data, humeurSliderImg) {
   doc.text(mag.libelle, W - mar, 10, {align:'right'});
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(6);
-  doc.text(pdfSafe(`Manager : ${mag.manager || '—'} · AR : ${data.ar || '—'} · Durée : ${formatDuree(data.duree) || '—'}`), W - mar, 14, {align:'right'});
+  // Pas de caractère "★" ici : jsPDF/Helvetica standard ne rend que le latin-1, l'étoile ne s'afficherait pas.
+  const googleInfo = mag.google_rating ? ` · Note Google : ${Number(mag.google_rating).toFixed(1)}/5 (${mag.google_reviews || 0} avis)` : '';
+  doc.text(pdfSafe(`Manager : ${mag.manager || '—'} · AR : ${data.ar || '—'} · Durée : ${formatDuree(data.duree) || '—'}${googleInfo}`), W - mar, 14, {align:'right'});
 
   // Sous-header gris
   doc.setFillColor(245, 245, 245);
