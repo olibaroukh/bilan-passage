@@ -677,6 +677,7 @@ input[type=date]{color-scheme:dark}
 
     <div id="analyse-group-block" style="display:none">
       <div style="font-size:12px;color:var(--muted);margin-bottom:6px">État des magasins — du plus urgent au moins urgent :</div>
+      <input type="text" id="analyse-health-search" placeholder="🔎 Rechercher un magasin..." oninput="renderStoreHealthList()" style="width:100%;background:var(--bg4);border:1px solid var(--border);border-radius:8px;padding:9px 10px;font-size:13px;color:var(--text);font-family:'Barlow',sans-serif;margin-bottom:8px">
       <div id="analyse-health-list" style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px"></div>
 
       <div style="font-size:12px;color:var(--muted);margin-bottom:6px">Sélectionne les magasins à inclure dans l'analyse IA de tournée :</div>
@@ -786,7 +787,7 @@ function loadLogo() {
 }
 
 // ── VERSION APP ── (incrémenter à chaque mise à jour notable, pour déclencher l'invite de rechargement)
-const APP_VERSION = '2026.08.04-1';
+const APP_VERSION = '2026.08.04-2';
 
 // Token pour la route /store-bilan du Worker (persistance D1, doit correspondre à STORE_SECRET dans worker.js)
 const STORE_SECRET = 'OC-bilan-store-2026';
@@ -4061,6 +4062,11 @@ function escapeHtmlLocal(s) {
   return (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
+// Comparaison insensible à la casse/accents pour la recherche magasin (écran Tournée)
+function normalizeSearch(s) {
+  return (s || '').normalize('NFD').replace(new RegExp('[' + String.fromCharCode(0x0300) + '-' + String.fromCharCode(0x036f) + ']', 'g'), '').toLowerCase().trim();
+}
+
 async function loadStoreHealthList() {
   const container = document.getElementById('analyse-health-list');
   if (!container || !arSession) return;
@@ -4099,8 +4105,17 @@ function renderStoreHealthList() {
     container.innerHTML = '<div style="font-size:12px;color:var(--muted);text-align:center;padding:10px">Aucun magasin dans ton périmètre.</div>';
     return;
   }
+  const searchEl = document.getElementById('analyse-health-search');
+  const searchTerm = searchEl ? normalizeSearch(searchEl.value.trim()) : '';
+  const filtered = searchTerm
+    ? storeHealthList.filter(s => normalizeSearch(s.libelle).includes(searchTerm))
+    : storeHealthList;
+  if (!filtered.length) {
+    container.innerHTML = '<div style="font-size:12px;color:var(--muted);text-align:center;padding:10px">Aucun magasin ne correspond à la recherche.</div>';
+    return;
+  }
   const order = { rouge: 0, orange: 1, vert: 2 };
-  const sorted = storeHealthList.slice().sort((a, b) => order[storeHealthColor(a)] - order[storeHealthColor(b)]);
+  const sorted = filtered.slice().sort((a, b) => order[storeHealthColor(a)] - order[storeHealthColor(b)]);
   container.innerHTML = '';
   sorted.forEach(s => {
     const color = storeHealthColor(s);
