@@ -870,7 +870,7 @@ function loadLogo() {
 }
 
 // ── VERSION APP ── (incrémenter à chaque mise à jour notable, pour déclencher l'invite de rechargement)
-const APP_VERSION = '2026.08.05-2';
+const APP_VERSION = '2026.08.05-3';
 
 // Token pour la route /store-bilan du Worker (persistance D1, doit correspondre à STORE_SECRET dans worker.js)
 const STORE_SECRET = 'OC-bilan-store-2026';
@@ -4196,13 +4196,21 @@ function healthSubScores(s) {
 // tout pour ce magasin (jamais de bilan, jamais de PEDLV, pas d'avis Google...).
 function computeHealthScore(s) {
   const sub = healthSubScores(s);
-  let total = 0, possible = 0;
+  let total = 0, possible = 0, totalWeight = 0;
   Object.keys(POIDS_SANTE).forEach(key => {
+    totalWeight += POIDS_SANTE[key];
     if (sub[key] === null) return;
     total += sub[key] * POIDS_SANTE[key];
     possible += POIDS_SANTE[key];
   });
-  return possible > 0 ? Math.round(total / possible) : null;
+  // Un magasin quasi sans donnée (ex: jamais visité, donc ni effectif ni
+  // positionnement ni actions connues) ne doit pas ressortir avec un bon score
+  // sous prétexte que le peu de signaux disponibles (ex: seul l'avis Google)
+  // sont bons — ça contredirait l'idée d'urgence. En dessous de 50% du poids
+  // total couvert par de la vraie donnée, on affiche "pas de score" plutôt
+  // qu'un chiffre non représentatif.
+  if (possible < totalWeight * 0.5) return null;
+  return Math.round(total / possible);
 }
 
 function escapeHtmlLocal(s) {
