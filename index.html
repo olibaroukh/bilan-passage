@@ -787,7 +787,7 @@ function loadLogo() {
 }
 
 // ── VERSION APP ── (incrémenter à chaque mise à jour notable, pour déclencher l'invite de rechargement)
-const APP_VERSION = '2026.08.04-2';
+const APP_VERSION = '2026.08.05-1';
 
 // Token pour la route /store-bilan du Worker (persistance D1, doit correspondre à STORE_SECRET dans worker.js)
 const STORE_SECRET = 'OC-bilan-store-2026';
@@ -4173,11 +4173,21 @@ function openStoreHealthDetail(code) {
 
   if (s.pedlv && s.pedlv.total) {
     const badgeColor = s.pedlv.rouge > 0 ? 'var(--red)' : 'var(--green)';
+    // Delta vs la semaine précédente (table jamais purgée) : ▲ = plus de rouge
+    // qu'avant (dégradation), ▼ = moins de rouge (amélioration), = = stable.
+    // Pas d'affichage si le magasin n'avait pas de donnée la semaine dernière.
+    let trendHtml = '';
+    if (s.pedlvTrend && s.pedlvTrend.total) {
+      const diff = s.pedlv.rouge - s.pedlvTrend.rouge;
+      const arrow = diff > 0 ? '▲' : (diff < 0 ? '▼' : '=');
+      const trendColor = diff > 0 ? 'var(--red)' : (diff < 0 ? 'var(--green)' : 'var(--muted)');
+      trendHtml = ` <span style="color:${trendColor};font-weight:600">(${arrow} vs ${s.pedlvTrend.rouge}/${s.pedlvTrend.total} sem. dernière)</span>`;
+    }
     const indicRows = Object.entries(s.pedlv.indicateurs || {}).map(([key, v]) => {
       const dot = v.statut === 'vert' ? 'var(--green)' : (v.statut === 'orange' ? 'var(--orange)' : 'var(--red)');
       return `<div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted)"><span style="width:7px;height:7px;border-radius:50%;background:${dot};display:inline-block;flex-shrink:0"></span>${escapeHtmlLocal(PEDLV_LABELS[key] || key)}</div>`;
     }).join('');
-    parts.push(`<div><div style="font-size:11px;color:var(--muted);text-transform:uppercase;margin-bottom:6px">Indicateurs PEDLV — <span style="color:${badgeColor};font-weight:600">${s.pedlv.rouge}/${s.pedlv.total} dans le rouge</span></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:4px">${indicRows}</div></div>`);
+    parts.push(`<div><div style="font-size:11px;color:var(--muted);text-transform:uppercase;margin-bottom:6px">Indicateurs PEDLV — <span style="color:${badgeColor};font-weight:600">${s.pedlv.rouge}/${s.pedlv.total} dans le rouge</span>${trendHtml}</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:4px">${indicRows}</div></div>`);
   } else {
     parts.push(`<div style="font-size:12px;color:var(--muted)">Pas de données Pour être dans le vert cette période.</div>`);
   }
