@@ -791,7 +791,7 @@ function loadLogo() {
 }
 
 // ── VERSION APP ── (incrémenter à chaque mise à jour notable, pour déclencher l'invite de rechargement)
-const APP_VERSION = '2026.08.07-1';
+const APP_VERSION = '2026.08.07-4';
 
 // Token pour la route /store-bilan du Worker (persistance D1, doit correspondre à STORE_SECRET dans worker.js)
 const STORE_SECRET = 'OC-bilan-store-2026';
@@ -1012,9 +1012,19 @@ function propagatePreviousActions() {
   // Ajouter les actions "En cours" et "Non fait" en tête du nouveau bilan.
   // _repriseCount s'incrémente à chaque report — sert à distinguer une action qui
   // traîne depuis 3 passages d'une action reportée une seule fois (écran Analyse).
-  const toPropagate = previousActions.filter((_, i) =>
-    previousActionsStatus[i] === 'ongoing' || previousActionsStatus[i] === 'todo'
-  ).map(a => ({...a, _fromPrevious: true, _repriseCount: (a._repriseCount || 0) + 1}));
+  // _status conserve le choix fait ici (ongoing/todo) — utilisé côté score de
+  // santé pour la pénalité (voir healthSubScores dans le fichier santé) : une
+  // action neuve (jamais reprise) ne pénalise jamais la note, seules celles
+  // déjà reportées comptent, avec un poids différent selon en cours/non fait.
+  const toPropagate = previousActions
+    .map((a, i) => ({ action: a, status: previousActionsStatus[i] }))
+    .filter(({ status }) => status === 'ongoing' || status === 'todo')
+    .map(({ action, status }) => ({
+      ...action,
+      _fromPrevious: true,
+      _repriseCount: (action._repriseCount || 0) + 1,
+      _status: status,
+    }));
   actions = [...toPropagate, ...actions];
   renderActions();
 }
@@ -4078,15 +4088,26 @@ const POIDS_SANTE = { // @@POIDS_SANTE@@
 function healthSubScores(s) {
   const scores = {};
 
+  // Seules les actions déjà reportées d'un bilan précédent pénalisent la note —
+  // une action neuve issue du tout dernier passage ne compte pas encore (il y en
+  // aura toujours à chaque visite, ce n'est pas en soi un signal d'alerte).
+  // Pénalité fixe selon le statut choisi lors du report : 15 pts si "en cours",
+  // 25 pts si "non fait" (pas de cumul supplémentaire lié au nombre de reports).
   if (s.actionsNonSoldees && Array.isArray(s.actionsNonSoldees.items)) {
-    const penalty = s.actionsNonSoldees.items.reduce((acc, a) => acc + 15 + (a.repriseCount || 0) * 10, 0);
+    const penalty = s.actionsNonSoldees.items
+      .filter(a => a.fromPrevious)
+      .reduce((acc, a) => acc + (a.status === 'todo' ? 25 : 15), 0);
     scores.actions = Math.max(0, 100 - penalty);
   } else {
     scores.actions = null;
   }
 
+  // delta = effectif réel (opt+audio) - effectif théorique. On sanctionne le
+  // SUR-effectif (delta > 0, coûte en masse salariale), pas le sous-effectif
+  // (delta <= 0 reste à 100 — un manque de personnel n'est pas mis au débit
+  // du score, c'est souvent hors du contrôle direct du magasin).
   if (s.effectif && s.effectif.delta !== null && s.effectif.delta !== undefined) {
-    scores.effectif = s.effectif.delta >= 0 ? 100 : Math.max(0, 100 + s.effectif.delta * 25);
+    scores.effectif = s.effectif.delta <= 0 ? 100 : Math.max(0, 100 - s.effectif.delta * 25);
   } else {
     scores.effectif = null;
   }
@@ -4240,7 +4261,7 @@ function openStoreHealthDetail(code) {
   const score = computeHealthScore(s);
   if (score !== null) {
     const scoreColor = score >= 75 ? 'var(--green)' : (score >= 50 ? 'var(--orange)' : 'var(--red)');
-    parts.push(`<div style="display:flex;align-items:center;justify-content:space-between;background:var(--bg3);border-radius:8px;padding:10px 12px"><span style="font-size:11px;color:var(--muted);text-transform:uppercase">Score de santé</span><span style="font-size:18px;font-weight:700;color:${scoreColor}">${score}/100</span></div>`);
+    parts.push(`<div style="display:flex;align-items:center;justify-content:space-between;background:var(--bg3);border-radius:8px;padding:10px 12px"><span style="font-size:11px;color:var(--muted);text-transform:uppercase;display:flex;align-items:center;gap:5px">Score de santé <span onclick="event.stopPropagation();showHealthScoreInfo()" title="Comment est calculé ce score ?" style="display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;border-radius:50%;border:1px solid var(--muted);color:var(--muted);font-size:9px;font-style:italic;font-weight:700;cursor:pointer;line-height:1;flex-shrink:0">i</span></span><span style="font-size:18px;font-weight:700;color:${scoreColor}">${score}/100</span></div>`);
   }
 
   if (s.actionsNonSoldees && s.actionsNonSoldees.items.length) {
@@ -4473,6 +4494,17 @@ function showToastLong(msg) {
 <div id="mic-toast"></div>
 
 
+<!-- MODAL EXPLICATION SCORE DE SANTÉ -->
+<div class="modal-overlay" id="modal-health-info" onclick="closeHealthScoreInfo()">
+  <div class="modal-box" onclick="event.stopPropagation()" style="max-width:420px">
+    <div class="modal-title">ℹ️ Comment est calculé le score de santé ?</div>
+    <div id="health-info-body"></div>
+    <div class="modal-actions">
+      <button class="btn-primary" onclick="closeHealthScoreInfo()">Fermer</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL COEFFICIENTS SCORE DE SANTÉ -->
 <div class="modal-overlay" id="modal-health-config" onclick="hcmClose()">
   <div class="modal-box" onclick="event.stopPropagation()" style="max-width:420px">
@@ -4493,6 +4525,39 @@ const HCM_LABELS = {
   actions: 'Actions non soldées', effectif: 'Effectif', positionnement: 'Positionnement annuel',
   pedlv: 'PEDLV (indicateurs rouges)', avis: 'Avis Google', equipe: 'Niveau équipe',
 };
+
+// Texte du popup "i" (fiche magasin, écran Tournée) — expliquant le calcul du
+// score de santé. Les poids affichés sont lus en direct dans POIDS_SANTE, donc
+// restent à jour même après un réglage via ⚖️ et régénération du fichier.
+const HEALTH_SCORE_INFO_TEXT = "Le score (sur 100) est une moyenne pondérée de 6 indicateurs. Seuls ceux pour lesquels on a une vraie donnée comptent — jamais un 0 par défaut pour une donnée manquante. Si moins de la moitié du poids total est couverte par de la donnée réelle, aucun score n'est affiché plutôt qu'un chiffre trompeur.";
+const HEALTH_SCORE_INFO_ITEMS = {
+  actions: { label: 'Actions non soldées', text: 'Seules les actions déjà reportées d\'un bilan précédent pénalisent la note ; une action toute neuve du dernier passage ne compte pas encore. -15 pts si elle est « en cours », -25 pts si « non fait ».' },
+  effectif: { label: 'Effectif', text: 'Le sous-effectif n\'est pas pénalisé. Le sur-effectif fait perdre 25 pts par personne en trop par rapport au théorique.' },
+  positionnement: { label: 'Positionnement annuel', text: '% de réalisation de l\'objectif CA annuel, tel que saisi dans le dernier bilan.' },
+  pedlv: { label: 'PEDLV', text: 'proportion d\'indicateurs « Pour être dans le vert » dans le rouge. 0 indicateur rouge = 100, tous rouges = 0.' },
+  avis: { label: 'Avis Google', text: 'note Google ramenée sur 100 (note/5 × 100).' },
+  equipe: { label: 'Niveau équipe', text: 'moyenne des responsabilités notées dans Évaluation Équipe (objectif 8/10), ramenée sur 100.' },
+};
+
+function showHealthScoreInfo() {
+  const items = Object.keys(POIDS_SANTE).map(key => {
+    const info = HEALTH_SCORE_INFO_ITEMS[key];
+    if (!info) return '';
+    return `<li style="margin-bottom:8px"><strong style="color:var(--text)">${info.label}</strong> <span style="color:var(--muted)">(poids ${POIDS_SANTE[key]})</span> — ${info.text}</li>`;
+  }).join('');
+  document.getElementById('health-info-body').innerHTML =
+    `<p style="font-size:12px;color:var(--text);line-height:1.5;margin:0 0 12px">${HEALTH_SCORE_INFO_TEXT}</p>` +
+    `<ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.6;color:var(--text)">${items}</ul>`;
+  document.getElementById('modal-health-info').classList.add('open');
+}
+
+function closeHealthScoreInfo() {
+  document.getElementById('modal-health-info').classList.remove('open');
+}
+
+document.getElementById('modal-health-info').addEventListener('click', function(e) {
+  if (e.target === this) closeHealthScoreInfo();
+});
 
 function hcmRenderSliders(values) {
   const container = document.getElementById('hcm-sliders');
