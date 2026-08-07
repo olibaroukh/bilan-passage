@@ -791,7 +791,7 @@ function loadLogo() {
 }
 
 // ── VERSION APP ── (incrémenter à chaque mise à jour notable, pour déclencher l'invite de rechargement)
-const APP_VERSION = '2026.08.05-4';
+const APP_VERSION = '2026.08.07-1';
 
 // Token pour la route /store-bilan du Worker (persistance D1, doit correspondre à STORE_SECRET dans worker.js)
 const STORE_SECRET = 'OC-bilan-store-2026';
@@ -4069,7 +4069,7 @@ const HEALTH_COLOR_HEX = { vert: 'var(--green)', orange: 'var(--orange)', rouge:
 // Le retard de visite n'entre PAS dans ce score : il reste géré séparément
 // comme signal prioritaire absolu (voir storeHealthColor).
 const POIDS_SANTE = { // @@POIDS_SANTE@@
-  actions: 7, effectif: 3, positionnement: 5, pedlv: 8, avis: 4
+  actions: 7, effectif: 3, positionnement: 5, pedlv: 8, avis: 4, equipe: 6
 };
 
 // Chaque sous-score va de 0 (mauvais) à 100 (bon), ou null si la donnée est
@@ -4107,6 +4107,15 @@ function healthSubScores(s) {
     scores.avis = Math.max(0, Math.min(100, (Number(s.googleRating.rating) / 5) * 100));
   } else {
     scores.avis = null;
+  }
+
+  // Niveau équipe (Évaluation Équipe) — moyenne du magasin sur les responsabilités
+  // notées, échelle 0-10 (objectif 8/10). Même principe que les autres sous-scores :
+  // mappé linéairement sur 0-100, null si le magasin n'a encore aucun contrôle noté.
+  if (s.niveauEquipe !== null && s.niveauEquipe !== undefined) {
+    scores.equipe = Math.max(0, Math.min(100, (Number(s.niveauEquipe) / 10) * 100));
+  } else {
+    scores.equipe = null;
   }
 
   return scores;
@@ -4253,6 +4262,11 @@ function openStoreHealthDetail(code) {
   }
   if (s.googleRating && s.googleRating.rating) {
     statCards.push(`<div style="flex:1;min-width:100px;background:var(--bg3);border-radius:8px;padding:8px 10px"><div style="font-size:10px;color:var(--muted)">Avis Google</div><div style="font-size:14px;font-weight:600;color:var(--text)">${Number(s.googleRating.rating).toFixed(1)} (${s.googleRating.reviewsCount || 0})</div></div>`);
+  }
+  if (s.niveauEquipe !== null && s.niveauEquipe !== undefined) {
+    const objectif = s.objectifNiveauEquipe || 8;
+    const equipeColor = s.niveauEquipe >= objectif ? 'var(--green)' : (s.niveauEquipe >= objectif - 1 ? 'var(--orange)' : 'var(--red)');
+    statCards.push(`<div style="flex:1;min-width:100px;background:var(--bg3);border-radius:8px;padding:8px 10px"><div style="font-size:10px;color:var(--muted)">Niveau équipe</div><div style="font-size:14px;font-weight:600;color:${equipeColor}">${s.niveauEquipe.toFixed(1)}/10 <span style="font-size:10px;color:var(--muted);font-weight:400">(obj. ${objectif})</span></div></div>`);
   }
   parts.push(`<div style="display:flex;gap:8px;flex-wrap:wrap">${statCards.join('')}</div>`);
 
@@ -4474,10 +4488,10 @@ function showToastLong(msg) {
 </div>
 
 <script>
-const HCM_DEFAUT = { actions: 4, effectif: 3, positionnement: 3, pedlv: 4, avis: 2 };
+const HCM_DEFAUT = { actions: 4, effectif: 3, positionnement: 3, pedlv: 4, avis: 2, equipe: 6 };
 const HCM_LABELS = {
   actions: 'Actions non soldées', effectif: 'Effectif', positionnement: 'Positionnement annuel',
-  pedlv: 'PEDLV (indicateurs rouges)', avis: 'Avis Google',
+  pedlv: 'PEDLV (indicateurs rouges)', avis: 'Avis Google', equipe: 'Niveau équipe',
 };
 
 function hcmRenderSliders(values) {
@@ -4514,7 +4528,7 @@ function hcmExport() {
   const newPoids =
     'const POIDS_SANTE = { // @@POIDS_SANTE@@\n' +
     '  actions: ' + vals.actions + ', effectif: ' + vals.effectif + ', positionnement: ' + vals.positionnement +
-    ', pedlv: ' + vals.pedlv + ', avis: ' + vals.avis + '\n' +
+    ', pedlv: ' + vals.pedlv + ', avis: ' + vals.avis + ', equipe: ' + vals.equipe + '\n' +
     '};';
 
   // Lookbehind négatif : évite de matcher la ligne si elle est précédée d'un
