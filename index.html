@@ -791,7 +791,7 @@ function loadLogo() {
 }
 
 // ── VERSION APP ── (incrémenter à chaque mise à jour notable, pour déclencher l'invite de rechargement)
-const APP_VERSION = '2026.08.07-4';
+const APP_VERSION = '2026.08.08-1';
 
 // Token pour la route /store-bilan du Worker (persistance D1, doit correspondre à STORE_SECRET dans worker.js)
 const STORE_SECRET = 'OC-bilan-store-2026';
@@ -921,7 +921,12 @@ function toggleMicFab() {
 let magasins = [];
 let params = {};
 let currentMag = null;
-let currentAR = null;
+// Filtre AR de convenance, choisi sur l'écran d'accueil. S'applique en lecture
+// seule à l'affichage (Historique, Analyse, Tournée) pour limiter la liste de
+// 119 magasins à ceux de l'AR sélectionné — aucun lien avec la sécurité/session
+// AR (arSession) qui reste inchangée. Persisté en localStorage pour survivre
+// aux rechargements de la PWA.
+let currentAR = localStorage.getItem('bdp_home_ar_filter') || null;
 let actions = [];
 let fortsList = [];
 let diffList = [];
@@ -1588,6 +1593,23 @@ function getARList() {
   return ['Olivier (tout le réseau)', ...ars.filter(a => a !== 'Olivier')];
 }
 
+// Liste des magasins à afficher compte tenu du filtre AR de convenance choisi
+// sur l'écran d'accueil (currentAR). Renvoie tous les magasins si aucun AR
+// n'est sélectionné ou si "tout le réseau" est choisi.
+function getHomeARStores() {
+  if (!currentAR || currentAR.includes('tout le réseau')) return magasins;
+  return magasins.filter(m => m.animateur === currentAR);
+}
+
+// Propage le filtre AR de convenance vers les autres onglets déjà initialisés
+// (sans toucher à la sécurité/session AR de l'onglet Analyse).
+function applyHomeARFilterEverywhere() {
+  populateHistoryFilter();
+  if (document.getElementById('screen-history').classList.contains('active')) renderHistory();
+  if (document.getElementById('screen-analyse').classList.contains('active')) initAnalyseScreen();
+  renderStoreHealthList();
+}
+
 function populateARSelect() {
   const sel = document.getElementById('sel-ar');
   sel.innerHTML = '<option value="">Sélectionner un AR...</option>';
@@ -1597,12 +1619,19 @@ function populateARSelect() {
     opt.textContent = ar;
     sel.appendChild(opt);
   });
+  // Restaure le filtre AR de convenance choisi lors d'une session précédente.
+  if (currentAR && getARList().includes(currentAR)) {
+    sel.value = currentAR;
+    onARChange();
+  }
 }
 
 function onARChange() {
   const ar = document.getElementById('sel-ar').value;
   if (!ar) { document.getElementById('sec-magasin').style.display = 'none'; return; }
   currentAR = ar;
+  localStorage.setItem('bdp_home_ar_filter', ar);
+  applyHomeARFilterEverywhere();
   document.getElementById('sec-magasin').style.display = 'flex';
   const sel = document.getElementById('sel-mag');
   const list = ar.includes('tout le réseau') ? magasins : magasins.filter(m => m.animateur === ar);
@@ -3707,19 +3736,22 @@ function saveToHistory(data) {
 
 function populateHistoryFilter() {
   const sel = document.getElementById('hist-mag-filter');
+  const prev = sel.value;
   sel.innerHTML = '<option value="">Tous les magasins</option>';
-  magasins.forEach(m => {
+  getHomeARStores().slice().sort((a,b) => a.libelle.localeCompare(b.libelle)).forEach(m => {
     const opt = document.createElement('option');
     opt.value = m.code; opt.textContent = m.libelle;
     sel.appendChild(opt);
   });
+  // Conserve la sélection précédente si le magasin reste dans le périmètre filtré.
+  if ([...sel.options].some(o => o.value === prev)) sel.value = prev;
 }
 
 function renderHistory() {
   const filter = document.getElementById('hist-mag-filter').value;
   const list = document.getElementById('history-list');
   list.innerHTML = '';
-  const codes = filter ? [filter] : magasins.map(m => m.code);
+  const codes = filter ? [filter] : getHomeARStores().map(m => m.code);
   let total = 0;
 
   // Bouton "Tout supprimer"
@@ -4035,7 +4067,15 @@ function initAnalyseScreen() {
   document.getElementById('analyse-session-info').textContent = 'Connecté : ' + (arSession.ar === 'ALL' ? 'tout le réseau' : arSession.ar);
   document.getElementById('analyse-mode-comhebdo').style.display = arSession.ar === 'ALL' ? 'block' : 'none';
 
-  const stores = analyseMyStores();
+  // analyseMyStores() reste la vraie restriction de sécurité liée à la session
+  // AR (arSession) — inchangée. Le filtre AR de l'écran d'accueil (currentAR)
+  // ne fait que réduire l'affichage par confort, uniquement pour la session
+  // "ALL" (Olivier / tout le réseau) ; un AR connecté avec sa propre session
+  // continue de ne voir que ses magasins, filtre ou non.
+  let stores = analyseMyStores();
+  if (arSession.ar === 'ALL' && currentAR && !currentAR.includes('tout le réseau')) {
+    stores = stores.filter(m => m.animateur === currentAR);
+  }
 
   const sel = document.getElementById('analyse-mag-select');
   sel.innerHTML = '<option value="">Sélectionner un magasin...</option>';
@@ -4207,15 +4247,23 @@ function storeHealthColor(s) {
 function renderStoreHealthList() {
   const container = document.getElementById('analyse-health-list');
   if (!container) return;
-  if (!storeHealthList.length) {
+  // Filtre AR de convenance de l'écran d'accueil, appliqué uniquement en
+  // session "ALL" (Olivier) — un AR connecté avec sa propre session ne voit
+  // de toute façon que ses magasins via arSession, non affecté ici.
+  let baseList = storeHealthList;
+  if (arSession && arSession.ar === 'ALL' && currentAR && !currentAR.includes('tout le réseau')) {
+    const arCodes = new Set(magasins.filter(m => m.animateur === currentAR).map(m => m.code));
+    baseList = baseList.filter(s => arCodes.has(s.code));
+  }
+  if (!baseList.length) {
     container.innerHTML = '<div style="font-size:12px;color:var(--muted);text-align:center;padding:10px">Aucun magasin dans ton périmètre.</div>';
     return;
   }
   const searchEl = document.getElementById('analyse-health-search');
   const searchTerm = searchEl ? normalizeSearch(searchEl.value.trim()) : '';
   const filtered = searchTerm
-    ? storeHealthList.filter(s => normalizeSearch(s.libelle).includes(searchTerm))
-    : storeHealthList;
+    ? baseList.filter(s => normalizeSearch(s.libelle).includes(searchTerm))
+    : baseList;
   if (!filtered.length) {
     container.innerHTML = '<div style="font-size:12px;color:var(--muted);text-align:center;padding:10px">Aucun magasin ne correspond à la recherche.</div>';
     return;
