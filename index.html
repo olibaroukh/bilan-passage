@@ -791,7 +791,7 @@ function loadLogo() {
 }
 
 // ── VERSION APP ── (incrémenter à chaque mise à jour notable, pour déclencher l'invite de rechargement)
-const APP_VERSION = '2026.08.08-1';
+const APP_VERSION = '2026.08.13-1';
 
 // Token pour la route /store-bilan du Worker (persistance D1, doit correspondre à STORE_SECRET dans worker.js)
 const STORE_SECRET = 'OC-bilan-store-2026';
@@ -4119,7 +4119,7 @@ const HEALTH_COLOR_HEX = { vert: 'var(--green)', orange: 'var(--orange)', rouge:
 // Le retard de visite n'entre PAS dans ce score : il reste géré séparément
 // comme signal prioritaire absolu (voir storeHealthColor).
 const POIDS_SANTE = { // @@POIDS_SANTE@@
-  actions: 7, effectif: 3, positionnement: 5, pedlv: 8, avis: 4, equipe: 6
+  actions: 7, effectif: 3, positionnement: 5, pedlv: 8, avis: 4, equipe: 6, kaizen: 7
 };
 
 // Chaque sous-score va de 0 (mauvais) à 100 (bon), ou null si la donnée est
@@ -4177,6 +4177,16 @@ function healthSubScores(s) {
     scores.equipe = Math.max(0, Math.min(100, (Number(s.niveauEquipe) / 10) * 100));
   } else {
     scores.equipe = null;
+  }
+
+  // Kaizen : score du DERNIER mois clôturé (pas le mois en cours, qui peut être
+  // partiellement rempli et fausserait le score à la baisse en cours de mois).
+  // null tant qu'aucun mois n'a encore été clôturé pour ce magasin. Miroir exact
+  // du calcul server-side (healthSubScoresServer dans worker.js).
+  if (s.kaizenDernierScoreCloture !== null && s.kaizenDernierScoreCloture !== undefined && s.kaizenDernierScoreMax) {
+    scores.kaizen = Math.max(0, Math.min(100, (s.kaizenDernierScoreCloture / s.kaizenDernierScoreMax) * 100));
+  } else {
+    scores.kaizen = null;
   }
 
   return scores;
@@ -4568,10 +4578,10 @@ function showToastLong(msg) {
 </div>
 
 <script>
-const HCM_DEFAUT = { actions: 4, effectif: 3, positionnement: 3, pedlv: 4, avis: 2, equipe: 6 };
+const HCM_DEFAUT = { actions: 4, effectif: 3, positionnement: 3, pedlv: 4, avis: 2, equipe: 6, kaizen: 7 };
 const HCM_LABELS = {
   actions: 'Actions non soldées', effectif: 'Effectif', positionnement: 'Positionnement annuel',
-  pedlv: 'PEDLV (indicateurs rouges)', avis: 'Avis Google', equipe: 'Niveau équipe',
+  pedlv: 'PEDLV (indicateurs rouges)', avis: 'Avis Google', equipe: 'Niveau équipe', kaizen: 'Kaizen (audit 5S)',
 };
 
 // Texte du popup "i" (fiche magasin, écran Tournée) — expliquant le calcul du
@@ -4585,6 +4595,7 @@ const HEALTH_SCORE_INFO_ITEMS = {
   pedlv: { label: 'PEDLV', text: 'proportion d\'indicateurs « Pour être dans le vert » dans le rouge. 0 indicateur rouge = 100, tous rouges = 0.' },
   avis: { label: 'Avis Google', text: 'note Google ramenée sur 100 (note/5 × 100).' },
   equipe: { label: 'Niveau équipe', text: 'moyenne des responsabilités notées dans Évaluation Équipe (objectif 8/10), ramenée sur 100.' },
+  kaizen: { label: 'Kaizen (audit 5S)', text: 'score du dernier mois clôturé (sur 50 pts, audit 5S), ramené sur 100. Le mois en cours n\'est pas utilisé tant qu\'il n\'est pas clôturé, pour ne pas pénaliser un audit encore en cours de remplissage.' },
 };
 
 function showHealthScoreInfo() {
@@ -4641,7 +4652,7 @@ function hcmExport() {
   const newPoids =
     'const POIDS_SANTE = { // @@POIDS_SANTE@@\n' +
     '  actions: ' + vals.actions + ', effectif: ' + vals.effectif + ', positionnement: ' + vals.positionnement +
-    ', pedlv: ' + vals.pedlv + ', avis: ' + vals.avis + ', equipe: ' + vals.equipe + '\n' +
+    ', pedlv: ' + vals.pedlv + ', avis: ' + vals.avis + ', equipe: ' + vals.equipe + ', kaizen: ' + vals.kaizen + '\n' +
     '};';
 
   // Lookbehind négatif : évite de matcher la ligne si elle est précédée d'un
