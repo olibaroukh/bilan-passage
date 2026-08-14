@@ -791,7 +791,7 @@ function loadLogo() {
 }
 
 // ── VERSION APP ── (incrémenter à chaque mise à jour notable, pour déclencher l'invite de rechargement)
-const APP_VERSION = '2026.08.13-1';
+const APP_VERSION = '2026.08.13-3';
 
 // Token pour la route /store-bilan du Worker (persistance D1, doit correspondre à STORE_SECRET dans worker.js)
 const STORE_SECRET = 'OC-bilan-store-2026';
@@ -4288,6 +4288,7 @@ function renderStoreHealthList() {
     chips.push(s.lastVisitDate ? `${s.daysSinceVisit}j sans visite` : 'jamais visité');
     if (s.actionsNonSoldees && s.actionsNonSoldees.count) chips.push(`${s.actionsNonSoldees.count} action(s) non soldée(s)`);
     if (s.pedlv && s.pedlv.total) chips.push(`${s.pedlv.rouge}/${s.pedlv.total} indic. dans le rouge`);
+    if (s.kaizenScoreMois !== null && s.kaizenScoreMois !== undefined) chips.push(`Kaizen ${s.kaizenScoreMois}/50`);
     if (s.googleRating && s.googleRating.rating) chips.push(`★ ${Number(s.googleRating.rating).toFixed(1)} (${s.googleRating.reviewsCount || 0})`);
     const scoreColor = score === null ? 'var(--muted)' : (score >= 75 ? 'var(--green)' : (score >= 50 ? 'var(--orange)' : 'var(--red)'));
     const row = document.createElement('div');
@@ -4303,6 +4304,15 @@ function renderStoreHealthList() {
       <span style="color:var(--muted);font-size:16px">›</span>`;
     container.appendChild(row);
   });
+}
+
+// Formate 'YYYY-MM' en libellé court français, ex. "juil. 2026".
+const KZ_MOIS_COURT = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'];
+function kzMoisLabelCourt(moisStr) {
+  if (!moisStr) return '';
+  const [y, m] = moisStr.split('-');
+  const idx = parseInt(m, 10) - 1;
+  return (KZ_MOIS_COURT[idx] || m) + ' ' + y;
 }
 
 function openStoreHealthDetail(code) {
@@ -4368,6 +4378,45 @@ function openStoreHealthDetail(code) {
     parts.push(`<div><div style="font-size:11px;color:var(--muted);text-transform:uppercase;margin-bottom:6px">Indicateurs PEDLV — <span style="color:${badgeColor};font-weight:600">${s.pedlv.rouge}/${s.pedlv.total} dans le rouge</span>${trendHtml}</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:4px">${indicRows}</div></div>`);
   } else {
     parts.push(`<div style="font-size:12px;color:var(--muted)">Pas de données Pour être dans le vert cette période.</div>`);
+  }
+
+// Objectif Kaizen : 40/50 = vert, en dessous de 36 = rouge, entre les deux = orange.
+const KZ_OBJECTIF = 40, KZ_SEUIL_ROUGE = 36;
+function kzScoreColor(score) {
+  if (score === null || score === undefined) return 'var(--text)';
+  if (score >= KZ_OBJECTIF) return 'var(--green)';
+  if (score >= KZ_SEUIL_ROUGE) return 'var(--orange)';
+  return 'var(--red)';
+}
+
+  // Kaizen (audit 5S) — même traitement que PEDLV : mois en cours ET dernier
+  // mois clôturé affichés côte à côte, "pas de remontée" si le magasin n'a
+  // jamais eu d'audit Kaizen (non éligible ou pas encore commencé).
+  if ((s.kaizenScoreMois !== null && s.kaizenScoreMois !== undefined) || s.kaizenDernierMoisCloture) {
+    const moisEnCoursLabel = (s.kaizenScoreMois !== null && s.kaizenScoreMois !== undefined)
+      ? `${s.kaizenScoreMois}/50${s.kaizenClosedMois ? ' (clôturé)' : ' (en cours)'}`
+      : 'pas encore commencé';
+    const moisEnCoursColor = (s.kaizenScoreMois !== null && s.kaizenScoreMois !== undefined)
+      ? kzScoreColor(s.kaizenScoreMois) : 'var(--muted)';
+    const dernierLabel = s.kaizenDernierMoisCloture
+      ? `${s.kaizenDernierScoreCloture}/${s.kaizenDernierScoreMax} (${kzMoisLabelCourt(s.kaizenDernierMoisCloture)})`
+      : 'aucun mois clôturé';
+    const dernierColor = s.kaizenDernierMoisCloture
+      ? kzScoreColor(s.kaizenDernierScoreCloture) : 'var(--muted)';
+    parts.push(`<div><div style="font-size:11px;color:var(--muted);text-transform:uppercase;margin-bottom:6px">Kaizen (audit 5S)</div>
+      <div style="display:flex;gap:8px">
+        <div style="flex:1;min-width:100px;background:var(--bg3);border-radius:8px;padding:8px 10px">
+          <div style="font-size:10px;color:var(--muted)">Mois en cours</div>
+          <div style="font-size:14px;font-weight:600;color:${moisEnCoursColor}">${escapeHtmlLocal(moisEnCoursLabel)}</div>
+        </div>
+        <div style="flex:1;min-width:100px;background:var(--bg3);border-radius:8px;padding:8px 10px">
+          <div style="font-size:10px;color:var(--muted)">Dernier clôturé</div>
+          <div style="font-size:14px;font-weight:600;color:${dernierColor}">${escapeHtmlLocal(dernierLabel)}</div>
+        </div>
+      </div>
+    </div>`);
+  } else {
+    parts.push(`<div style="font-size:12px;color:var(--muted)">Pas de remontée Kaizen pour ce magasin.</div>`);
   }
 
   document.getElementById('shd-body').innerHTML = parts.join('');
