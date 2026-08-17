@@ -791,7 +791,7 @@ function loadLogo() {
 }
 
 // ── VERSION APP ── (incrémenter à chaque mise à jour notable, pour déclencher l'invite de rechargement)
-const APP_VERSION = '2026.08.13-3';
+const APP_VERSION = '2026.08.13-4';
 
 // Token pour la route /store-bilan du Worker (persistance D1, doit correspondre à STORE_SECRET dans worker.js)
 const STORE_SECRET = 'OC-bilan-store-2026';
@@ -3614,7 +3614,10 @@ async function generatePDF(data, humeurSliderImg) {
     doc.text('Aucune action renseignée pour ce passage', col1+4, actY+actHeaderH+8);
   }
 
-  // PHOTOS
+  // PHOTOS — toujours sur la page 1, même si les actions ont débordé sur la
+  // page 2 juste au-dessus (doc.addPage() a changé la page "courante" de
+  // jsPDF, il faut explicitement y revenir avant de dessiner la suite).
+  doc.setPage(1);
   const photoW = photoColW;
   let py = y;
   doc.setFillColor(249,249,249);
