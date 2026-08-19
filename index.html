@@ -794,7 +794,7 @@ function loadLogo() {
 }
 
 // ── VERSION APP ── (incrémenter à chaque mise à jour notable, pour déclencher l'invite de rechargement)
-const APP_VERSION = '2026.08.19-1';
+const APP_VERSION = '2026.08.19-2';
 
 // Token pour la route /store-bilan du Worker (persistance D1, doit correspondre à STORE_SECRET dans worker.js)
 const STORE_SECRET = 'OC-bilan-store-2026';
@@ -4133,7 +4133,7 @@ const HEALTH_COLOR_HEX = { vert: 'var(--green)', orange: 'var(--orange)', rouge:
 // Le retard de visite n'entre PAS dans ce score : il reste géré séparément
 // comme signal prioritaire absolu (voir storeHealthColor).
 const POIDS_SANTE = { // @@POIDS_SANTE@@
-  actions: 7, effectif: 3, positionnement: 5, pedlv: 8, avis: 4, equipe: 6, kaizen: 7, absenteisme: 4
+  actions: 7, effectif: 3, absenteisme: 4, positionnement: 5, pedlv: 8, avis: 4, equipe: 6, kaizen: 7
 };
 
 // Chaque sous-score va de 0 (mauvais) à 100 (bon), ou null si la donnée est
@@ -4664,11 +4664,10 @@ function showToastLong(msg) {
 </div>
 
 <script>
-const HCM_DEFAUT = { actions: 4, effectif: 3, positionnement: 3, pedlv: 4, avis: 2, equipe: 6, kaizen: 7, absenteisme: 4 };
+const HCM_DEFAUT = { actions: 4, effectif: 3, absenteisme: 4, positionnement: 3, pedlv: 4, avis: 2, equipe: 6, kaizen: 7 };
 const HCM_LABELS = {
-  actions: 'Actions non soldées', effectif: 'Effectif', positionnement: 'Positionnement annuel',
+  actions: 'Actions non soldées', effectif: 'Effectif', absenteisme: 'Absentéisme', positionnement: 'Positionnement annuel',
   pedlv: 'PEDLV (indicateurs rouges)', avis: 'Avis Google', equipe: 'Niveau équipe', kaizen: 'Kaizen (audit 5S)',
-  absenteisme: 'Absentéisme',
 };
 
 // Texte du popup "i" (fiche magasin, écran Tournée) — expliquant le calcul du
@@ -4677,13 +4676,13 @@ const HCM_LABELS = {
 const HEALTH_SCORE_INFO_TEXT = "Le score (sur 100) est une moyenne pondérée de 8 indicateurs. Seuls ceux pour lesquels on a une vraie donnée comptent — jamais un 0 par défaut pour une donnée manquante. Si moins de la moitié du poids total est couverte par de la donnée réelle, aucun score n'est affiché plutôt qu'un chiffre trompeur.";
 const HEALTH_SCORE_INFO_ITEMS = {
   actions: { label: 'Actions non soldées', text: 'Seules les actions déjà reportées d\'un bilan précédent pénalisent la note ; une action toute neuve du dernier passage ne compte pas encore. -15 pts si elle est « en cours », -25 pts si « non fait ».' },
-  effectif: { label: 'Effectif', text: 'Le sur-effectif fait perdre 25 pts par personne en trop par rapport au théorique. Le sous-effectif est aussi pénalisé depuis le 19/08, mais seulement s\'il est soutenu sur 3 mois consécutifs (donnée RH réelle, hors salariés en longue durée) — un manque ponctuel n\'est pas mis au débit du score.' },
+  effectif: { label: 'Effectif', text: 'Le sur-effectif fait perdre 25 pts par personne en trop par rapport au théorique. Le sous-effectif est aussi pénalisé s\'il est soutenu sur 3 mois consécutifs (donnée RH réelle, hors salariés en longue durée) — un manque ponctuel n\'est pas mis au débit du score.' },
+  absenteisme: { label: 'Absentéisme', text: 'taux mensuel = jours d\'absence groupe A (vraie absence, longue durée incluse) / jours ouvrés théoriques, par magasin. Note du mois = 100 - taux en %. Le sous-score est la moyenne des notes mensuelles sur tous les mois pour lesquels le magasin a des données RH.' },
   positionnement: { label: 'Positionnement annuel', text: '% de réalisation de l\'objectif CA annuel, tel que saisi dans le dernier bilan.' },
   pedlv: { label: 'PEDLV', text: 'proportion d\'indicateurs « Pour être dans le vert » dans le rouge. 0 indicateur rouge = 100, tous rouges = 0.' },
   avis: { label: 'Avis Google', text: 'note Google ramenée sur 100 (note/5 × 100).' },
   equipe: { label: 'Niveau équipe', text: 'moyenne des responsabilités notées dans Évaluation Équipe (objectif 8/10), ramenée sur 100.' },
   kaizen: { label: 'Kaizen (audit 5S)', text: 'score du dernier mois clôturé (sur 50 pts, audit 5S), ramené sur 100. Le mois en cours n\'est pas utilisé tant qu\'il n\'est pas clôturé, pour ne pas pénaliser un audit encore en cours de remplissage.' },
-  absenteisme: { label: 'Absentéisme', text: 'taux mensuel = jours d\'absence groupe A (vraie absence, longue durée incluse) / jours ouvrés théoriques, par magasin. Note du mois = 100 - taux en %. Le sous-score est la moyenne des notes mensuelles sur tous les mois pour lesquels le magasin a des données RH.' },
 };
 
 function showHealthScoreInfo() {
@@ -4739,9 +4738,9 @@ function hcmExport() {
 
   const newPoids =
     'const POIDS_SANTE = { // @@POIDS_SANTE@@\n' +
-    '  actions: ' + vals.actions + ', effectif: ' + vals.effectif + ', positionnement: ' + vals.positionnement +
-    ', pedlv: ' + vals.pedlv + ', avis: ' + vals.avis + ', equipe: ' + vals.equipe + ', kaizen: ' + vals.kaizen +
-    ', absenteisme: ' + vals.absenteisme + '\n' +
+    '  actions: ' + vals.actions + ', effectif: ' + vals.effectif + ', absenteisme: ' + vals.absenteisme +
+    ', positionnement: ' + vals.positionnement + ', pedlv: ' + vals.pedlv + ', avis: ' + vals.avis +
+    ', equipe: ' + vals.equipe + ', kaizen: ' + vals.kaizen + '\n' +
     '};';
 
   // Lookbehind négatif : évite de matcher la ligne si elle est précédée d'un
