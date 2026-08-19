@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Import RH — Bilan de Passage</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root{
+  --bg:#0D0D0D;--bg2:#1a1a1a;--bg3:#222;--bg4:#2a2a2a;
+  --red:#CC1719;--red2:rgba(204,23,25,0.15);--red3:rgba(204,23,25,0.3);
+  --text:#F0EDE6;--muted:#888;--border:rgba(255,255,255,0.08);
+  --green:#3fae5c;--green2:rgba(63,174,92,0.15);
+}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%;background:linear-gradient(160deg,#1A1210 0%,#0D0D0D 40%,#111010 70%,#0A0A0A 100%);background-attachment:fixed;color:var(--text);font-family:'Barlow',sans-serif;font-size:15px}
+.wrap{max-width:520px;margin:0 auto;padding:24px 16px 60px;display:flex;flex-direction:column;gap:16px}
+h1{font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:700;margin:0 0 2px;letter-spacing:.3px}
+.subtitle{font-size:12px;color:var(--muted);margin:0 0 8px}
+.card{background:rgba(20,16,16,0.85);border:1px solid var(--border);border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:10px}
+label{font-size:11px;color:var(--muted);font-weight:500;text-transform:uppercase;letter-spacing:.5px}
+input[type=password],input[type=text],input[type=month]{background:var(--bg4);border:1px solid var(--border);border-radius:8px;padding:11px 12px;font-size:14px;color:var(--text);font-family:'Barlow',sans-serif;width:100%}
+.btn-primary{background:var(--red);color:#fff;border:none;border-radius:10px;padding:14px;font-size:15px;font-weight:600;font-family:'Barlow',sans-serif;width:100%;cursor:pointer;letter-spacing:.3px}
+.btn-primary:disabled{opacity:.5;cursor:default}
+.btn-secondary{background:transparent;color:var(--text);border:1px solid var(--border);border-radius:10px;padding:11px;font-size:13px;font-weight:500;font-family:'Barlow',sans-serif;width:100%;cursor:pointer}
+.error{color:var(--red);font-size:12px}
+.dropzone{border:1.5px dashed var(--border);border-radius:10px;padding:20px 14px;text-align:center;font-size:13px;color:var(--muted);cursor:pointer;transition:border-color .15s,background .15s}
+.dropzone.over{border-color:var(--red);background:var(--red2)}
+.dropzone.filled{border-color:var(--green);background:var(--green2);color:var(--text)}
+.dropzone b{color:var(--text)}
+.dz-filename{font-size:12px;margin-top:4px;color:var(--text);word-break:break-all}
+.hint{font-size:11px;color:var(--muted);line-height:1.5}
+.result{font-size:12px;line-height:1.7;background:var(--bg4);border-radius:8px;padding:12px}
+.result .ok{color:var(--green)}
+.result .warn{color:var(--red)}
+.session-bar{display:flex;justify-content:space-between;align-items:center;font-size:11px;color:var(--muted)}
+.session-bar button{background:transparent;border:1px solid var(--border);color:var(--muted);border-radius:6px;padding:4px 8px;font-size:11px;font-family:'Barlow',sans-serif;cursor:pointer}
+#screen-login{display:none}
+#screen-main{display:none}
+.spinner{display:inline-block;width:13px;height:13px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite;vertical-align:-2px;margin-right:6px}
+@keyframes spin{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div>
+    <h1>Import RH mensuel</h1>
+    <p class="subtitle">Bilan de Passage — alimente le score de santé, l'effectif Bilan de Passage et Pour être dans le vert</p>
+  </div>
+
+  <div id="screen-login" class="card">
+    <div class="hint">Connexion avec ton identifiant Zimbra (même mécanisme que l'onglet Analyse de Bilan de Passage). Réservé à Olivier.</div>
+    <div><label>Identifiant Zimbra</label><input type="text" id="login-user" placeholder="prenom.nom@opticalcenter.fr" autocomplete="username"></div>
+    <div><label>Mot de passe Zimbra</label><input type="password" id="login-pass" placeholder="Mot de passe" autocomplete="current-password"></div>
+    <button class="btn-primary" id="login-btn" onclick="doLogin()">Se connecter</button>
+    <div id="login-error" class="error" style="display:none"></div>
+  </div>
+
+  <div id="screen-main" style="display:none;flex-direction:column;gap:16px">
+    <div class="session-bar">
+      <span id="session-info"></span>
+      <button onclick="logout()">Se déconnecter</button>
+    </div>
+
+    <div class="card">
+      <label>Mois concerné</label>
+      <input type="month" id="mois-input">
+      <div class="hint">Le mois des 2 exports (agenda validés + effectif). Un import remplace uniquement les données de ce mois — les mois précédents ne sont jamais écrasés.</div>
+    </div>
+
+    <div class="card">
+      <label>1. Rapport agenda validés (.xls)</label>
+      <div class="dropzone" id="dz-agenda" onclick="document.getElementById('file-agenda').click()">
+        📄 Cliquer ou déposer le fichier ici
+        <div class="dz-filename" id="dz-agenda-name"></div>
+      </div>
+      <input type="file" id="file-agenda" accept=".xls,.xlsx" style="display:none">
+    </div>
+
+    <div class="card">
+      <label>2. Export effectif / poste / genre (.xls)</label>
+      <div class="dropzone" id="dz-effectif" onclick="document.getElementById('file-effectif').click()">
+        📄 Cliquer ou déposer le fichier ici
+        <div class="dz-filename" id="dz-effectif-name"></div>
+      </div>
+      <input type="file" id="file-effectif" accept=".xls,.xlsx" style="display:none">
+    </div>
+
+    <button class="btn-primary" id="submit-btn" onclick="lancerImport()" disabled>Importer</button>
+
+    <div id="result" style="display:none"></div>
+  </div>
+</div>
+
+<script>
+const RELAY = 'https://zimbra-relay.oli-baroukh.workers.dev';
+const STORE_SECRET = 'OC-bilan-store-2026';
+const SESSION_KEY = 'rh_import_ar_session';
+
+let arSession = null;
+let fileAgenda = null;
+let fileEffectif = null;
+
+function loadSession() {
+  try {
+    const s = JSON.parse(localStorage.getItem(SESSION_KEY) || 'null');
+    if (s && s.exp > Date.now() && s.ar === 'ALL') { arSession = s; return s; }
+  } catch(e) {}
+  arSession = null;
+  localStorage.removeItem(SESSION_KEY);
+  return null;
+}
+
+function showScreen() {
+  if (loadSession()) {
+    document.getElementById('screen-login').style.display = 'none';
+    document.getElementById('screen-main').style.display = 'flex';
+    document.getElementById('session-info').textContent = 'Connecté — session valable jusqu\'à ' + new Date(arSession.exp).toLocaleTimeString('fr-FR', {hour:'2-digit', minute:'2-digit'});
+  } else {
+    document.getElementById('screen-login').style.display = 'flex';
+    document.getElementById('screen-main').style.display = 'none';
+  }
+}
+
+async function doLogin() {
+  const user = document.getElementById('login-user').value.trim();
+  const pass = document.getElementById('login-pass').value;
+  const errEl = document.getElementById('login-error');
+  errEl.style.display = 'none';
+  if (!user || !pass) { errEl.textContent = 'Identifiant et mot de passe requis'; errEl.style.display = 'block'; return; }
+  const btn = document.getElementById('login-btn');
+  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>Connexion...';
+  try {
+    const resp = await fetch(RELAY + '/ar-login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Store-Token': STORE_SECRET },
+      body: JSON.stringify({ zimbraUser: user, zimbraPass: pass })
+    });
+    const data = await resp.json();
+    if (!resp.ok || !data.ok) throw new Error(data.error || 'Connexion échouée');
+    if (data.ar !== 'ALL') throw new Error('Cette page est réservée à Olivier — identifiants valides mais non autorisés ici.');
+    const session = { token: data.sessionToken, ar: data.ar, exp: Date.now() + (data.expiresInMs || 12*60*60*1000) };
+    localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+    document.getElementById('login-pass').value = '';
+    showScreen();
+  } catch(e) {
+    errEl.textContent = e.message || String(e);
+    errEl.style.display = 'block';
+  } finally {
+    btn.disabled = false; btn.textContent = 'Se connecter';
+  }
+}
+
+function logout() {
+  localStorage.removeItem(SESSION_KEY);
+  arSession = null;
+  showScreen();
+}
+
+function defaultMois() {
+  // Par défaut, le mois calendaire précédent (l'export du 1er porte sur le mois qui vient de se terminer)
+  const d = new Date();
+  d.setMonth(d.getMonth() - 1);
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+}
+
+function setupDropzone(zoneId, inputId, onFile) {
+  const zone = document.getElementById(zoneId);
+  const input = document.getElementById(inputId);
+  input.addEventListener('change', () => { if (input.files[0]) onFile(input.files[0]); });
+  zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('over'); });
+  zone.addEventListener('dragleave', () => zone.classList.remove('over'));
+  zone.addEventListener('drop', e => {
+    e.preventDefault();
+    zone.classList.remove('over');
+    if (e.dataTransfer.files[0]) onFile(e.dataTransfer.files[0]);
+  });
+}
+
+function checkReady() {
+  document.getElementById('submit-btn').disabled = !(fileAgenda && fileEffectif && document.getElementById('mois-input').value);
+}
+
+function parseXlsFile(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      try {
+        const wb = XLSX.read(e.target.result, { type: 'array' });
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        const rows = XLSX.utils.sheet_to_json(ws, { defval: null });
+        resolve(rows);
+      } catch(err) { reject(err); }
+    };
+    reader.onerror = () => reject(new Error('Lecture du fichier échouée'));
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+function renderResult(html) {
+  const el = document.getElementById('result');
+  el.style.display = 'block';
+  el.innerHTML = html;
+}
+
+async function lancerImport() {
+  const mois = document.getElementById('mois-input').value;
+  if (!mois || !fileAgenda || !fileEffectif) return;
+  const btn = document.getElementById('submit-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>Import en cours...';
+  renderResult('<div class="result">Lecture des fichiers…</div>');
+
+  try {
+    const [rowsAgenda, rowsEffectif] = await Promise.all([
+      parseXlsFile(fileAgenda),
+      parseXlsFile(fileEffectif),
+    ]);
+
+    renderResult('<div class="result">Envoi de l\'agenda validés (' + rowsAgenda.length + ' lignes)…</div>');
+    const respAgenda = await fetch(RELAY + '/rh-import/agenda', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Store-Token': STORE_SECRET, 'X-AR-Session': arSession.token },
+      body: JSON.stringify({ mois, rows: rowsAgenda })
+    });
+    const dataAgenda = await respAgenda.json();
+    if (!respAgenda.ok || !dataAgenda.ok) throw new Error('Agenda validés : ' + (dataAgenda.error || respAgenda.status));
+
+    renderResult('<div class="result">Envoi de l\'effectif (' + rowsEffectif.length + ' lignes)…</div>');
+    const respEffectif = await fetch(RELAY + '/rh-import/effectif', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Store-Token': STORE_SECRET, 'X-AR-Session': arSession.token },
+      body: JSON.stringify({ mois, rows: rowsEffectif })
+    });
+    const dataEffectif = await respEffectif.json();
+    if (!respEffectif.ok || !dataEffectif.ok) throw new Error('Effectif : ' + (dataEffectif.error || respEffectif.status));
+
+    let html = '<div class="result">';
+    html += '<div class="ok">✓ Agenda validés — ' + dataAgenda.nbSalaries + ' salariés, ' + dataAgenda.nbLongueDuree + ' en absence longue durée</div>';
+    html += '<div class="ok">✓ Effectif — ' + dataEffectif.nbSalaries + ' salariés' + (dataEffectif.nbSansSite ? ', ' + dataEffectif.nbSansSite + ' sans site renseigné' : '') + '</div>';
+    if (dataEffectif.sitesNonReconnus && dataEffectif.sitesNonReconnus.length) {
+      html += '<div class="warn" style="margin-top:8px">⚠ Codes sites non reconnus dans magasins.csv (' + dataEffectif.sitesNonReconnus.length + ') :</div>';
+      html += '<div style="margin-top:2px">' + dataEffectif.sitesNonReconnus.map(s => (s.nom || '?') + ' (' + s.code + ')').join(', ') + '</div>';
+    }
+    html += '</div>';
+    renderResult(html);
+  } catch(e) {
+    renderResult('<div class="result warn">✗ ' + (e.message || String(e)) + '</div>');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Importer';
+    checkReady();
+  }
+}
+
+document.getElementById('mois-input').value = defaultMois();
+document.getElementById('mois-input').addEventListener('change', checkReady);
+
+setupDropzone('dz-agenda', 'file-agenda', file => {
+  fileAgenda = file;
+  document.getElementById('dz-agenda').classList.add('filled');
+  document.getElementById('dz-agenda-name').textContent = file.name;
+  checkReady();
+});
+setupDropzone('dz-effectif', 'file-effectif', file => {
+  fileEffectif = file;
+  document.getElementById('dz-effectif').classList.add('filled');
+  document.getElementById('dz-effectif-name').textContent = file.name;
+  checkReady();
+});
+
+showScreen();
+</script>
+</body>
+</html>
