@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>Import RH — Bilan de Passage</title>
+<title>Imports — Bilan de Passage</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -46,8 +46,8 @@ input[type=password],input[type=text],input[type=month]{background:var(--bg4);bo
 <body>
 <div class="wrap">
   <div>
-    <h1>Import RH mensuel</h1>
-    <p class="subtitle">Bilan de Passage — alimente le score de santé, l'effectif Bilan de Passage et Pour être dans le vert</p>
+    <h1>Imports Bilan de Passage</h1>
+    <p class="subtitle">RH mensuel + historique Kaizen (import ponctuel)</p>
   </div>
 
   <div id="screen-login" class="card">
@@ -67,7 +67,7 @@ input[type=password],input[type=text],input[type=month]{background:var(--bg4);bo
     <div class="card">
       <label>Mois concerné</label>
       <input type="month" id="mois-input">
-      <div class="hint">Le mois des 2 exports (agenda validés + effectif). Un import remplace uniquement les données de ce mois — les mois précédents ne sont jamais écrasés.</div>
+      <div class="hint">Import RH mensuel — le mois des 2 exports (agenda validés + effectif). Un import remplace uniquement les données de ce mois — les mois précédents ne sont jamais écrasés.</div>
     </div>
 
     <div class="card">
@@ -91,6 +91,20 @@ input[type=password],input[type=text],input[type=month]{background:var(--bg4);bo
     <button class="btn-primary" id="submit-btn" onclick="lancerImport()" disabled>Importer</button>
 
     <div id="result" style="display:none"></div>
+
+    <div style="height:8px"></div>
+    <div class="card">
+      <label>Historique Kaizen (import ponctuel)</label>
+      <div class="hint">Fichier Google Forms/Excel de l'historique 5S pré-app (colonnes : Horodateur, Date de l'audit, Mon prénom, Mon code site, Score). Sans détail par item — score global uniquement. N'écrase jamais un mois déjà présent en base (natif ou déjà importé) — seuls les mois absents sont ajoutés.</div>
+      <div class="dropzone" id="dz-kaizen" onclick="document.getElementById('file-kaizen').click()">
+        📄 Cliquer ou déposer le fichier ici
+        <div class="dz-filename" id="dz-kaizen-name"></div>
+      </div>
+      <input type="file" id="file-kaizen" accept=".xls,.xlsx" style="display:none">
+      <button class="btn-primary" id="submit-kaizen-btn" onclick="lancerImportKaizen()" disabled>Importer l'historique Kaizen</button>
+      <button class="btn-secondary" onclick="rollbackImportKaizen(event)">🗑️ Supprimer tout l'historique importé</button>
+      <div id="result-kaizen" style="display:none"></div>
+    </div>
   </div>
 </div>
 
@@ -268,6 +282,122 @@ setupDropzone('dz-effectif', 'file-effectif', file => {
   document.getElementById('dz-effectif').classList.add('filled');
   document.getElementById('dz-effectif-name').textContent = file.name;
   checkReady();
+});
+
+// ── Import historique Kaizen (ponctuel) ──
+let fileKaizen = null;
+
+function parseKaizenHistoriqueFile(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      try {
+        const wb = XLSX.read(e.target.result, { type: 'array', cellDates: true });
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        const rows = XLSX.utils.sheet_to_json(ws, { defval: null });
+        resolve(rows);
+      } catch(err) { reject(err); }
+    };
+    reader.onerror = () => reject(new Error('Lecture du fichier échouée'));
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+function excelDateToISO(d) {
+  if (!(d instanceof Date) || isNaN(d.getTime())) return null;
+  const y = d.getFullYear(), m = String(d.getMonth() + 1).padStart(2, '0'), day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function kaizenRowToEntry(row) {
+  const codeRaw = row['Mon code site'];
+  const prenom = row['Mon prénom :'] ?? row['Mon prénom'] ?? '';
+  const score = row['Score'];
+  // Priorité à "Date de l'audit" ; repli sur "Horodateur" si absente ou invalide
+  // (ex. dates mal saisies à la main dans l'ancien formulaire).
+  let dateAudit = excelDateToISO(row["Date de l'audit"]);
+  if (!dateAudit) dateAudit = excelDateToISO(row['Horodateur']);
+  return {
+    code: codeRaw === null || codeRaw === undefined ? '' : String(codeRaw).trim(),
+    dateAudit,
+    prenom: String(prenom || '').trim(),
+    score: score === null || score === undefined ? null : Number(score),
+  };
+}
+
+function renderResultKaizen(html) {
+  const el = document.getElementById('result-kaizen');
+  el.style.display = 'block';
+  el.innerHTML = html;
+}
+
+async function lancerImportKaizen() {
+  if (!fileKaizen) return;
+  const btn = document.getElementById('submit-kaizen-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>Import en cours...';
+  renderResultKaizen('<div class="result">Lecture du fichier…</div>');
+
+  try {
+    const rawRows = await parseKaizenHistoriqueFile(fileKaizen);
+    const entries = rawRows
+      .map(kaizenRowToEntry)
+      .filter(r => r.code || r.dateAudit || r.score !== null); // ignore lignes totalement vides
+
+    renderResultKaizen('<div class="result">Envoi de ' + entries.length + ' ligne(s)…</div>');
+    const resp = await fetch(RELAY + '/kaizen-import-historique', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Store-Token': STORE_SECRET, 'X-AR-Session': arSession.token },
+      body: JSON.stringify({ rows: entries })
+    });
+    const data = await resp.json();
+    if (!resp.ok || !data.ok) throw new Error(data.error || ('Erreur ' + resp.status));
+
+    let html = '<div class="result">';
+    html += '<div class="ok">✓ ' + data.inserted + ' audit(s) importé(s)</div>';
+    html += '<div>Lignes lues : ' + data.totalLignes + ' — importables : ' + data.importables + ' — après dédoublonnage (magasin+mois) : ' + data.dedupliques + '</div>';
+    if (data.skippedExisting) {
+      html += '<div style="margin-top:6px">⏭ ' + data.skippedExisting + ' mois déjà présents en base, non écrasés :</div>';
+      html += '<div style="margin-top:2px">' + data.skippedDetails.map(s => s.code + ' (' + s.mois + ')').join(', ') + '</div>';
+    }
+    if (data.rejected && data.rejected.length) {
+      html += '<div class="warn" style="margin-top:8px">⚠ ' + data.rejected.length + ' ligne(s) rejetée(s) :</div>';
+      html += '<div style="margin-top:2px">' + data.rejected.map(r => (r.code || '?') + ' — ' + r.raison).join('<br>') + '</div>';
+    }
+    html += '</div>';
+    renderResultKaizen(html);
+  } catch(e) {
+    renderResultKaizen('<div class="result warn">✗ ' + (e.message || String(e)) + '</div>');
+  } finally {
+    btn.disabled = false; btn.textContent = "Importer l'historique Kaizen";
+  }
+}
+
+async function rollbackImportKaizen(event) {
+  if (!confirm("Supprimer TOUT l'historique Kaizen précédemment importé (tous magasins, tous mois) ? Cette action ne touche que les lignes importées (jamais les audits saisis dans l'app) et est réversible uniquement en réimportant le fichier.")) return;
+  const btn = event.target;
+  btn.disabled = true;
+  renderResultKaizen('<div class="result">Suppression en cours…</div>');
+  try {
+    const resp = await fetch(RELAY + '/kaizen-import-historique-rollback', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Store-Token': STORE_SECRET, 'X-AR-Session': arSession.token },
+    });
+    const data = await resp.json();
+    if (!resp.ok || !data.ok) throw new Error(data.error || ('Erreur ' + resp.status));
+    renderResultKaizen('<div class="result ok">✓ ' + data.deleted + ' audit(s) importé(s) supprimé(s).</div>');
+  } catch(e) {
+    renderResultKaizen('<div class="result warn">✗ ' + (e.message || String(e)) + '</div>');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+setupDropzone('dz-kaizen', 'file-kaizen', file => {
+  fileKaizen = file;
+  document.getElementById('dz-kaizen').classList.add('filled');
+  document.getElementById('dz-kaizen-name').textContent = file.name;
+  document.getElementById('submit-kaizen-btn').disabled = false;
 });
 
 showScreen();
