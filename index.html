@@ -255,6 +255,7 @@ input[type=date]{color-scheme:dark}
       <div class="magasin-field"><label>Effectif présent</label><input type="number" inputmode="decimal" step="0.5" id="fi-eff-present" placeholder="0"></div>
     </div>
     <span class="magasin-note">Ces données sont pré-remplies depuis le référentiel. Modifie-les ici si elles ne sont pas à jour — la modification reste locale.</span>
+    <div id="card-eff-rh-hint" style="font-size:10px;color:var(--muted);margin-top:2px"></div>
   </div>
   <div class="select-section" id="sec-passage" style="display:none">
     <span class="select-label">Passage n°</span>
@@ -794,7 +795,7 @@ function loadLogo() {
 }
 
 // ── VERSION APP ── (incrémenter à chaque mise à jour notable, pour déclencher l'invite de rechargement)
-const APP_VERSION = '2026.08.19-2';
+const APP_VERSION = '2026.08.20-1';
 
 // Token pour la route /store-bilan du Worker (persistance D1, doit correspondre à STORE_SECRET dans worker.js)
 const STORE_SECRET = 'OC-bilan-store-2026';
@@ -1652,6 +1653,8 @@ function onARChange() {
 
 function onMagChange() {
   const code = document.getElementById('sel-mag').value;
+  const hintEl = document.getElementById('card-eff-rh-hint');
+  if (hintEl) hintEl.textContent = '';
   if (!code) { document.getElementById('magasin-card').classList.remove('visible'); return; }
   currentMag = magasins.find(m => m.code === code);
   if (!currentMag) return;
@@ -1667,6 +1670,45 @@ function onMagChange() {
   document.getElementById('sec-passage').style.display = 'flex';
   document.getElementById('btn-start').style.display = 'block';
   document.getElementById('f-renta-obj').value = (params.rentaTarget || '28') + '%';
+  applyRhEffectifPrefill(code);
+}
+
+// Effectif optique/audio : magasins.csv reste la source de repli (et la seule
+// source pour l'effectif théorique, jamais saisi par l'AR — voir doc RH du
+// 19/08), mais dès qu'un import RH mensuel existe pour ce magasin, on
+// pré-remplit avec l'effectif réel connu (plus frais qu'un CSV mis à jour au
+// gré d'Olivier). Jamais un champ verrouillé : l'AR peut toujours corriger
+// ensuite, et on n'écrase pas une valeur qu'il aurait déjà modifiée pendant
+// l'attente de la réponse.
+async function applyRhEffectifPrefill(code) {
+  const hintEl = document.getElementById('card-eff-rh-hint');
+  if (!code) return;
+  const relay = params.relay || 'https://zimbra-relay.oli-baroukh.workers.dev';
+  try {
+    const r = await fetch(relay + '/rh-effectif?magasin_code=' + encodeURIComponent(code), {
+      headers: { 'X-Store-Token': STORE_SECRET }
+    });
+    if (!r.ok) return;
+    const data = await r.json();
+    if (!currentMag || currentMag.code !== code) return; // l'AR a changé de magasin entre-temps
+    const rh = data && data.magasins && data.magasins[code];
+    if (!rh) return;
+    const optEl = document.getElementById('fi-eff-opt');
+    const audEl = document.getElementById('fi-eff-audio');
+    const optCsv = currentMag.eff_opt || '';
+    const audCsv = currentMag.eff_audio || '';
+    let applied = false;
+    if (optEl && String(optEl.value) === String(optCsv) && rh.eff_opt !== undefined) { optEl.value = rh.eff_opt; applied = true; }
+    if (audEl && String(audEl.value) === String(audCsv) && rh.eff_audio !== undefined) { audEl.value = rh.eff_audio; applied = true; }
+    if (applied && hintEl && data.mois) {
+      const moisLabels = ['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];
+      const [y, m] = data.mois.split('-');
+      hintEl.textContent = `Effectif opt./audio pré-rempli depuis l'import RH de ${moisLabels[parseInt(m, 10) - 1]} ${y} — modifiable ci-dessus.`;
+    }
+  } catch (e) {
+    // Pré-remplissage optionnel : en cas d'échec réseau, on garde silencieusement
+    // les valeurs déjà remplies depuis magasins.csv, sans bloquer ni alerter l'AR.
+  }
 }
 
 function resetSaisie() {
