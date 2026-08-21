@@ -795,7 +795,7 @@ function loadLogo() {
 }
 
 // ── VERSION APP ── (incrémenter à chaque mise à jour notable, pour déclencher l'invite de rechargement)
-const APP_VERSION = '2026.08.20-1';
+const APP_VERSION = '2026.08.21-1';
 
 // Token pour la route /store-bilan du Worker (persistance D1, doit correspondre à STORE_SECRET dans worker.js)
 const STORE_SECRET = 'OC-bilan-store-2026';
@@ -2272,7 +2272,16 @@ function dedupeActions(list) {
 function collectData() {
   return {
     magasin: currentMag,
-    ar: currentAR,
+    // ar : toujours l'animateur réellement rattaché au magasin sélectionné
+    // (magasins.csv), jamais le filtre de convenance de l'écran d'accueil
+    // (currentAR). Corrige un cas réel : si le filtre est sur "Olivier (tout
+    // le réseau)" au moment de la saisie (usage courant pour le Directeur
+    // Réseau), l'ancien code enregistrait ar="Olivier (tout le réseau)" —
+    // une valeur qui ne correspond à aucun animateur réel, donc le bilan
+    // n'apparaissait jamais dans la communication personnelle de l'AR du
+    // magasin concerné (22/08). currentAR reste utilisé tel quel comme repli
+    // si jamais le magasin n'a pas d'animateur renseigné.
+    ar: (currentMag && currentMag.animateur) || currentAR,
     passage: document.getElementById('sel-passage').value,
     date: document.getElementById('f-date').value,
     duree: document.getElementById('f-duree').value,
