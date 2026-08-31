@@ -41,6 +41,18 @@ input[type=password],input[type=text],input[type=month]{background:var(--bg4);bo
 #screen-main{display:none}
 .spinner{display:inline-block;width:13px;height:13px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite;vertical-align:-2px;margin-right:6px}
 @keyframes spin{to{transform:rotate(360deg)}}
+.label-row{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.info-btn{background:transparent;border:1px solid var(--border);color:var(--muted);border-radius:50%;width:20px;height:20px;min-width:20px;font-size:11px;font-family:'Barlow',sans-serif;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;line-height:1}
+.info-btn:hover{border-color:var(--red);color:var(--text)}
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:100;align-items:center;justify-content:center;padding:20px}
+.modal-overlay.open{display:flex}
+.modal-card{background:#161212;border:1px solid var(--border);border-radius:12px;padding:18px;max-width:440px;width:100%;max-height:80vh;overflow-y:auto;display:flex;flex-direction:column;gap:10px}
+.modal-card h3{font-family:'Barlow Condensed',sans-serif;color:var(--red);font-size:17px;font-weight:700;margin:0;letter-spacing:.3px}
+.modal-card .modal-sub{font-size:11px;color:var(--muted);margin:-6px 0 4px}
+.modal-card h4{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin:8px 0 2px}
+.modal-card ul{margin:0;padding-left:18px;font-size:13px;line-height:1.6}
+.modal-card ul.compact li{font-size:12.5px}
+.modal-close{align-self:flex-end;background:var(--red);color:#fff;border:none;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:600;font-family:'Barlow',sans-serif;cursor:pointer;margin-top:4px}
 </style>
 </head>
 <body>
@@ -71,7 +83,10 @@ input[type=password],input[type=text],input[type=month]{background:var(--bg4);bo
     </div>
 
     <div class="card">
-      <label>1. Rapport agenda validés (.xls)</label>
+      <div class="label-row">
+        <label>1. Rapport agenda validés (.xls)</label>
+        <button type="button" class="info-btn" onclick="openColsModal('agenda')" aria-label="Colonnes attendues">i</button>
+      </div>
       <div class="dropzone" id="dz-agenda" onclick="document.getElementById('file-agenda').click()">
         📄 Cliquer ou déposer le fichier ici
         <div class="dz-filename" id="dz-agenda-name"></div>
@@ -80,7 +95,10 @@ input[type=password],input[type=text],input[type=month]{background:var(--bg4);bo
     </div>
 
     <div class="card">
-      <label>2. Export effectif / poste / genre (.xls)</label>
+      <div class="label-row">
+        <label>2. Export effectif / poste / genre (.xls)</label>
+        <button type="button" class="info-btn" onclick="openColsModal('effectif')" aria-label="Colonnes attendues">i</button>
+      </div>
       <div class="dropzone" id="dz-effectif" onclick="document.getElementById('file-effectif').click()">
         📄 Cliquer ou déposer le fichier ici
         <div class="dz-filename" id="dz-effectif-name"></div>
@@ -94,8 +112,11 @@ input[type=password],input[type=text],input[type=month]{background:var(--bg4);bo
 
     <div style="height:8px"></div>
     <div class="card">
-      <label>Historique Kaizen (import ponctuel)</label>
-      <div class="hint">Fichier Google Forms/Excel de l'historique 5S pré-app (colonnes : Horodateur, Date de l'audit, Mon prénom, Mon code site, Score). Sans détail par item — score global uniquement. N'écrase jamais un mois déjà présent en base (natif ou déjà importé) — seuls les mois absents sont ajoutés.</div>
+      <div class="label-row">
+        <label>Historique Kaizen (import ponctuel)</label>
+        <button type="button" class="info-btn" onclick="openColsModal('kaizen')" aria-label="Colonnes attendues">i</button>
+      </div>
+      <div class="hint">Fichier Google Forms/Excel de l'historique 5S pré-app. Sans détail par item — score global uniquement. N'écrase jamais un mois déjà présent en base (natif ou déjà importé) — seuls les mois absents sont ajoutés.</div>
       <div class="dropzone" id="dz-kaizen" onclick="document.getElementById('file-kaizen').click()">
         📄 Cliquer ou déposer le fichier ici
         <div class="dz-filename" id="dz-kaizen-name"></div>
@@ -106,6 +127,10 @@ input[type=password],input[type=text],input[type=month]{background:var(--bg4);bo
       <div id="result-kaizen" style="display:none"></div>
     </div>
   </div>
+</div>
+
+<div class="modal-overlay" id="cols-modal-overlay" onclick="if(event.target===this) closeColsModal()">
+  <div class="modal-card" id="cols-modal-card"></div>
 </div>
 
 <script>
@@ -399,6 +424,53 @@ setupDropzone('dz-kaizen', 'file-kaizen', file => {
   document.getElementById('dz-kaizen-name').textContent = file.name;
   document.getElementById('submit-kaizen-btn').disabled = false;
 });
+
+// ── Rappel des colonnes attendues (modale) ──
+const COLS_INFO = {
+  agenda: {
+    title: 'Rapport agenda validés',
+    sub: 'Export du système de gestion des temps, ~70 colonnes par salarié. Colonne clé de jointure : Matricule.',
+    sections: [
+      { h: 'Dénominateur (jours ouvrés théoriques)', items: ['Jours calendaires', 'Repos hebdomadaire', 'Jours fériés', 'Jours de fermeture magasin'] },
+      { h: 'Groupe A — vraie absence (compte dans le taux)', items: ['Absence maladie (+ variante Alsace-Moselle)', 'Absence Accident Travail (+ variante Alsace-Moselle)', 'Absence non payée', 'Congés non payé', 'Congé maternité / paternité / parental', 'Naissance', 'Mariage / PACS'] },
+      { h: 'Groupe B — congés prévus (exclus du taux, gardés visibles)', items: ['Congés payés', 'Ancienneté', 'Performance', 'Repos anniversaire', 'Récupération', 'Jours fériés', 'Jours de fermeture magasin', 'Repos hebdomadaire', 'Repos temps partiel', 'Déduction entrée / sortie', 'Autres (décès, événement religieux, garde d\'enfants, journée école, temps partiel thérapeutique, congé supplémentaire naissance)'] },
+      { h: 'Autre colonne exploitée', items: ['Type contrat (CDI / CDD / alternance / intérim)'] },
+    ]
+  },
+  effectif: {
+    title: 'Export effectif / poste / genre',
+    sub: 'Fichier distinct de l\'agenda validés, colonnes attendues telles quelles :',
+    sections: [
+      { h: 'Colonnes', items: ['Matricule (clé de jointure avec l\'agenda validés)', 'Codes sites', 'Noms sites', 'Date d\'entrée', 'Date de départ (souvent vide — voir note)', 'Genre', 'Nom', 'Prénom', 'Poste'] },
+      { h: 'Notes', items: ['Codes sites : plusieurs codes séparés par une virgule si le salarié est multi-site (répartition 1/nombre de sites)', 'Poste : mappé en 2 catégories, "audio" (Audioprothésiste, Technicien audio) et "opticien" (Manager, Monteur, Opticien/vendeur, Optométriste/contactologue) — les postes siège (Formateur, Logistique, etc.) sont ignorés', 'Date de départ non exportée pour l\'instant côté RH — les départs sont déduits par comparaison d\'un mois à l\'autre'] },
+    ]
+  },
+  kaizen: {
+    title: 'Historique Kaizen (import ponctuel)',
+    sub: 'Fichier Google Forms/Excel de l\'historique 5S pré-app. Score global uniquement, pas de détail par item.',
+    sections: [
+      { h: 'Colonnes', items: ['Horodateur', 'Date de l\'audit (priorité sur Horodateur si les deux sont présentes)', 'Mon prénom', 'Mon code site', 'Score'] },
+    ]
+  }
+};
+
+function openColsModal(key) {
+  const info = COLS_INFO[key];
+  if (!info) return;
+  let html = '<h3>' + info.title + '</h3>';
+  html += '<div class="modal-sub">' + info.sub + '</div>';
+  info.sections.forEach(sec => {
+    html += '<h4>' + sec.h + '</h4>';
+    html += '<ul class="compact">' + sec.items.map(i => '<li>' + i + '</li>').join('') + '</ul>';
+  });
+  html += '<button type="button" class="modal-close" onclick="closeColsModal()">Fermer</button>';
+  document.getElementById('cols-modal-card').innerHTML = html;
+  document.getElementById('cols-modal-overlay').classList.add('open');
+}
+
+function closeColsModal() {
+  document.getElementById('cols-modal-overlay').classList.remove('open');
+}
 
 showScreen();
 </script>
