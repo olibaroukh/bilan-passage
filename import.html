@@ -431,10 +431,11 @@ const COLS_INFO = {
     title: 'Rapport agenda validés',
     sub: 'Export du système de gestion des temps, ~70 colonnes par salarié. Colonne clé de jointure : Matricule.',
     sections: [
-      { h: 'Dénominateur (jours ouvrés théoriques)', items: ['Jours calendaires', 'Repos hebdomadaire', 'Jours fériés', 'Jours de fermeture magasin'] },
+      { h: 'Dénominateur (jours ouvrés théoriques)', items: ['Jours calendaires du mois : calculé automatiquement par le Worker à partir du mois sélectionné — pas une colonne à chercher dans le fichier', 'Repos hebdomadaire (nom de colonne confirmé dans le Worker)', 'Férié (nom de colonne confirmé dans le Worker)', 'Jour de fermeture (nom de colonne confirmé dans le Worker)'] },
       { h: 'Groupe A — vraie absence (compte dans le taux)', items: ['Absence maladie (+ variante Alsace-Moselle)', 'Absence Accident Travail (+ variante Alsace-Moselle)', 'Absence non payée', 'Congés non payé', 'Congé maternité / paternité / parental', 'Naissance', 'Mariage / PACS'] },
       { h: 'Groupe B — congés prévus (exclus du taux, gardés visibles)', items: ['Congés payés', 'Ancienneté', 'Performance', 'Repos anniversaire', 'Récupération', 'Jours fériés', 'Jours de fermeture magasin', 'Repos hebdomadaire', 'Repos temps partiel', 'Déduction entrée / sortie', 'Autres (décès, événement religieux, garde d\'enfants, journée école, temps partiel thérapeutique, congé supplémentaire naissance)'] },
-      { h: 'Autre colonne exploitée', items: ['Type contrat (CDI / CDD / alternance / intérim)'] },
+      { h: 'Autre colonne exploitée', items: ['Type contrat (CDI / CDD / alternance / intérim, nom de colonne confirmé dans le Worker)'] },
+      { h: 'Note', items: ['Les intitulés exacts des colonnes du groupe A/B ci-dessus reprennent la logique métier validée avec Olivier — le nom précis de chaque colonne dans le fichier n\'a pas été revérifié caractère pour caractère dans le code depuis'] },
     ]
   },
   effectif: {
@@ -442,7 +443,7 @@ const COLS_INFO = {
     sub: 'Fichier distinct de l\'agenda validés, colonnes attendues telles quelles :',
     sections: [
       { h: 'Colonnes', items: ['Matricule (clé de jointure avec l\'agenda validés)', 'Codes sites', 'Noms sites', 'Date d\'entrée', 'Date de départ (souvent vide — voir note)', 'Genre', 'Nom', 'Prénom', 'Poste'] },
-      { h: 'Notes', items: ['Codes sites : plusieurs codes séparés par une virgule si le salarié est multi-site (répartition 1/nombre de sites)', 'Poste : mappé en 2 catégories, "audio" (Audioprothésiste, Technicien audio) et "opticien" (Manager, Monteur, Opticien/vendeur, Optométriste/contactologue) — les postes siège (Formateur, Logistique, etc.) sont ignorés', 'Date de départ non exportée pour l\'instant côté RH — les départs sont déduits par comparaison d\'un mois à l\'autre'] },
+      { h: 'Notes', items: ['Codes sites : une seule ligne par salarié — si multi-site, les codes sont dans la même cellule séparés par une virgule (ex. "001020, 001030"), pareil pour "Noms sites". Confirmé dans le code du Worker (rh-import/effectif, split(\',\'))', 'Poste : mappé en 2 catégories, "audio" (Audioprothésiste, Technicien audio) et "opticien" (Manager, Monteur, Opticien/vendeur, Optométriste/contactologue) — les postes siège (Formateur, Logistique, etc.) sont ignorés', 'Date de départ non exportée pour l\'instant côté RH — les départs sont déduits par comparaison d\'un mois à l\'autre'] },
     ]
   },
   kaizen: {
