@@ -142,6 +142,15 @@
   .modal-box h3 { margin: 0 0 12px; font-size: 15px; }
   .modal-close { float: right; background: none; border: none; font-size: 18px; cursor: pointer; color: var(--gray); }
 
+  .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  @media (max-width: 480px) {
+    main { padding: 14px 10px 50px; }
+    header.topbar { padding: 12px 14px; }
+    header.topbar h1 { font-size: 15px; }
+    .detail-header h2 { font-size: 18px; }
+    .card, .kpi-card, .chart-box { padding: 12px; }
+  }
+
   .loading { text-align: center; padding: 40px; color: var(--gray); }
 </style>
 </head>
@@ -294,12 +303,14 @@ function renderNetworkView() {
     </div>
     <div class="kpi-row" id="kpi-row"></div>
     <div class="chart-box"><canvas id="network-chart" height="90"></canvas></div>
+    <div class="table-wrap">
     <table class="dash-table">
       <thead><tr>
         <th>Magasin</th><th>Animateur</th><th>Santé</th><th>Kaizen</th><th>Actions</th><th>Dernière visite</th>
       </tr></thead>
       <tbody id="table-body"></tbody>
     </table>
+    </div>
   `;
 
   renderKpis();
@@ -395,23 +406,43 @@ function renderDetailView(d) {
   const cumulHtml = d.kaizenCumulAnnuel !== null && d.kaizenCumulAnnuel !== undefined
     ? '<p style="font-size:12px;color:var(--gray);margin:10px 0 0">Cumul annuel : ' + d.kaizenCumulAnnuel + '/400</p>' : '';
 
-  const pedlvRows = (d.pedlvIndicateurs || []).map(i => `
+  const pedlvRows = (d.pedlvIndicateurs || []).map(i => {
+    const valeurAffichee = i.cle === 'tva' && i.valeur !== null && i.valeur !== undefined ? Math.round(i.valeur) : (i.valeur ?? '—');
+    return `
     <tr>
-      <td>${i.cle}</td>
-      <td style="text-align:right">${i.valeur ?? '—'}</td>
+      <td style="font-weight:600">${i.cle}</td>
+      <td style="text-align:right">${valeurAffichee}</td>
       <td style="text-align:right;color:var(--gray)">${i.objectif ?? '—'}</td>
       <td style="text-align:right"><span class="badge badge-${i.statut}">${i.statut}${i.semainesRouge ? ' · ' + i.semainesRouge + ' sem.' : ''}</span></td>
-    </tr>`).join('');
+    </tr>`;
+  }).join('');
 
-  const equipeRows = (d.equipeTaches || []).map(t => `
+  const equipeRows = (d.equipeTaches || []).map(t => {
+    let moyenneHtml = '—';
+    if (t.moyenne !== null && t.moyenne !== undefined) {
+      const color = t.moyenne >= 8 ? 'var(--green)' : (t.moyenne < 7 ? 'var(--red)' : 'var(--orange)');
+      moyenneHtml = '<span style="color:' + color + ';font-weight:700">' + t.moyenne + '</span>';
+    }
+    return `
     <tr>
       <td>${t.tache}</td>
       <td>${t.responsable || '<span style="color:var(--red)">non assigné</span>'}</td>
-      <td style="text-align:right">${t.moyenne !== null ? t.moyenne + '/10' : '—'}</td>
-    </tr>`).join('');
+      <td style="text-align:right">${moyenneHtml}</td>
+    </tr>`;
+  }).join('');
 
+  const eff = d.effectif || {};
+  const effRH = d.effectifRH || {};
+  let effHtml = 'Pas de donnée effectif RH';
+  if (eff.label && eff.label !== 'pas de données') {
+    let color = 'var(--gray)';
+    let bold = false;
+    if (effRH.soutenu) { color = 'var(--red)'; bold = true; }
+    else if (eff.delta !== null && eff.delta < 0) { color = 'var(--orange)'; bold = true; }
+    else if (eff.delta === 0) { color = 'var(--green)'; bold = true; }
+    effHtml = 'Écart vs théorique : <span style="color:' + color + (bold ? ';font-weight:700' : '') + '">' + eff.label + '</span>' + (effRH.soutenu ? ' <span style="color:var(--red);font-size:12px">(sous-effectif soutenu, 3 mois)</span>' : '');
+  }
   const managerLabel = d.manager ? (d.manager.prenom + ' ' + d.manager.nom) : '—';
-  const effectif = d.effectifRH || {};
 
   el.innerHTML = `
     <button class="back-btn" onclick="showNetworkView()">&larr; Retour au réseau</button>
@@ -422,7 +453,7 @@ function renderDetailView(d) {
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <span class="badge ${scoreClass(d.score)}">Score santé ${d.score !== null ? d.score : '—'}</span>
-        <span class="badge badge-neutre">${d.daysSinceVisit !== null ? d.daysSinceVisit + ' jours sans visite' : 'jamais visité'}</span>
+        <span class="badge badge-neutre">${d.daysSinceVisit !== null ? d.daysSinceVisit + ' jours sans visite (' + fmtDate(d.lastVisitDate) + ')' : 'jamais visité'}</span>
       </div>
     </div>
 
@@ -445,7 +476,7 @@ function renderDetailView(d) {
 
     <p class="section-label">Performance commerciale — Pedlv</p>
     <div class="card">
-      ${pedlvRows ? '<table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr><th style="text-align:left;color:var(--gray);font-weight:500;padding:4px 0">Indicateur</th><th style="text-align:right;color:var(--gray);font-weight:500;padding:4px 0">Valeur</th><th style="text-align:right;color:var(--gray);font-weight:500;padding:4px 0">Objectif</th><th></th></tr></thead><tbody>' + pedlvRows + '</tbody></table>' : '<p style="color:var(--gray);font-size:13px;margin:0">Pas de données Pedlv récentes.</p>'}
+      ${pedlvRows ? '<div class="table-wrap"><table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr><th style="text-align:left;font-weight:700;padding:4px 0">Indicateur</th><th style="text-align:right;font-weight:700;padding:4px 0">Valeur</th><th style="text-align:right;font-weight:700;padding:4px 0">Objectif</th><th></th></tr></thead><tbody>' + pedlvRows + '</tbody></table></div>' : '<p style="color:var(--gray);font-size:13px;margin:0">Pas de données Pedlv récentes.</p>'}
     </div>
 
     <p class="section-label">Équipe</p>
@@ -457,7 +488,7 @@ function renderDetailView(d) {
       <div class="card">
         <h4>Effectif</h4>
         <p style="font-size:13px;margin:0 0 6px">Manager : <b>${managerLabel}</b></p>
-        <p style="font-size:13px;margin:0 0 6px">${effectif.label ? 'Écart vs théorique : ' + effectif.label : 'Pas de donnée effectif RH'}</p>
+        <p style="font-size:13px;margin:0 0 6px">${effHtml}</p>
         <p style="font-size:13px;margin:0">${d.absenteisme && d.absenteisme.score !== null ? 'Absentéisme (note) : ' + d.absenteisme.score + '/100' : ''}</p>
       </div>
     </div>
