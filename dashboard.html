@@ -442,6 +442,13 @@ function renderDetailView(d) {
     else if (eff.delta === 0) { color = 'var(--green)'; bold = true; }
     effHtml = 'Écart vs théorique : <span style="color:' + color + (bold ? ';font-weight:700' : '') + '">' + eff.label + '</span>' + (effRH.soutenu ? ' <span style="color:var(--red);font-size:12px">(sous-effectif soutenu, 3 mois)</span>' : '');
   }
+  let moyenneEquipeHtml = '<p style="color:var(--gray);font-size:13px;margin:0 0 10px">Pas de donnée.</p>';
+  if (d.niveauEquipe !== null && d.niveauEquipe !== undefined) {
+    const nv = Number(d.niveauEquipe);
+    const color = nv >= 8 ? 'var(--green)' : (nv < 7 ? 'var(--red)' : 'var(--orange)');
+    moyenneEquipeHtml = '<p style="font-size:14px;margin:0 0 10px">Note moyenne équipe : <span style="color:' + color + ';font-weight:700">' + nv + '/10</span></p>';
+  }
+
   const managerLabel = d.manager ? (d.manager.prenom + ' ' + d.manager.nom) : '—';
 
   el.innerHTML = `
@@ -483,13 +490,14 @@ function renderDetailView(d) {
     <div class="two-col">
       <div class="card">
         <h4>Évaluation équipe</h4>
-        ${equipeRows ? '<table style="width:100%;border-collapse:collapse;font-size:13px"><tbody>' + equipeRows + '</tbody></table>' : '<p style="color:var(--gray);font-size:13px;margin:0">Pas de données.</p>'}
+        ${moyenneEquipeHtml}
+        ${equipeRows ? '<table style="width:100%;border-collapse:collapse;font-size:13px"><tbody>' + equipeRows + '</tbody></table>' : '<p style="color:var(--gray);font-size:13px;margin:0">Pas de détail par tâche.</p>'}
       </div>
       <div class="card">
         <h4>Effectif</h4>
         <p style="font-size:13px;margin:0 0 6px">Manager : <b>${managerLabel}</b></p>
         <p style="font-size:13px;margin:0 0 6px">${effHtml}</p>
-        <p style="font-size:13px;margin:0">${d.absenteisme && d.absenteisme.score !== null ? 'Absentéisme (note) : ' + d.absenteisme.score + '/100' : ''}</p>
+        <p style="font-size:13px;margin:0">${d.absenteisme && d.absenteisme.score !== null && d.absenteisme.score !== undefined ? 'Taux d\'absentéisme : ' + (Math.round((100 - d.absenteisme.score) * 10) / 10) + '%' : ''}</p>
       </div>
     </div>
   `;
