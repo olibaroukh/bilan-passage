@@ -500,6 +500,12 @@ function renderDetailView(d) {
         <p style="font-size:13px;margin:0">${d.absenteisme && d.absenteisme.score !== null && d.absenteisme.score !== undefined ? 'Taux d\'absentéisme : ' + (Math.round((100 - d.absenteisme.score) * 10) / 10) + '%' : ''}</p>
       </div>
     </div>
+
+    <p class="section-label">Conseils</p>
+    <div class="card">
+      <button id="advice-btn" onclick="generateAdvice('${d.magasin.code}')" style="background:var(--red);color:#fff;border:none;border-radius:6px;padding:9px 16px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer">Générer des conseils d'action</button>
+      <div id="advice-content" style="margin-top:12px;font-size:13px;line-height:1.6;white-space:pre-wrap"></div>
+    </div>
   `;
 
   renderSubGrid(d);
@@ -568,6 +574,30 @@ function openSubModal(key) {
 
 function closeModal() {
   document.getElementById('modal-overlay').style.display = 'none';
+}
+
+async function generateAdvice(code) {
+  const btn = document.getElementById('advice-btn');
+  const content = document.getElementById('advice-content');
+  btn.disabled = true;
+  btn.textContent = 'Génération en cours…';
+  content.textContent = '';
+  try {
+    const resp = await fetch(RELAY + '/store-advice', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify({ magasin_code: code }),
+    });
+    const data = await resp.json();
+    if (!resp.ok || !data.ok) throw new Error(data.error || 'Erreur de génération');
+    content.textContent = data.conseils;
+    btn.textContent = 'Régénérer';
+  } catch(e) {
+    content.textContent = 'Erreur : ' + e.message;
+    btn.textContent = 'Générer des conseils d\'action';
+  } finally {
+    btn.disabled = false;
+  }
 }
 
 // ---------------------------------------------------------------- Boot
