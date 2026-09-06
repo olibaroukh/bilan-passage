@@ -181,6 +181,7 @@
   <main>
     <div id="view-network"></div>
     <div id="view-detail" style="display:none"></div>
+    <div id="view-ar" style="display:none"></div>
   </main>
 </div>
 
@@ -299,11 +300,12 @@ function renderNetworkView() {
 
   el.innerHTML = `
     <div class="filters">
-      <select id="ar-filter" onchange="renderTable()">
+      <select id="ar-filter" onchange="renderTable(); toggleMyDashboardBtn()">
         <option value="">Tous les animateurs</option>
         ${ars.map(a => '<option value="' + a + '">' + a + '</option>').join('')}
       </select>
       <input type="text" id="search-input" placeholder="Rechercher un magasin" oninput="renderTable()">
+      <button id="my-dashboard-btn" style="display:none;background:var(--dark);color:#fff;border:none;border-radius:6px;padding:8px 14px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer" onclick="showArView(document.getElementById('ar-filter').value)">Mon dashboard</button>
     </div>
     <div class="kpi-row" id="kpi-row"></div>
     <div class="chart-box"><canvas id="network-chart" height="90"></canvas></div>
@@ -356,6 +358,11 @@ function renderNetworkChart() {
   });
 }
 
+function toggleMyDashboardBtn() {
+  const val = document.getElementById('ar-filter').value;
+  document.getElementById('my-dashboard-btn').style.display = val ? 'inline-block' : 'none';
+}
+
 function renderTable() {
   const arFilter = document.getElementById('ar-filter').value;
   const search = document.getElementById('search-input').value.trim().toLowerCase();
@@ -374,6 +381,138 @@ function renderTable() {
       <td style="color:var(--gray)">${r.daysSinceVisit !== null ? r.daysSinceVisit + ' j.' : 'jamais'}</td>
     </tr>
   `).join('');
+}
+
+// ---------------------------------------------------------------- Vue "Mon dashboard" (agrégé par AR)
+let lastArContext = null;
+
+async function showArView(arName) {
+  if (!arName) return;
+  lastArContext = arName;
+  document.getElementById('view-network').style.display = 'none';
+  document.getElementById('view-detail').style.display = 'none';
+  const el = document.getElementById('view-ar');
+  el.style.display = 'block';
+  el.innerHTML = '<div class="loading">Chargement…</div>';
+  try {
+    const resp = await fetch(RELAY + '/ar-dashboard?ar=' + encodeURIComponent(arName), { headers: authHeaders() });
+    const data = await resp.json();
+    if (!resp.ok || !data.ok) throw new Error(data.error || 'Erreur de chargement');
+    renderArView(data);
+  } catch(e) {
+    el.innerHTML = '<button class="back-btn" onclick="showNetworkView()">&larr; Retour</button><div class="loading">Erreur : ' + e.message + '</div>';
+  }
+}
+
+function renderArView(d) {
+  const el = document.getElementById('view-ar');
+
+  const actionsHtml = (d.actionsAgregees && d.actionsAgregees.length)
+    ? d.actionsAgregees.map(a => '<div class="item-row"><span>' + a.magasin + ' — ' + a.text + '</span><span style="color:var(--red)">' + (a.repriseCount + 1) + ' visites</span></div>').join('')
+    : '<p style="color:var(--gray);font-size:13px;margin:0">Aucune action non soldée.</p>';
+
+  const kaizenHtml = (d.kaizenAgreges && d.kaizenAgreges.length)
+    ? d.kaizenAgreges.map(k => '<div class="item-row"><span>' + k.magasin + ' — ' + k.label + (k.zoneNom ? ' (' + k.zoneNom + ')' : '') + '</span><span style="color:var(--red)">' + k.moisConsecutifs + ' mois</span></div>').join('')
+    : '<p style="color:var(--gray);font-size:13px;margin:0">Aucun point non résolu.</p>';
+
+  const storesRows = (d.results || []).slice().sort((a, b) => (a.score ?? 999) - (b.score ?? 999)).map(r => `
+    <tr class="row-clickable" onclick="showDetailView('${r.code}')">
+      <td>${r.libelle}</td>
+      <td><span class="badge ${scoreClass(r.score)}">${r.score !== null ? r.score : '—'}</span></td>
+      <td style="${r.actionsNonSoldees && r.actionsNonSoldees.count > 0 ? 'color:var(--red)' : 'color:var(--gray)'}">${r.actionsNonSoldees ? r.actionsNonSoldees.count : 0}</td>
+      <td style="color:var(--gray)">${r.daysSinceVisit !== null ? r.daysSinceVisit + ' j.' : 'jamais'}</td>
+    </tr>`).join('');
+
+  el.innerHTML = `
+    <button class="back-btn" onclick="showNetworkView()">&larr; Retour au réseau</button>
+    <div class="detail-header">
+      <div>
+        <h2>${d.ar}</h2>
+        <p class="sub">${d.nbMagasins} magasin${d.nbMagasins > 1 ? 's' : ''}</p>
+      </div>
+      <span class="badge ${scoreClass(d.scoreMoyen)}">Score moyen ${d.scoreMoyen !== null ? d.scoreMoyen : '—'}</span>
+    </div>
+
+    <div class="pos-row">
+      <div class="pos-chip">Positionnement annuel moyen <span class="v">${d.positionnementAnnuelMoyen !== null ? d.positionnementAnnuelMoyen + '%' : '—'}</span></div>
+      <div class="pos-chip">Objectif annuel total <span class="v">${d.objectifAnnuelTotal ? d.objectifAnnuelTotal + ' k€' : '—'}</span></div>
+      <div class="pos-chip">CA prévisionnel annuel total <span class="v">${d.caPrevisionnelTotal ? d.caPrevisionnelTotal + ' k€' : '—'}</span></div>
+    </div>
+
+    <p class="section-label">Vue d'ensemble (moyenne du périmètre)</p>
+    <div class="sub-grid" id="ar-sub-grid"></div>
+
+    <p class="section-label">Évolution du score moyen — historique</p>
+    <div class="chart-box"><canvas id="ar-chart" height="110"></canvas></div>
+
+    <p class="section-label">Terrain (tous magasins)</p>
+    <div class="two-col">
+      <div class="card"><h4>Actions non soldées (bilan de passage)</h4>${actionsHtml}</div>
+      <div class="card"><h4>Kaizen — points non résolus</h4>${kaizenHtml}</div>
+    </div>
+
+    <p class="section-label">Conseils</p>
+    <div class="card">
+      <button id="ar-advice-btn" onclick="generateArAdvice('${d.ar}')" style="background:var(--red);color:#fff;border:none;border-radius:6px;padding:9px 16px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer">Générer les priorités de la semaine</button>
+      <div id="ar-advice-content" style="margin-top:12px;font-size:13px;line-height:1.6;white-space:pre-wrap"></div>
+    </div>
+
+    <p class="section-label">Magasins du périmètre</p>
+    <div class="table-wrap">
+    <table class="dash-table">
+      <thead><tr><th>Magasin</th><th>Santé</th><th>Actions</th><th>Dernière visite</th></tr></thead>
+      <tbody>${storesRows}</tbody>
+    </table>
+    </div>
+  `;
+
+  const grid = document.getElementById('ar-sub-grid');
+  const sub = d.subScoresMoyens || {};
+  grid.innerHTML = Object.keys(SUB_LABELS).map(key => {
+    const val = sub[key];
+    return `<button class="sub-card" onclick="openSubModal('${key}')">
+      <p class="lbl">${SUB_LABELS[key]}</p>
+      <p class="val" style="color:${val === null || val === undefined ? '#999' : (val >= 80 ? 'var(--green)' : val >= 60 ? 'var(--orange)' : 'var(--red)')}">${val !== null && val !== undefined ? Math.round(val) : '—'}</p>
+    </button>`;
+  }).join('');
+
+  if (detailChart) { detailChart.destroy(); detailChart = null; }
+  const ctx = document.getElementById('ar-chart');
+  const history = d.history || [];
+  if (history.length) {
+    detailChart = new Chart(ctx, {
+      type: 'line',
+      data: { labels: history.map(h => fmtDate(h.periode)), datasets: [{ data: history.map(h => h.score), borderColor: '#CC1719', backgroundColor: 'rgba(204,23,25,0.08)', fill: true, tension: 0.3, pointRadius: 2, borderWidth: 2 }] },
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { min: 0, max: 100 }, x: { grid: { display: false } } } },
+    });
+  } else {
+    ctx.parentElement.innerHTML = '<p style="color:var(--gray);font-size:13px;margin:0">Pas encore assez d\'historique.</p>';
+  }
+  currentDetailHistory = history;
+}
+
+async function generateArAdvice(arName) {
+  const btn = document.getElementById('ar-advice-btn');
+  const content = document.getElementById('ar-advice-content');
+  btn.disabled = true;
+  btn.textContent = 'Génération en cours…';
+  content.textContent = '';
+  try {
+    const resp = await fetch(RELAY + '/ar-advice', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify({ ar: arName }),
+    });
+    const data = await resp.json();
+    if (!resp.ok || !data.ok) throw new Error(data.error || 'Erreur de génération');
+    content.textContent = data.conseils;
+    btn.textContent = 'Régénérer';
+  } catch(e) {
+    content.textContent = 'Erreur : ' + e.message;
+    btn.textContent = 'Générer les priorités de la semaine';
+  } finally {
+    btn.disabled = false;
+  }
 }
 
 // ---------------------------------------------------------------- Vue détail
