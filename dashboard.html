@@ -424,6 +424,42 @@ function renderArView(d) {
       <td style="color:var(--gray)">${r.daysSinceVisit !== null ? r.daysSinceVisit + ' j.' : 'jamais'}</td>
     </tr>`).join('');
 
+  const pedlvRowsAr = (d.pedlvIndicateursAgreges || []).map(i => {
+    const valeurAffichee = i.cle === 'tva' && i.valeurMoyenne !== null ? Math.round(i.valeurMoyenne) : (i.valeurMoyenne ?? '—');
+    const rougeColor = i.nbRouge > 0 ? 'var(--red)' : 'var(--gray)';
+    return `
+    <tr>
+      <td style="font-weight:600">${i.cle}</td>
+      <td style="text-align:right">${valeurAffichee}</td>
+      <td style="text-align:right;color:var(--gray)">${i.objectifMoyen ?? '—'}</td>
+      <td style="text-align:right;color:${rougeColor}">${i.nbRouge}/${i.nbTotal} magasins au rouge</td>
+    </tr>`;
+  }).join('');
+
+  let niveauEquipeArHtml = '<p style="color:var(--gray);font-size:13px;margin:0 0 10px">Pas de donnée.</p>';
+  if (d.niveauEquipeMoyen !== null && d.niveauEquipeMoyen !== undefined) {
+    const nv = d.niveauEquipeMoyen;
+    const color = nv >= 8 ? 'var(--green)' : (nv < 7 ? 'var(--red)' : 'var(--orange)');
+    niveauEquipeArHtml = '<p style="font-size:14px;margin:0 0 10px">Note moyenne équipe (secteur) : <span style="color:' + color + ';font-weight:700">' + nv + '/10</span></p>';
+  }
+  const equipeRowsAr = (d.equipeTachesAgregees || []).map(t => {
+    let moyenneHtml = '—';
+    if (t.moyenne !== null && t.moyenne !== undefined) {
+      const color = t.moyenne >= 8 ? 'var(--green)' : (t.moyenne < 7 ? 'var(--red)' : 'var(--orange)');
+      moyenneHtml = '<span style="color:' + color + ';font-weight:700">' + t.moyenne + '</span>';
+    }
+    return `
+    <tr>
+      <td>${t.tache}</td>
+      <td style="text-align:right">${moyenneHtml}</td>
+      <td style="text-align:right;${t.nbVacant > 0 ? 'color:var(--red)' : 'color:var(--gray)'}">${t.nbVacant}/${t.nbTotal} vacant${t.nbVacant > 1 ? 's' : ''}</td>
+    </tr>`;
+  }).join('');
+
+  const sousEffectifHtml = (d.sousEffectifSoutenu && d.sousEffectifSoutenu.length)
+    ? '<p style="font-size:13px;color:var(--red);margin:0 0 6px;font-weight:600">Sous-effectif soutenu (3 mois) : ' + d.sousEffectifSoutenu.join(', ') + '</p>'
+    : '<p style="font-size:13px;color:var(--gray);margin:0 0 6px">Aucun magasin en sous-effectif soutenu.</p>';
+
   el.innerHTML = `
     <button class="back-btn" onclick="showNetworkView()">&larr; Retour au réseau</button>
     <div class="detail-header">
@@ -450,6 +486,23 @@ function renderArView(d) {
     <div class="two-col">
       <div class="card"><h4>Actions non soldées (bilan de passage)</h4>${actionsHtml}</div>
       <div class="card"><h4>Kaizen — points non résolus</h4>${kaizenHtml}</div>
+    </div>
+
+    <p class="section-label">Performance commerciale — Pedlv (moyenne du secteur)</p>
+    <div class="card">
+      ${pedlvRowsAr ? '<div class="table-wrap"><table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr><th style="text-align:left;font-weight:700;padding:4px 0">Indicateur</th><th style="text-align:right;font-weight:700;padding:4px 0">Valeur moy.</th><th style="text-align:right;font-weight:700;padding:4px 0">Objectif moy.</th><th></th></tr></thead><tbody>' + pedlvRowsAr + '</tbody></table></div>' : '<p style="color:var(--gray);font-size:13px;margin:0">Pas de données Pedlv récentes sur le secteur.</p>'}
+    </div>
+
+    <p class="section-label">Évaluation équipe (secteur)</p>
+    <div class="card">
+      ${niveauEquipeArHtml}
+      ${equipeRowsAr ? '<div class="table-wrap"><table style="width:100%;border-collapse:collapse;font-size:13px"><tbody>' + equipeRowsAr + '</tbody></table></div>' : '<p style="color:var(--gray);font-size:13px;margin:0">Pas de détail par tâche.</p>'}
+    </div>
+
+    <p class="section-label">Effectif (secteur)</p>
+    <div class="card">
+      ${sousEffectifHtml}
+      <p style="font-size:13px;margin:0">${d.tauxAbsenteismeMoyen !== null && d.tauxAbsenteismeMoyen !== undefined ? 'Taux d\'absentéisme moyen : <b>' + d.tauxAbsenteismeMoyen + '%</b>' : ''}</p>
     </div>
 
     <p class="section-label">Conseils</p>
