@@ -449,7 +449,7 @@ function renderDetailView(d) {
     moyenneEquipeHtml = '<p style="font-size:14px;margin:0 0 10px">Note moyenne équipe : <span style="color:' + color + ';font-weight:700">' + nv + '/10</span></p>';
   }
 
-  const managerLabel = d.manager ? (d.manager.prenom + ' ' + d.manager.nom) : '—';
+  const managerLabel = d.manager || '—';
 
   el.innerHTML = `
     <button class="back-btn" onclick="showNetworkView()">&larr; Retour au réseau</button>
@@ -467,6 +467,8 @@ function renderDetailView(d) {
     <div class="pos-row">
       <div class="pos-chip">Positionnement mensuel <span class="v">${d.positionnementMensuel !== null ? d.positionnementMensuel + '%' : '—'}</span></div>
       <div class="pos-chip">Positionnement annuel <span class="v">${d.positionnementAnnuel !== null ? d.positionnementAnnuel + '%' : '—'}</span></div>
+      <div class="pos-chip">Objectif annuel <span class="v">${d.objectifAnnuel !== null && d.objectifAnnuel !== undefined ? d.objectifAnnuel + ' k€' : '—'}</span></div>
+      <div class="pos-chip">CA prévisionnel annuel <span class="v">${d.caPrevisionnelAnnuel !== null && d.caPrevisionnelAnnuel !== undefined ? d.caPrevisionnelAnnuel + ' k€' : '—'}</span></div>
     </div>
 
     <p class="section-label">Vue d'ensemble</p>
