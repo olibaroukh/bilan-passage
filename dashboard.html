@@ -459,6 +459,9 @@ function renderArView(d) {
   const sousEffectifHtml = (d.sousEffectifSoutenu && d.sousEffectifSoutenu.length)
     ? '<p style="font-size:13px;color:var(--red);margin:0 0 6px;font-weight:600">Sous-effectif soutenu (3 mois) : ' + d.sousEffectifSoutenu.join(', ') + '</p>'
     : '<p style="font-size:13px;color:var(--gray);margin:0 0 6px">Aucun magasin en sous-effectif soutenu.</p>';
+  const sureffectifHtml = (d.sureffectif && d.sureffectif.length)
+    ? '<p style="font-size:13px;color:var(--orange);margin:0 0 6px;font-weight:600">Sur-effectif (' + d.sureffectif.length + ') : ' + d.sureffectif.join(', ') + '</p>'
+    : '<p style="font-size:13px;color:var(--gray);margin:0 0 6px">Aucun magasin en sur-effectif.</p>';
 
   el.innerHTML = `
     <button class="back-btn" onclick="showNetworkView()">&larr; Retour au réseau</button>
@@ -502,6 +505,7 @@ function renderArView(d) {
     <p class="section-label">Effectif (secteur)</p>
     <div class="card">
       ${sousEffectifHtml}
+      ${sureffectifHtml}
       <p style="font-size:13px;margin:0">${d.tauxAbsenteismeMoyen !== null && d.tauxAbsenteismeMoyen !== undefined ? 'Taux d\'absentéisme moyen : <b>' + d.tauxAbsenteismeMoyen + '%</b>' : ''}</p>
     </div>
 
