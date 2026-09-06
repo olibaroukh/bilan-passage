@@ -279,6 +279,7 @@ function fmtDate(iso) {
 // ---------------------------------------------------------------- Vue réseau
 async function showNetworkView() {
   document.getElementById('view-detail').style.display = 'none';
+  document.getElementById('view-ar').style.display = 'none';
   const el = document.getElementById('view-network');
   el.style.display = 'block';
   el.innerHTML = '<div class="loading">Chargement…</div>';
@@ -518,6 +519,7 @@ async function generateArAdvice(arName) {
 // ---------------------------------------------------------------- Vue détail
 async function showDetailView(code) {
   document.getElementById('view-network').style.display = 'none';
+  document.getElementById('view-ar').style.display = 'none';
   const el = document.getElementById('view-detail');
   el.style.display = 'block';
   el.innerHTML = '<div class="loading">Chargement…</div>';
