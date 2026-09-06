@@ -113,9 +113,9 @@
   .detail-header { display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 10px; margin-bottom: 6px; }
   .detail-header h2 { margin: 0 0 2px; font-size: 21px; }
   .detail-header .sub { color: var(--gray); font-size: 13px; }
-  .pos-row { display: flex; gap: 10px; margin: 12px 0 20px; flex-wrap: wrap; }
-  .pos-chip { background: #fff; border-radius: 8px; padding: 7px 14px; font-size: 13px; display: flex; align-items: center; gap: 8px; }
-  .pos-chip .v { font-weight: 700; }
+  .pos-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin: 12px 0 20px; }
+  .pos-chip { background: #fff; border-radius: 8px; padding: 10px 14px; font-size: 13px; display: flex; flex-direction: column; gap: 4px; }
+  .pos-chip .v { font-weight: 700; font-size: 16px; }
 
   .section-label { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--gray); margin: 22px 0 8px; }
   .sub-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(95px, 1fr)); gap: 8px; }
