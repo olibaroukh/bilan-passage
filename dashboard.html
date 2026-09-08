@@ -189,7 +189,8 @@
   <div class="modal-box">
     <button class="modal-close" onclick="closeModal()">&times;</button>
     <h3 id="modal-title"></h3>
-    <div class="chart-box" style="padding:0"><canvas id="modal-chart" height="180"></canvas></div>
+    <div class="chart-box" id="modal-chart-box" style="padding:0"><canvas id="modal-chart" height="180"></canvas></div>
+    <div id="modal-list" style="display:none;font-size:13px;line-height:1.8"></div>
   </div>
 </div>
 
@@ -407,6 +408,7 @@ async function showArView(arName) {
 
 function renderArView(d) {
   const el = document.getElementById('view-ar');
+  currentEquipeTaches = d.equipeTachesAgregees || [];
 
   const actionsHtml = (d.actionsAgregees && d.actionsAgregees.length)
     ? d.actionsAgregees.map(a => '<div class="item-row"><span>' + a.magasin + ' — ' + a.text + '</span><span style="color:var(--red)">' + (a.repriseCount + 1) + ' visites</span></div>').join('')
@@ -448,11 +450,14 @@ function renderArView(d) {
       const color = t.moyenne >= 8 ? 'var(--green)' : (t.moyenne < 7 ? 'var(--red)' : 'var(--orange)');
       moyenneHtml = '<span style="color:' + color + ';font-weight:700">' + t.moyenne + '</span>';
     }
+    const vacantCell = t.nbVacant > 0
+      ? '<span onclick="openVacantModal(\'' + t.tache.replace(/'/g, "\\'") + '\')" style="cursor:pointer;text-decoration:underline;color:var(--red)">' + t.nbVacant + '/' + t.nbTotal + ' vacant' + (t.nbVacant > 1 ? 's' : '') + '</span>'
+      : '<span style="color:var(--gray)">' + t.nbVacant + '/' + t.nbTotal + ' vacant</span>';
     return `
     <tr>
       <td>${t.tache}</td>
       <td style="text-align:right">${moyenneHtml}</td>
-      <td style="text-align:right;${t.nbVacant > 0 ? 'color:var(--red)' : 'color:var(--gray)'}">${t.nbVacant}/${t.nbTotal} vacant${t.nbVacant > 1 ? 's' : ''}</td>
+      <td style="text-align:right">${vacantCell}</td>
     </tr>`;
   }).join('');
 
@@ -755,6 +760,8 @@ function openSubModal(key) {
   const history = currentDetailHistory;
   document.getElementById('modal-title').textContent = SUB_LABELS[key] + ' — historique';
   document.getElementById('modal-overlay').style.display = 'flex';
+  document.getElementById('modal-chart-box').style.display = 'block';
+  document.getElementById('modal-list').style.display = 'none';
   if (modalChartInstance) { modalChartInstance.destroy(); modalChartInstance = null; }
   const ctx = document.getElementById('modal-chart');
   const points = history.map(h => ({ periode: h.periode, val: h.sousScores ? h.sousScores[key] : null })).filter(p => p.val !== null && p.val !== undefined);
@@ -778,6 +785,22 @@ function openSubModal(key) {
 
 function closeModal() {
   document.getElementById('modal-overlay').style.display = 'none';
+}
+
+// ---------------------------------------------------------------- Modal magasins vacants (Évaluation équipe, vue AR)
+let currentEquipeTaches = [];
+
+function openVacantModal(tache) {
+  const entry = currentEquipeTaches.find(t => t.tache === tache);
+  const magasins = entry ? entry.magasinsVacants || [] : [];
+  document.getElementById('modal-title').textContent = tache + ' — magasins sans responsable assigné';
+  document.getElementById('modal-overlay').style.display = 'flex';
+  document.getElementById('modal-chart-box').style.display = 'none';
+  const list = document.getElementById('modal-list');
+  list.style.display = 'block';
+  list.innerHTML = magasins.length
+    ? magasins.map(m => '<div style="padding:4px 0;border-bottom:0.5px solid #eee">' + m + '</div>').join('')
+    : '<p style="color:var(--gray);margin:0">Aucun magasin vacant sur cette tâche.</p>';
 }
 
 async function generateAdvice(code) {
