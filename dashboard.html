@@ -201,6 +201,7 @@ const STORE_TOKEN = 'OC-bilan-store-2026';
 const SUB_LABELS = {
   actions: 'Actions', effectif: 'Effectif', absenteisme: 'Absentéisme', positionnement: 'Positionnement',
   pedlv: 'Pedlv', avis: 'Avis', equipe: 'Équipe', kaizen: 'Kaizen',
+  entretiens: 'Entretiens', lancements: 'Lancements',
 };
 
 let session = null;
@@ -658,6 +659,18 @@ function renderDetailView(d) {
 
   const managerLabel = d.manager || '—';
 
+  // Suivi Managers (18/09) — couverture entretiens individuels + lancements de
+  // journée du mois en cours. d.entretiensLancements vient de buildStoreHealthResults
+  // (Worker), jamais recalculé ici. 0 partout si le champ est absent (magasin sans
+  // aucune donnée ce mois-ci) plutôt qu'un "—" trompeur.
+  const el2 = d.entretiensLancements || { nbVus: 0, nbEligibles: 0, joursLances: 0, joursOuverts: 0 };
+  const moisLabelCourt = new Date().toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+  const suiviManagersHtml = `
+    <p style="font-size:13px;color:var(--gray);margin:0 0 10px;text-transform:capitalize">${moisLabelCourt}</p>
+    <p style="font-size:14px;margin:0 0 8px">Entretiens individuels pilotés : <span style="font-weight:700">${el2.nbVus}/${el2.nbEligibles}</span> collaborateur${el2.nbEligibles > 1 ? 's' : ''}</p>
+    <p style="font-size:14px;margin:0">Lancements de journée : <span style="font-weight:700">${el2.joursLances}/${el2.joursOuverts || '?'}</span> jours ouvrés</p>
+  `;
+
   el.innerHTML = `
     <button class="back-btn" onclick="showNetworkView()">&larr; Retour au réseau</button>
     <div class="detail-header">
@@ -689,6 +702,9 @@ function renderDetailView(d) {
       <div class="card"><h4>Actions non soldées (bilan de passage)</h4>${actionsHtml}</div>
       <div class="card"><h4>Kaizen — points non résolus</h4>${kaizenHtml}${cumulHtml}</div>
     </div>
+
+    <p class="section-label">Suivi Managers — mois en cours</p>
+    <div class="card">${suiviManagersHtml}</div>
 
     <p class="section-label">Performance commerciale — Pedlv</p>
     <div class="card">
