@@ -800,7 +800,7 @@ function loadLogo() {
 }
 
 // ── VERSION APP ── (incrémenter à chaque mise à jour notable, pour déclencher l'invite de rechargement)
-const APP_VERSION = '2026.08.27-1';
+const APP_VERSION = '2026.09.18-1';
 
 // Token pour la route /store-bilan du Worker (persistance D1, doit correspondre à STORE_SECRET dans worker.js)
 const STORE_SECRET = 'OC-bilan-store-2026';
@@ -4564,7 +4564,8 @@ const HEALTH_COLOR_HEX = { vert: 'var(--green)', orange: 'var(--orange)', rouge:
 // Le retard de visite n'entre PAS dans ce score : il reste géré séparément
 // comme signal prioritaire absolu (voir storeHealthColor).
 const POIDS_SANTE = { // @@POIDS_SANTE@@
-  actions: 7, effectif: 3, absenteisme: 4, positionnement: 5, pedlv: 8, avis: 4, equipe: 6, kaizen: 7
+  actions: 7, effectif: 3, absenteisme: 4, positionnement: 5, pedlv: 8, avis: 4, equipe: 6, kaizen: 7,
+  entretiens: 6, lancements: 5
 };
 
 // Chaque sous-score va de 0 (mauvais) à 100 (bon), ou null si la donnée est
@@ -4649,6 +4650,13 @@ function healthSubScores(s) {
   } else {
     scores.kaizen = null;
   }
+
+  // Suivi Managers — entretiens individuels et lancements de journée (phase 3,
+  // 18/09). Seule exception à la règle "null si pas de donnée" de tout ce
+  // fichier : ces deux dimensions valent 0 sans donnée (silence = magasin non
+  // piloté, décision explicite d'Olivier). Miroir exact de healthSubScoresServer.
+  scores.entretiens = s.entretiensLancements ? s.entretiensLancements.tauxEntretiens : 0;
+  scores.lancements = s.entretiensLancements ? s.entretiensLancements.tauxLancements : 0;
 
   return scores;
 }
