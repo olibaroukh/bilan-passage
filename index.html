@@ -800,7 +800,7 @@ function loadLogo() {
 }
 
 // ── VERSION APP ── (incrémenter à chaque mise à jour notable, pour déclencher l'invite de rechargement)
-const APP_VERSION = '2026.09.18-1';
+const APP_VERSION = '2026.09.18-2';
 
 // Token pour la route /store-bilan du Worker (persistance D1, doit correspondre à STORE_SECRET dans worker.js)
 const STORE_SECRET = 'OC-bilan-store-2026';
@@ -5103,16 +5103,17 @@ function showToastLong(msg) {
 </div>
 
 <script>
-const HCM_DEFAUT = { actions: 4, effectif: 3, absenteisme: 4, positionnement: 3, pedlv: 4, avis: 2, equipe: 6, kaizen: 7 };
+const HCM_DEFAUT = { actions: 4, effectif: 3, absenteisme: 4, positionnement: 3, pedlv: 4, avis: 2, equipe: 6, kaizen: 7, entretiens: 6, lancements: 5 };
 const HCM_LABELS = {
   actions: 'Actions non soldées', effectif: 'Effectif', absenteisme: 'Absentéisme', positionnement: 'Positionnement annuel',
   pedlv: 'PEDLV (indicateurs rouges)', avis: 'Avis Google', equipe: 'Niveau équipe', kaizen: 'Kaizen (audit 5S)',
+  entretiens: 'Entretiens individuels (Suivi Managers)', lancements: 'Lancements de journée (Suivi Managers)',
 };
 
 // Texte du popup "i" (fiche magasin, écran Tournée) — expliquant le calcul du
 // score de santé. Les poids affichés sont lus en direct dans POIDS_SANTE, donc
 // restent à jour même après un réglage via ⚖️ et régénération du fichier.
-const HEALTH_SCORE_INFO_TEXT = "Le score (sur 100) est une moyenne pondérée de 8 indicateurs. Seuls ceux pour lesquels on a une vraie donnée comptent — jamais un 0 par défaut pour une donnée manquante. Si moins de la moitié du poids total est couverte par de la donnée réelle, aucun score n'est affiché plutôt qu'un chiffre trompeur.";
+const HEALTH_SCORE_INFO_TEXT = "Le score (sur 100) est une moyenne pondérée de 10 indicateurs. Pour 8 d'entre eux, seuls ceux pour lesquels on a une vraie donnée comptent — jamais un 0 par défaut pour une donnée manquante. Les deux indicateurs Suivi Managers (entretiens individuels, lancements de journée) font exception : sans donnée ce mois-ci, ils valent 0 (silence = magasin non piloté). Si moins de la moitié du poids total est couverte par de la donnée réelle sur l'ensemble, aucun score n'est affiché plutôt qu'un chiffre trompeur.";
 const HEALTH_SCORE_INFO_ITEMS = {
   actions: { label: 'Actions non soldées', text: 'Seules les actions déjà reportées d\'un bilan précédent pénalisent la note ; une action toute neuve du dernier passage ne compte pas encore. -15 pts si elle est « en cours », -25 pts si « non fait ».' },
   effectif: { label: 'Effectif', text: 'Le sur-effectif fait perdre 25 pts par personne en trop par rapport au théorique. Le sous-effectif est aussi pénalisé s\'il est soutenu sur 3 mois consécutifs (donnée RH réelle, hors salariés en longue durée) — un manque ponctuel n\'est pas mis au débit du score.' },
@@ -5122,6 +5123,8 @@ const HEALTH_SCORE_INFO_ITEMS = {
   avis: { label: 'Avis Google', text: 'note Google ramenée sur 100 (note/5 × 100).' },
   equipe: { label: 'Niveau équipe', text: 'moyenne des responsabilités notées dans Évaluation Équipe (objectif 8/10), ramenée sur 100.' },
   kaizen: { label: 'Kaizen (audit 5S)', text: 'score du dernier mois clôturé (sur 50 pts, audit 5S), ramené sur 100. Le mois en cours n\'est pas utilisé tant qu\'il n\'est pas clôturé, pour ne pas pénaliser un audit encore en cours de remplissage.' },
+  entretiens: { label: 'Entretiens individuels (Suivi Managers)', text: '% de collaborateurs (hors Manager) ayant eu au moins un entretien Écoute & Feedback ou Pilotage ce mois-ci (l\'entretien de recadrage ne compte pas). 0% si aucun entretien ce mois-ci — seule exception à la règle « pas de donnée = exclu » de ce score.' },
+  lancements: { label: 'Lancements de journée (Suivi Managers)', text: 'jours du mois avec au moins un lancement de journée / jours ouvrés du magasin ce mois-ci (donnée saisie dans Pour être dans le vert). 0% si aucun lancement ce mois-ci — même exception que ci-dessus.' },
 };
 
 function showHealthScoreInfo() {
