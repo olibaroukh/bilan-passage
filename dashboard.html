@@ -659,16 +659,21 @@ function renderDetailView(d) {
 
   const managerLabel = d.manager || '—';
 
-  // Suivi Managers (18/09) — couverture entretiens individuels + lancements de
-  // journée du mois en cours. d.entretiensLancements vient de buildStoreHealthResults
-  // (Worker), jamais recalculé ici. 0 partout si le champ est absent (magasin sans
-  // aucune donnée ce mois-ci) plutôt qu'un "—" trompeur.
-  const el2 = d.entretiensLancements || { nbVus: 0, nbEligibles: 0, joursLances: 0, joursOuverts: 0 };
+  // Suivi Managers (18/09, revu 18/09) — 4 lignes dans la carte Effectif :
+  // pilotage et lancements gardent le ratio "fait/éligible" (couverture
+  // collaborateurs / jours ouvrés, déjà calculé par getEntretiensLancementsMap
+  // côté Worker), écoute & feedback et recadrage sont de simples décomptes
+  // bruts du mois (pas de notion d'éligibilité pour ces deux-là).
+  // d.entretiensLancements vient de buildStoreHealthResults, jamais recalculé
+  // ici. 0 partout si le champ est absent (magasin sans donnée ce mois-ci).
+  const el2 = d.entretiensLancements || { nbVus: 0, nbEligibles: 0, joursLances: 0, joursOuverts: 0, nbEcouteFb: 0, nbRecadrage: 0 };
   const moisLabelCourt = new Date().toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
   const suiviManagersHtml = `
-    <p style="font-size:13px;color:var(--gray);margin:0 0 10px;text-transform:capitalize">${moisLabelCourt}</p>
-    <p style="font-size:14px;margin:0 0 8px">Entretiens individuels pilotés : <span style="font-weight:700">${el2.nbVus}/${el2.nbEligibles}</span> collaborateur${el2.nbEligibles > 1 ? 's' : ''}</p>
-    <p style="font-size:14px;margin:0">Lancements de journée : <span style="font-weight:700">${el2.joursLances}/${el2.joursOuverts || '?'}</span> jours ouvrés</p>
+    <p style="font-size:11px;letter-spacing:.04em;color:var(--gray);margin:12px 0 6px">Suivi Managers — ${moisLabelCourt}</p>
+    <div class="item-row"><span>Entretiens de pilotage</span><span style="font-weight:700">${el2.nbVus}/${el2.nbEligibles}</span></div>
+    <div class="item-row"><span>Lancements de journée</span><span style="font-weight:700">${el2.joursLances}/${el2.joursOuverts || '?'}</span></div>
+    <div class="item-row"><span>Écoute &amp; Feedback</span><span style="font-weight:700">${el2.nbEcouteFb}</span></div>
+    <div class="item-row"><span>Entretiens de recadrage</span><span style="font-weight:700">${el2.nbRecadrage}</span></div>
   `;
 
   el.innerHTML = `
@@ -703,9 +708,6 @@ function renderDetailView(d) {
       <div class="card"><h4>Kaizen — points non résolus</h4>${kaizenHtml}${cumulHtml}</div>
     </div>
 
-    <p class="section-label">Suivi Managers — mois en cours</p>
-    <div class="card">${suiviManagersHtml}</div>
-
     <p class="section-label">Performance commerciale — Pedlv</p>
     <div class="card">
       ${pedlvRows ? '<div class="table-wrap"><table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr><th style="text-align:left;font-weight:700;padding:4px 0">Indicateur</th><th style="text-align:right;font-weight:700;padding:4px 0">Valeur</th><th style="text-align:right;font-weight:700;padding:4px 0">Objectif</th><th></th></tr></thead><tbody>' + pedlvRows + '</tbody></table></div>' : '<p style="color:var(--gray);font-size:13px;margin:0">Pas de données Pedlv récentes.</p>'}
@@ -723,6 +725,7 @@ function renderDetailView(d) {
         <p style="font-size:13px;margin:0 0 6px">Manager : <b>${managerLabel}</b></p>
         <p style="font-size:13px;margin:0 0 6px">${effHtml}</p>
         <p style="font-size:13px;margin:0">${d.absenteisme && d.absenteisme.score !== null && d.absenteisme.score !== undefined ? 'Taux d\'absentéisme : ' + (Math.round((100 - d.absenteisme.score) * 10) / 10) + '%' : ''}</p>
+        ${suiviManagersHtml}
       </div>
     </div>
 
