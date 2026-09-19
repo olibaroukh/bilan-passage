@@ -812,7 +812,7 @@ function loadLogo() {
 }
 
 // ── VERSION APP ── (incrémenter à chaque mise à jour notable, pour déclencher l'invite de rechargement)
-const APP_VERSION = '2026.09.19-4'; // à bumper avec SW_VERSION (sw.js) ET version.json à chaque déploiement
+const APP_VERSION = '2026.09.19-5'; // à bumper avec SW_VERSION (sw.js) ET version.json à chaque déploiement
 
 // Token pour la route /store-bilan du Worker (persistance D1, doit correspondre à STORE_SECRET dans worker.js)
 const STORE_SECRET = 'OC-bilan-store-2026';
@@ -4673,6 +4673,15 @@ async function loadHealthWeights() {
 function healthSubScores(s) {
   const scores = {};
 
+  // Bascule du 19/09 (initialement prévue pour janvier 2027, avancée à la
+  // demande d'Olivier) : "pas de donnée" ne veut plus dire "exclu du calcul"
+  // pour la plupart des dimensions — un outil jamais utilisé doit peser sur
+  // le score, pas être ignoré. Exception maintenue pour effectif, absenteisme
+  // et avis, qui dépendent d'un import/flux RÉSEAU (import RH mensuel,
+  // rafraîchissement Google automatique) plutôt que d'un usage du magasin :
+  // un retard d'import ou un glitch d'API ne doit pas faire chuter tout le
+  // réseau d'un coup. Miroir exact de healthSubScoresServer dans worker.js.
+
   // Seules les actions déjà reportées d'un bilan précédent pénalisent la note —
   // une action neuve issue du tout dernier passage ne compte pas encore (il y en
   // aura toujours à chaque visite, ce n'est pas en soi un signal d'alerte).
@@ -4684,15 +4693,16 @@ function healthSubScores(s) {
       .reduce((acc, a) => acc + (a.status === 'todo' ? 25 : 15), 0);
     scores.actions = Math.max(0, 100 - penalty);
   } else {
-    scores.actions = null;
+    scores.actions = 0;
   }
 
   // delta = effectif réel (opt+audio) - effectif théorique. On sanctionne le
   // SUR-effectif (delta > 0, coûte en masse salariale) comme avant. Depuis le
   // 19/08, le sous-effectif est aussi sanctionné, mais seulement s'il est
   // soutenu sur 3 mois consécutifs (donnée RH réelle, effectifRH) — un manque
-  // ponctuel reste hors du débit du score. Miroir exact de healthSubScoresServer
-  // dans worker.js.
+  // ponctuel reste hors du débit du score. Reste exclu (null) si pas de
+  // donnée — import RH réseau, pas un usage du magasin (voir en tête de
+  // fonction).
   if (s.effectif && s.effectif.delta !== null && s.effectif.delta !== undefined) {
     let score = s.effectif.delta <= 0 ? 100 : Math.max(0, 100 - s.effectif.delta * 25);
     if (s.effectifRH && s.effectifRH.soutenu && s.effectifRH.ecartMoyen !== null) {
@@ -4707,6 +4717,7 @@ function healthSubScores(s) {
 
   // Absentéisme (RH, groupe A / jours ouvrés théoriques, longue durée incluse) —
   // moyenne des notes mensuelles sur tous les mois disponibles pour ce magasin.
+  // Reste exclu (null) si pas de donnée — import RH réseau (voir ci-dessus).
   if (s.absenteisme && s.absenteisme.score !== null && s.absenteisme.score !== undefined) {
     scores.absenteisme = s.absenteisme.score;
   } else {
@@ -4716,15 +4727,17 @@ function healthSubScores(s) {
   if (s.positionnementAnnuel !== null && s.positionnementAnnuel !== undefined) {
     scores.positionnement = Math.max(0, Math.min(100, s.positionnementAnnuel));
   } else {
-    scores.positionnement = null;
+    scores.positionnement = 0;
   }
 
   if (s.pedlv && s.pedlv.total) {
     scores.pedlv = Math.max(0, 100 - (s.pedlv.rouge / s.pedlv.total) * 100);
   } else {
-    scores.pedlv = null;
+    scores.pedlv = 0;
   }
 
+  // Avis Google : reste exclu (null) si pas de donnée — rafraîchissement
+  // automatique réseau, pas un usage du magasin (voir en tête de fonction).
   if (s.googleRating && s.googleRating.rating) {
     scores.avis = Math.max(0, Math.min(100, (Number(s.googleRating.rating) / 5) * 100));
   } else {
@@ -4732,28 +4745,28 @@ function healthSubScores(s) {
   }
 
   // Niveau équipe (Évaluation Équipe) — moyenne du magasin sur les responsabilités
-  // notées, échelle 0-10 (objectif 8/10). Même principe que les autres sous-scores :
-  // mappé linéairement sur 0-100, null si le magasin n'a encore aucun contrôle noté.
+  // notées, échelle 0-10 (objectif 8/10). Mappé linéairement sur 0-100, 0 si le
+  // magasin n'a encore aucun contrôle noté.
   if (s.niveauEquipe !== null && s.niveauEquipe !== undefined) {
     scores.equipe = Math.max(0, Math.min(100, (Number(s.niveauEquipe) / 10) * 100));
   } else {
-    scores.equipe = null;
+    scores.equipe = 0;
   }
 
   // Kaizen : score du DERNIER mois clôturé (pas le mois en cours, qui peut être
   // partiellement rempli et fausserait le score à la baisse en cours de mois).
-  // null tant qu'aucun mois n'a encore été clôturé pour ce magasin. Miroir exact
+  // 0 tant qu'aucun mois n'a encore été clôturé pour ce magasin. Miroir exact
   // du calcul server-side (healthSubScoresServer dans worker.js).
   if (s.kaizenDernierScoreCloture !== null && s.kaizenDernierScoreCloture !== undefined && s.kaizenDernierScoreMax) {
     scores.kaizen = Math.max(0, Math.min(100, (s.kaizenDernierScoreCloture / s.kaizenDernierScoreMax) * 100));
   } else {
-    scores.kaizen = null;
+    scores.kaizen = 0;
   }
 
   // Suivi Managers — entretiens individuels et lancements de journée (phase 3,
-  // 18/09). Seule exception à la règle "null si pas de donnée" de tout ce
-  // fichier : ces deux dimensions valent 0 sans donnée (silence = magasin non
-  // piloté, décision explicite d'Olivier). Miroir exact de healthSubScoresServer.
+  // 18/09). Même règle que actions/positionnement/pedlv/equipe/kaizen ci-dessus
+  // depuis le 19/09 : 0 par défaut si s.entretiensLancements est absent. Miroir
+  // exact de healthSubScoresServer.
   scores.entretiens = s.entretiensLancements ? s.entretiensLancements.tauxEntretiens : 0;
   scores.lancements = s.entretiensLancements ? s.entretiensLancements.tauxLancements : 0;
 
@@ -5217,7 +5230,7 @@ const HCM_LABELS = {
 // Texte du popup "i" (fiche magasin, écran Tournée) — expliquant le calcul du
 // score de santé. Les poids affichés sont lus en direct dans POIDS_SANTE, donc
 // restent à jour même après un réglage via ⚖️ et régénération du fichier.
-const HEALTH_SCORE_INFO_TEXT = "Le score (sur 100) est une moyenne pondérée de 10 indicateurs. Pour 8 d'entre eux, seuls ceux pour lesquels on a une vraie donnée comptent — jamais un 0 par défaut pour une donnée manquante. Les deux indicateurs Suivi Managers (entretiens individuels, lancements de journée) font exception : sans donnée ce mois-ci, ils valent 0 (silence = magasin non piloté). Si moins de la moitié du poids total est couverte par de la donnée réelle sur l'ensemble, aucun score n'est affiché plutôt qu'un chiffre trompeur.";
+const HEALTH_SCORE_INFO_TEXT = "Le score (sur 100) est une moyenne pondérée de 10 indicateurs. Depuis le 19/09, 7 d'entre eux (actions, positionnement, PEDLV, niveau équipe, Kaizen, entretiens individuels, lancements de journée) valent 0 s'il n'y a pas de donnée — un outil jamais utilisé pèse sur le score, il n'est plus ignoré. 3 exceptions restent exclues (jamais un 0 par défaut) : effectif, absentéisme et avis Google, qui dépendent d'un import ou d'un flux réseau plutôt que d'un usage du magasin lui-même. Si moins de la moitié du poids total est couverte par de la donnée réelle sur l'ensemble, aucun score n'est affiché plutôt qu'un chiffre trompeur.";
 const HEALTH_SCORE_INFO_ITEMS = {
   actions: { label: 'Actions non soldées', text: 'Seules les actions déjà reportées d\'un bilan précédent pénalisent la note ; une action toute neuve du dernier passage ne compte pas encore. -15 pts si elle est « en cours », -25 pts si « non fait ».' },
   effectif: { label: 'Effectif', text: 'Le sur-effectif fait perdre 25 pts par personne en trop par rapport au théorique. Le sous-effectif est aussi pénalisé s\'il est soutenu sur 3 mois consécutifs (donnée RH réelle, hors salariés en longue durée) — un manque ponctuel n\'est pas mis au débit du score.' },
@@ -5227,8 +5240,8 @@ const HEALTH_SCORE_INFO_ITEMS = {
   avis: { label: 'Avis Google', text: 'note Google ramenée sur 100 (note/5 × 100).' },
   equipe: { label: 'Niveau équipe', text: 'moyenne des responsabilités notées dans Évaluation Équipe (objectif 8/10), ramenée sur 100.' },
   kaizen: { label: 'Kaizen (audit 5S)', text: 'score du dernier mois clôturé (sur 50 pts, audit 5S), ramené sur 100. Le mois en cours n\'est pas utilisé tant qu\'il n\'est pas clôturé, pour ne pas pénaliser un audit encore en cours de remplissage.' },
-  entretiens: { label: 'Entretiens individuels (Suivi Managers)', text: '% de collaborateurs (hors Manager) ayant eu au moins un entretien Écoute & Feedback ou Pilotage ce mois-ci (l\'entretien de recadrage ne compte pas). 0% si aucun entretien ce mois-ci — seule exception à la règle « pas de donnée = exclu » de ce score.' },
-  lancements: { label: 'Lancements de journée (Suivi Managers)', text: 'jours du mois avec au moins un lancement de journée / jours ouvrés du magasin ce mois-ci (donnée saisie dans Pour être dans le vert). 0% si aucun lancement ce mois-ci — même exception que ci-dessus.' },
+  entretiens: { label: 'Entretiens individuels (Suivi Managers)', text: '% de collaborateurs (hors Manager) ayant eu au moins un entretien Écoute & Feedback ou Pilotage ce mois-ci (l\'entretien de recadrage ne compte pas). 0% si aucun entretien ce mois-ci.' },
+  lancements: { label: 'Lancements de journée (Suivi Managers)', text: 'jours du mois avec au moins un lancement de journée / jours ouvrés du magasin ce mois-ci (donnée saisie dans Pour être dans le vert). 0% si aucun lancement ce mois-ci.' },
 };
 
 function showHealthScoreInfo() {
