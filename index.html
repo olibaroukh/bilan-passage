@@ -812,7 +812,7 @@ function loadLogo() {
 }
 
 // ── VERSION APP ── (incrémenter à chaque mise à jour notable, pour déclencher l'invite de rechargement)
-const APP_VERSION = '2026.09.19-2'; // à bumper avec SW_VERSION (sw.js) ET version.json à chaque déploiement
+const APP_VERSION = '2026.09.19-3'; // à bumper avec SW_VERSION (sw.js) ET version.json à chaque déploiement
 
 // Token pour la route /store-bilan du Worker (persistance D1, doit correspondre à STORE_SECRET dans worker.js)
 const STORE_SECRET = 'OC-bilan-store-2026';
@@ -5191,9 +5191,13 @@ function showToastLong(msg) {
 <div class="modal-overlay" id="modal-health-config" onclick="hcmClose()">
   <div class="modal-box" onclick="event.stopPropagation()" style="max-width:420px">
     <div class="modal-title">⚖️ Coefficients du score de santé</div>
-    <div style="font-size:12px;color:var(--muted);margin:-8px 0 16px">Ajuste l'importance de chaque indicateur (0 = ignoré, 10 = maximum). Le retard de visite n'est pas concerné : il reste géré à part. « Enregistrer » s'applique immédiatement partout (digest hebdo, onglet Tournée) — réservé à Olivier, connecté via l'onglet Analyse.</div>
+    <div style="font-size:12px;color:var(--muted);margin:-8px 0 16px">Ajuste l'importance de chaque indicateur (0 = ignoré, 10 = maximum). Le retard de visite n'est pas concerné : il reste géré à part. « Enregistrer » s'applique immédiatement partout (digest hebdo, onglet Tournée).</div>
     <div id="hcm-sliders" style="display:flex;flex-direction:column;gap:12px"></div>
-    <div id="hcm-save-msg" style="font-size:12px;margin:4px 0;display:none"></div>
+    <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border)">
+      <div style="font-size:12px;color:var(--muted);margin-bottom:8px">🔒 Mot de passe Zimbra requis pour enregistrer (redemandé à chaque fois, indépendamment de l'onglet Analyse) :</div>
+      <input type="password" id="hcm-zimbra-pass" placeholder="Mot de passe Zimbra" style="width:100%;background:var(--bg4);border:1px solid var(--border);border-radius:8px;padding:10px;font-size:13px;color:var(--text);font-family:'Barlow',sans-serif;box-sizing:border-box">
+    </div>
+    <div id="hcm-save-msg" style="font-size:12px;margin:8px 0 0;display:none"></div>
     <div class="modal-actions">
       <button class="btn-secondary" onclick="hcmReset()">Défaut</button>
       <button class="btn-primary" id="hcm-save-btn" onclick="hcmSave()">💾 Enregistrer</button>
@@ -5260,6 +5264,8 @@ function hcmRenderSliders(values) {
 
 function hcmOpen() {
   hcmRenderSliders(POIDS_SANTE);
+  document.getElementById('hcm-zimbra-pass').value = '';
+  document.getElementById('hcm-save-msg').style.display = 'none';
   document.getElementById('modal-health-config').classList.add('open');
 }
 
@@ -5273,16 +5279,17 @@ function hcmReset() {
 
 async function hcmSave() {
   const msgEl = document.getElementById('hcm-save-msg');
+  const passEl = document.getElementById('hcm-zimbra-pass');
   const showMsg = (text, ok) => {
     msgEl.textContent = text;
     msgEl.style.color = ok ? 'var(--green)' : 'var(--red)';
     msgEl.style.display = 'block';
   };
 
-  if (!arSession || arSession.ar !== 'ALL') {
-    showMsg('Réservé à Olivier — connecte-toi depuis l\'onglet Analyse avant de modifier les coefficients.', false);
-    return;
-  }
+  const zimbraUser = (params.zimbraUser || '').trim();
+  const zimbraPass = passEl.value;
+  if (!zimbraUser) { showMsg('Configure d\'abord ton identifiant Zimbra dans Paramètres.', false); return; }
+  if (!zimbraPass) { showMsg('Mot de passe Zimbra requis.', false); return; }
 
   // Les 10 poids (toutes les clés de POIDS_SANTE, pas seulement les 8
   // historiques — bug corrigé le 19/09 : l'ancienne version "Générer le
@@ -5295,14 +5302,29 @@ async function hcmSave() {
   });
 
   const btn = document.getElementById('hcm-save-btn');
-  btn.disabled = true; btn.textContent = '⏳ Enregistrement...';
+  btn.disabled = true; btn.textContent = '⏳ Vérification...';
   msgEl.style.display = 'none';
 
+  const relay = params.relay || 'https://zimbra-relay.oli-baroukh.workers.dev';
   try {
-    const relay = params.relay || 'https://zimbra-relay.oli-baroukh.workers.dev';
+    // Authentification systématiquement redemandée ici (jamais réutilisée depuis
+    // l'onglet Analyse, même si une session y est déjà ouverte) : un poste resté
+    // connecté ne doit pas permettre de modifier le score de santé de tout le
+    // réseau sans re-saisie du mot de passe. Le jeton obtenu n'est utilisé
+    // qu'une fois pour cet appel, jamais stocké en localStorage.
+    const loginResp = await fetch(relay + '/ar-login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Store-Token': STORE_SECRET },
+      body: JSON.stringify({ zimbraUser, zimbraPass })
+    });
+    const loginData = await loginResp.json();
+    if (!loginResp.ok || loginData.error) throw new Error(loginData.error || 'Identifiants Zimbra invalides');
+    if (loginData.ar !== 'ALL') throw new Error('Réservé à Olivier — identifiants valides mais non autorisés ici.');
+
+    btn.textContent = '⏳ Enregistrement...';
     const res = await fetch(relay + '/health-weights', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Store-Token': STORE_SECRET, 'X-AR-Session': arSession.token },
+      headers: { 'Content-Type': 'application/json', 'X-Store-Token': STORE_SECRET, 'X-AR-Session': loginData.sessionToken },
       body: JSON.stringify(vals)
     });
     const data = await res.json();
@@ -5312,6 +5334,7 @@ async function hcmSave() {
   } catch (e) {
     showMsg('❌ ' + (e.message || String(e)), false);
   } finally {
+    passEl.value = '';
     btn.disabled = false; btn.textContent = '💾 Enregistrer';
   }
 }
