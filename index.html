@@ -812,7 +812,7 @@ function loadLogo() {
 }
 
 // ── VERSION APP ── (incrémenter à chaque mise à jour notable, pour déclencher l'invite de rechargement)
-const APP_VERSION = '2026.09.19-1'; // à bumper avec SW_VERSION (sw.js) ET version.json à chaque déploiement
+const APP_VERSION = '2026.09.19-2'; // à bumper avec SW_VERSION (sw.js) ET version.json à chaque déploiement
 
 // Token pour la route /store-bilan du Worker (persistance D1, doit correspondre à STORE_SECRET dans worker.js)
 const STORE_SECRET = 'OC-bilan-store-2026';
@@ -1401,6 +1401,7 @@ window.addEventListener('load', async () => {
   checkLatestVersionOnServer();
   setInterval(checkLatestVersionOnServer, VERSION_CHECK_INTERVAL_MS);
   loadParams();
+  loadHealthWeights();
   if (document.getElementById('f-humeur')) updateHumeur();
   loadLogo();
   loadRituelsCustom();
@@ -4640,15 +4641,31 @@ const PEDLV_LABELS = {
 const HEALTH_COLOR_HEX = { vert: 'var(--green)', orange: 'var(--orange)', rouge: 'var(--red)' };
 
 // Coefficients du score de santé magasin — même principe que les coefficients
-// du podium dans "Pour être dans le vert" (0 = ignoré, 10 = maximum). Réglables
-// via la modale ⚖️ (voir hcmOpen/hcmExport plus bas), qui régénère ce fichier
-// avec les nouvelles valeurs en dur, à repousser sur GitHub comme pour PEDLV.
+// du podium dans "Pour être dans le vert" (0 = ignoré, 10 = maximum). Valeurs
+// de repli seulement : la source unique est la table D1 health_weights, lue
+// au chargement (loadHealthWeights) et éditable en direct via la modale ⚖️
+// (hcmOpen/hcmSave plus bas), qui enregistre directement au Worker — plus
+// besoin de régénérer et repousser ce fichier à chaque réglage.
 // Le retard de visite n'entre PAS dans ce score : il reste géré séparément
 // comme signal prioritaire absolu (voir storeHealthColor).
-const POIDS_SANTE = { // @@POIDS_SANTE@@
+const POIDS_SANTE = {
   actions: 7, effectif: 3, absenteisme: 4, positionnement: 5, pedlv: 8, avis: 4, equipe: 6, kaizen: 7,
   entretiens: 6, lancements: 5
 };
+
+// Récupère les poids courants depuis le Worker (source unique). Échec/hors
+// ligne : on garde silencieusement les valeurs de repli ci-dessus.
+async function loadHealthWeights() {
+  try {
+    const relay = params.relay || 'https://zimbra-relay.oli-baroukh.workers.dev';
+    const res = await fetch(relay + '/health-weights', { headers: { 'X-Store-Token': STORE_SECRET } });
+    if (!res.ok) return;
+    const data = await res.json();
+    if (data && data.ok && data.weights) Object.assign(POIDS_SANTE, data.weights);
+  } catch (e) {
+    console.warn('Poids du score de santé : repli sur les valeurs par défaut (Worker injoignable)', e);
+  }
+}
 
 // Chaque sous-score va de 0 (mauvais) à 100 (bon), ou null si la donnée est
 // absente pour ce magasin — un sous-score null est exclu du calcul (jamais
@@ -5174,11 +5191,12 @@ function showToastLong(msg) {
 <div class="modal-overlay" id="modal-health-config" onclick="hcmClose()">
   <div class="modal-box" onclick="event.stopPropagation()" style="max-width:420px">
     <div class="modal-title">⚖️ Coefficients du score de santé</div>
-    <div style="font-size:12px;color:var(--muted);margin:-8px 0 16px">Ajuste l'importance de chaque indicateur (0 = ignoré, 10 = maximum). Le retard de visite n'est pas concerné : il reste géré à part. « Générer le fichier » télécharge une nouvelle version de cette page à repousser sur GitHub.</div>
+    <div style="font-size:12px;color:var(--muted);margin:-8px 0 16px">Ajuste l'importance de chaque indicateur (0 = ignoré, 10 = maximum). Le retard de visite n'est pas concerné : il reste géré à part. « Enregistrer » s'applique immédiatement partout (digest hebdo, onglet Tournée) — réservé à Olivier, connecté via l'onglet Analyse.</div>
     <div id="hcm-sliders" style="display:flex;flex-direction:column;gap:12px"></div>
+    <div id="hcm-save-msg" style="font-size:12px;margin:4px 0;display:none"></div>
     <div class="modal-actions">
       <button class="btn-secondary" onclick="hcmReset()">Défaut</button>
-      <button class="btn-primary" onclick="hcmExport()">⬇ Générer le fichier</button>
+      <button class="btn-primary" id="hcm-save-btn" onclick="hcmSave()">💾 Enregistrer</button>
       <button class="btn-secondary" onclick="hcmClose()">Fermer</button>
     </div>
   </div>
@@ -5253,39 +5271,49 @@ function hcmReset() {
   hcmRenderSliders(HCM_DEFAUT);
 }
 
-function hcmExport() {
+async function hcmSave() {
+  const msgEl = document.getElementById('hcm-save-msg');
+  const showMsg = (text, ok) => {
+    msgEl.textContent = text;
+    msgEl.style.color = ok ? 'var(--green)' : 'var(--red)';
+    msgEl.style.display = 'block';
+  };
+
+  if (!arSession || arSession.ar !== 'ALL') {
+    showMsg('Réservé à Olivier — connecte-toi depuis l\'onglet Analyse avant de modifier les coefficients.', false);
+    return;
+  }
+
+  // Les 10 poids (toutes les clés de POIDS_SANTE, pas seulement les 8
+  // historiques — bug corrigé le 19/09 : l'ancienne version "Générer le
+  // fichier" omettait entretiens/lancements et les aurait fait disparaître
+  // silencieusement du score si on l'avait utilisée après leur ajout).
   const vals = {};
-  Object.keys(HCM_DEFAUT).forEach(key => {
+  Object.keys(POIDS_SANTE).forEach(key => {
     const el = document.getElementById('poids-' + key);
-    vals[key] = el ? parseInt(el.value, 10) : HCM_DEFAUT[key];
+    vals[key] = el ? parseInt(el.value, 10) : POIDS_SANTE[key];
   });
 
-  const newPoids =
-    'const POIDS_SANTE = { // @@POIDS_SANTE@@\n' +
-    '  actions: ' + vals.actions + ', effectif: ' + vals.effectif + ', absenteisme: ' + vals.absenteisme +
-    ', positionnement: ' + vals.positionnement + ', pedlv: ' + vals.pedlv + ', avis: ' + vals.avis +
-    ', equipe: ' + vals.equipe + ', kaizen: ' + vals.kaizen + '\n' +
-    '};';
+  const btn = document.getElementById('hcm-save-btn');
+  btn.disabled = true; btn.textContent = '⏳ Enregistrement...';
+  msgEl.style.display = 'none';
 
-  // Lookbehind négatif : évite de matcher la ligne si elle est précédée d'un
-  // guillemet (cas où ce motif apparaît dans le code source de cette fonction
-  // elle-même, comme texte). Sécurité en plus du fait que la vraie déclaration
-  // POIDS_SANTE est placée plus haut dans le fichier que ce script.
-  let src = '<!DOCTYPE html>\n' + document.documentElement.outerHTML;
-  src = src.replace(
-    /(?<!['"])const POIDS_SANTE = \{ \/\/ @@POIDS_SANTE@@[\s\S]*?\};/,
-    newPoids
-  );
-
-  const blob = new Blob([src], { type: 'text/html;charset=utf-8' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = 'index.html';
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-  hcmClose();
+  try {
+    const relay = params.relay || 'https://zimbra-relay.oli-baroukh.workers.dev';
+    const res = await fetch(relay + '/health-weights', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Store-Token': STORE_SECRET, 'X-AR-Session': arSession.token },
+      body: JSON.stringify(vals)
+    });
+    const data = await res.json();
+    if (!res.ok || !data.ok) throw new Error(data.error || 'Échec de l\'enregistrement');
+    Object.assign(POIDS_SANTE, data.weights);
+    showMsg('✅ Enregistré — pris en compte immédiatement (digest hebdo, onglet Tournée).', true);
+  } catch (e) {
+    showMsg('❌ ' + (e.message || String(e)), false);
+  } finally {
+    btn.disabled = false; btn.textContent = '💾 Enregistrer';
+  }
 }
 
 document.getElementById('modal-health-config').addEventListener('click', function(e) {
