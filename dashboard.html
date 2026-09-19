@@ -606,6 +606,13 @@ function renderDetailView(d) {
       ).join('')
     : '<p style="color:var(--gray);font-size:13px;margin:0">Aucune action non soldée.</p>';
 
+  // 19/09 : score du mois en cours (audit pas forcément clôturé — d.kaizenScoreMois
+  // vient de getKaizenHealthMap, distinct de dernierScoreCloture utilisé dans le
+  // score de santé). Affiché même "en cours" pour donner une visibilité immédiate
+  // plutôt que d'attendre la clôture du 1er du mois suivant.
+  const scoreMoisHtml = (d.kaizenScoreMois !== null && d.kaizenScoreMois !== undefined)
+    ? '<p style="font-size:14px;margin:0 0 10px">Score du mois en cours : <span style="font-weight:700">' + d.kaizenScoreMois + (d.kaizenScoreMaxMois ? '/' + d.kaizenScoreMaxMois : '') + '</span>' + (d.kaizenClosedMois ? '' : ' <span style="color:var(--gray);font-size:12px">(en cours, pas encore clôturé)</span>') + '</p>'
+    : '<p style="color:var(--gray);font-size:13px;margin:0 0 10px">Pas encore d\'audit ce mois-ci.</p>';
   const kaizenHtml = (d.kaizenPointsNonResolus && d.kaizenPointsNonResolus.length)
     ? d.kaizenPointsNonResolus.map(k =>
         '<div class="item-row"><span>' + k.label + (k.zoneNom ? ' — ' + k.zoneNom : '') + '</span><span style="color:var(--red)">' + k.moisConsecutifs + ' mois</span></div>'
@@ -705,7 +712,7 @@ function renderDetailView(d) {
     <p class="section-label">Terrain</p>
     <div class="two-col">
       <div class="card"><h4>Actions non soldées (bilan de passage)</h4>${actionsHtml}</div>
-      <div class="card"><h4>Kaizen — points non résolus</h4>${kaizenHtml}${cumulHtml}</div>
+      <div class="card"><h4>Kaizen — points non résolus</h4>${scoreMoisHtml}${kaizenHtml}${cumulHtml}</div>
     </div>
 
     <p class="section-label">Performance commerciale — Pedlv</p>
