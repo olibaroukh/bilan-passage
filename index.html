@@ -155,6 +155,20 @@ html,body{height:100%;background:linear-gradient(160deg,#1A1210 0%,#0D0D0D 40%,#
 #toast{position:fixed;top:70px;left:50%;transform:translateX(-50%) translateY(-20px);background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:10px 18px;font-size:13px;color:var(--text);opacity:0;transition:.3s;z-index:999;pointer-events:none;white-space:nowrap}
 #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 /* ── MODAL ── */
+/* ── CHECKLIST DE PASSAGE (24/09) ── */
+#checklist-fab{position:fixed;right:16px;bottom:136px;z-index:160;display:none;align-items:center;gap:6px;background:var(--red);color:#fff;border:none;border-radius:22px;padding:10px 16px;font-family:'Barlow',sans-serif;font-size:14px;font-weight:700;box-shadow:0 4px 14px rgba(0,0,0,.45);cursor:pointer}
+#checklist-fab.complete{background:#1a7a45}
+.ckl-item{display:flex;align-items:center;gap:8px;background:var(--bg4);border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:13px;color:var(--text)}
+.ckl-item .ckl-texte{flex:1;line-height:1.35}
+.ckl-item button{background:none;border:none;color:var(--muted);font-size:15px;cursor:pointer;padding:2px 4px}
+.ckl-badge{font-size:10px;font-weight:700;color:var(--red);background:var(--red2);border:1px solid var(--red3);border-radius:4px;padding:1px 5px;text-transform:uppercase;letter-spacing:.3px;flex-shrink:0}
+.ckl-sub{font-size:12px;font-weight:700;color:var(--text);margin-top:4px}
+.ckl-hint{font-size:11px;color:var(--muted)}
+.ckl-check{display:flex;align-items:flex-start;gap:10px;padding:10px 4px;border-bottom:1px solid var(--border);font-size:14px;color:var(--text);cursor:pointer}
+.ckl-check input{width:20px;height:20px;margin:0;flex-shrink:0;accent-color:var(--red)}
+.ckl-check.done .ckl-texte{color:var(--muted);text-decoration:line-through}
+.ckl-input{flex:1;background:var(--bg4);border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:13px;color:var(--text);font-family:'Barlow',sans-serif}
+#home-checklist-link{font-size:13px;color:var(--muted);background:var(--bg4);border:1px solid var(--border);border-radius:10px;padding:10px 12px;cursor:pointer}
 .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:500;align-items:flex-end}
 .modal-overlay.open{display:flex}
 .modal-box{background:var(--bg2);border-radius:16px 16px 0 0;padding:20px 16px 40px;width:100%;max-height:80vh;overflow-y:auto}
@@ -276,6 +290,7 @@ input[type=date]{color-scheme:dark}
     <span style="font-size:10px;color:var(--muted);margin-top:2px">Numéro de passage dans l'année (sera automatique l'an prochain)</span>
   </div>
   <button class="btn-primary" id="btn-start" onclick="startBilan()" style="display:none">Commencer le bilan →</button>
+  <div id="home-checklist-link" onclick="goScreen('params')">📋 Ma checklist de passage →</div>
 </div>
 
 <!-- SCREEN 2 : SAISIE -->
@@ -619,6 +634,30 @@ input[type=date]{color-scheme:dark}
 
 <!-- SCREEN 4 : PARAMÈTRES -->
 <div id="screen-params" class="screen">
+  <div class="params-section" id="checklist-section">
+    <div class="params-section-title">Ma checklist de passage</div>
+    <div class="ckl-hint">Aide-mémoire consultable pendant la saisie (bouton ☑ en bas à droite). Tes points personnels ne sont visibles que par toi ; les points réseau sont définis par Olivier pour tous les AR.</div>
+    <div id="checklist-login" style="display:none;flex-direction:column;gap:6px">
+      <div class="ckl-hint">Connecte-toi avec ton mot de passe Zimbra pour charger et modifier ta checklist (elle te suit sur tous tes appareils).</div>
+      <div style="display:flex;gap:6px">
+        <input type="password" id="checklist-login-pass" class="ckl-input" placeholder="Mot de passe Zimbra" onkeydown="if(event.key==='Enter')checklistLogin()">
+        <button class="btn-add" onclick="checklistLogin()">Se connecter</button>
+      </div>
+      <div id="checklist-login-error" class="ckl-hint" style="color:var(--red);display:none"></div>
+    </div>
+    <div class="ckl-sub">Points réseau</div>
+    <div id="checklist-reseau-list" style="display:flex;flex-direction:column;gap:6px"></div>
+    <div id="checklist-reseau-add" style="display:none;gap:6px">
+      <input type="text" id="checklist-reseau-new" class="ckl-input" placeholder="Nouveau point pour tous les AR" maxlength="300" onkeydown="if(event.key==='Enter')checklistAjouter('reseau')">
+      <button class="btn-add" onclick="checklistAjouter('reseau')">+ Réseau</button>
+    </div>
+    <div class="ckl-sub">Mes points</div>
+    <div id="checklist-perso-list" style="display:flex;flex-direction:column;gap:6px"></div>
+    <div id="checklist-perso-add" style="display:none;gap:6px">
+      <input type="text" id="checklist-perso-new" class="ckl-input" placeholder="Ex : vérifier l'affichage vitrine" maxlength="300" onkeydown="if(event.key==='Enter')checklistAjouter('perso')">
+      <button class="btn-add" onclick="checklistAjouter('perso')">+ Ajouter</button>
+    </div>
+  </div>
   <div class="params-section">
     <div class="params-section-title">Objectifs KPI</div>
     <div id="kpi-params-list"></div>
@@ -729,6 +768,29 @@ input[type=date]{color-scheme:dark}
 <!-- TOAST -->
 <div id="toast"></div>
 
+<!-- CHECKLIST DE PASSAGE : bouton flottant + panneau + alerte (24/09) -->
+<button id="checklist-fab" onclick="openChecklistPanel()">☑ <span id="checklist-fab-count">0/0</span></button>
+<div class="modal-overlay" id="modal-checklist" onclick="closeChecklistPanel()">
+  <div class="modal-box" onclick="event.stopPropagation()" style="max-width:480px">
+    <div class="modal-title">Checklist du passage</div>
+    <div id="checklist-panel-list"></div>
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeChecklistPanel()">Fermer</button>
+    </div>
+  </div>
+</div>
+<div class="modal-overlay" id="modal-checklist-alerte" onclick="closeChecklistAlerte()">
+  <div class="modal-box" onclick="event.stopPropagation()" style="max-width:480px">
+    <div class="modal-title">Checklist incomplète</div>
+    <div class="ckl-hint" style="margin-bottom:8px">Ces points ne sont pas cochés. Tu peux revenir les faire, ou continuer quand même.</div>
+    <div id="checklist-alerte-list" style="display:flex;flex-direction:column;gap:6px"></div>
+    <div class="modal-actions">
+      <button class="btn-primary" onclick="closeChecklistAlerte()">← Revenir à la saisie</button>
+      <button class="btn-secondary" onclick="checklistContinuerQuandMeme()">Continuer quand même</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL -->
 <div class="modal-overlay" id="modal-send" onclick="closeModal()">
   <div class="modal-box" onclick="event.stopPropagation()" style="max-width:480px">
@@ -812,7 +874,7 @@ function loadLogo() {
 }
 
 // ── VERSION APP ── (incrémenter à chaque mise à jour notable, pour déclencher l'invite de rechargement)
-const APP_VERSION = '2026.09.19-5'; // à bumper avec SW_VERSION (sw.js) ET version.json à chaque déploiement
+const APP_VERSION = '2026.09.24-1'; // à bumper avec SW_VERSION (sw.js) ET version.json à chaque déploiement
 
 // Token pour la route /store-bilan du Worker (persistance D1, doit correspondre à STORE_SECRET dans worker.js)
 const STORE_SECRET = 'OC-bilan-store-2026';
@@ -1768,6 +1830,7 @@ async function applyRhEffectifPrefill(code) {
 function resetSaisie() {
   if (!confirm('Réinitialiser la saisie en cours ? Toutes les informations déjà saisies pour ce bilan seront effacées.')) return;
   if (draftKey) localStorage.removeItem(draftKey);
+  checklistClearEtat();
   actions = []; kpisAdded = []; photos = [null,null,null]; photoCaptions = ['','',''];
   fortsList = []; diffList = []; entretiens = []; peniches = emptyPeniches();
   renderPoints('forts'); renderPoints('diff'); renderEntretiens(); renderPeniches();
@@ -1826,6 +1889,7 @@ function startBilan() {
   renderActions(); renderKpiChips();
   draftKey = `bilan_draft_${currentMag.code}`;
   loadDraft();
+  checklistLoadEtat();
   goScreen('saisie');
   document.getElementById('bottom-bar').style.display = 'flex';
   setToday();
@@ -2458,6 +2522,13 @@ function finalizeBilan() {
     document.getElementById('peniches-list')?.scrollIntoView({behavior:'smooth',block:'center'});
     return;
   }
+  // Checklist de passage (24/09) : alerte non bloquante si des points restent
+  // non cochés — « Continuer quand même » relance finalizeBilan sans alerte.
+  if (!checklistBypass) {
+    const restants = checklistRestants();
+    if (restants.length) { openChecklistAlerte(restants); return; }
+  }
+  checklistBypass = false;
   params.myEmail = document.getElementById('p-my-email').value || params.myEmail || '';
   const recips = document.getElementById('modal-recipients');
   recips.innerHTML = '';
@@ -3065,11 +3136,13 @@ async function sendBilan() {
     // transverse d'Olivier, indépendamment du localStorage de chaque animateur.
     // Ne doit jamais bloquer ni faire échouer l'envoi du bilan lui-même.
     if (sendOk) {
+      data.checklistReseau = checklistReseauPourBilan();
       fetch(relay + '/store-bilan', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-Store-Token': STORE_SECRET },
         body: JSON.stringify(data)
       }).catch(e => console.warn('store-bilan (persistance centrale) échouée :', e));
+      checklistClearEtat();
     }
 
     if (sendOk) {
@@ -5156,6 +5229,234 @@ async function runComHebdo() {
   }
 }
 // ── NAVIGATION ──
+// ── CHECKLIST DE PASSAGE (24/09) ─────────────────────────────────────────────
+// Points réseau (définis par Olivier, communs à tous, état coché envoyé avec le
+// bilan) + points personnels de l'AR (aide-mémoire privé). Les deux listes sont
+// en base (Worker /ar-checklist) ; copie locale pour l'affichage hors connexion.
+// L'état coché du passage en cours est local, par magasin, et repart de zéro à
+// chaque nouveau passage.
+let checklist = { reseau: [], perso: [], ar: null, estOlivier: false, sessionRequise: true };
+let checklistEtat = {};
+let checklistBypass = false;
+
+function checklistRelay() { return params.relay || 'https://zimbra-relay.oli-baroukh.workers.dev'; }
+function checklistEtatKey() { return currentMag ? 'bilan_checklist_etat_' + currentMag.code : null; }
+function checklistNewId() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
+function checklistEsc(t) { const d = document.createElement('div'); d.textContent = t == null ? '' : String(t); return d.innerHTML; }
+
+function checklistLoadCache() {
+  try {
+    const c = JSON.parse(localStorage.getItem('bilan_checklist_cache') || 'null');
+    if (c) checklist = Object.assign(checklist, { reseau: c.reseau || [], perso: c.perso || [], ar: c.ar || null, estOlivier: !!c.estOlivier });
+  } catch(e) {}
+}
+function checklistSaveCache() {
+  try { localStorage.setItem('bilan_checklist_cache', JSON.stringify({ reseau: checklist.reseau, perso: checklist.perso, ar: checklist.ar, estOlivier: checklist.estOlivier })); } catch(e) {}
+}
+
+async function checklistRefresh() {
+  const session = loadArSession();
+  try {
+    const headers = { 'X-Store-Token': STORE_SECRET };
+    if (session) headers['X-AR-Session'] = session.token;
+    const resp = await fetch(checklistRelay() + '/ar-checklist', { headers });
+    const d = await resp.json();
+    if (!resp.ok || !d.ok) throw new Error(d.error || ('Erreur ' + resp.status));
+    checklist.reseau = d.reseau || [];
+    checklist.sessionRequise = !!d.sessionRequise;
+    if (!d.sessionRequise) {
+      // Autre AR connecté que celui en cache : on ne garde pas ses points perso.
+      checklist.perso = d.items || [];
+      checklist.ar = d.ar; checklist.estOlivier = !!d.estOlivier;
+    }
+    checklistSaveCache();
+  } catch(e) {
+    checklist.sessionRequise = !session;
+  }
+  renderChecklistParams(); updateChecklistFab(); updateHomeChecklistLink();
+}
+
+async function checklistLogin() {
+  const errEl = document.getElementById('checklist-login-error');
+  errEl.style.display = 'none';
+  const zimbraUser = (params.zimbraUser || '').trim();
+  const zimbraPass = document.getElementById('checklist-login-pass').value;
+  if (!zimbraUser) { errEl.textContent = 'Renseigne d\'abord ton identifiant Zimbra plus bas dans Paramètres'; errEl.style.display = 'block'; return; }
+  if (!zimbraPass) { errEl.textContent = 'Mot de passe requis'; errEl.style.display = 'block'; return; }
+  try {
+    const resp = await fetch(checklistRelay() + '/ar-login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Store-Token': STORE_SECRET },
+      body: JSON.stringify({ zimbraUser, zimbraPass })
+    });
+    const raw = await resp.text();
+    let data; try { data = JSON.parse(raw); } catch(e) { data = { error: raw }; }
+    if (!resp.ok || data.error) throw new Error(data.error || ('Erreur ' + resp.status));
+    arSession = { token: data.sessionToken, ar: data.ar, exp: Date.now() + data.expiresInMs };
+    localStorage.setItem('bilan_ar_session', JSON.stringify(arSession));
+    document.getElementById('checklist-login-pass').value = '';
+    await checklistRefresh();
+    showToast('Checklist chargée ✓');
+  } catch(e) {
+    errEl.textContent = e.message; errEl.style.display = 'block';
+  }
+}
+
+async function checklistSauver(type) {
+  const session = loadArSession();
+  if (!session) { checklist.sessionRequise = true; renderChecklistParams(); showToast('⚠ Session expirée — reconnecte-toi'); return false; }
+  const path = type === 'reseau' ? '/ar-checklist-reseau' : '/ar-checklist';
+  const items = type === 'reseau' ? checklist.reseau : checklist.perso;
+  try {
+    const resp = await fetch(checklistRelay() + path, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Store-Token': STORE_SECRET, 'X-AR-Session': session.token },
+      body: JSON.stringify({ items })
+    });
+    const d = await resp.json().catch(() => ({}));
+    if (!resp.ok || !d.ok) throw new Error(d.error || ('Erreur ' + resp.status));
+    checklistSaveCache();
+    return true;
+  } catch(e) {
+    showToast('⚠ Checklist non enregistrée : ' + e.message);
+    await checklistRefresh();
+    return false;
+  }
+}
+
+function checklistAjouter(type) {
+  const input = document.getElementById(type === 'reseau' ? 'checklist-reseau-new' : 'checklist-perso-new');
+  const texte = input.value.trim();
+  if (!texte) return;
+  (type === 'reseau' ? checklist.reseau : checklist.perso).push({ id: checklistNewId(), texte });
+  input.value = '';
+  renderChecklistParams(); updateChecklistFab(); updateHomeChecklistLink();
+  checklistSauver(type);
+}
+
+function checklistSupprimer(type, id) {
+  const liste = type === 'reseau' ? checklist.reseau : checklist.perso;
+  const it = liste.find(x => x.id === id);
+  if (!it) return;
+  if (type === 'reseau' && !confirm('Supprimer ce point réseau pour tous les AR ?\n\n« ' + it.texte + ' »')) return;
+  if (type === 'reseau') checklist.reseau = liste.filter(x => x.id !== id); else checklist.perso = liste.filter(x => x.id !== id);
+  renderChecklistParams(); updateChecklistFab(); updateHomeChecklistLink();
+  checklistSauver(type);
+}
+
+function checklistDeplacer(type, id, delta) {
+  const liste = type === 'reseau' ? checklist.reseau : checklist.perso;
+  const i = liste.findIndex(x => x.id === id), j = i + delta;
+  if (i < 0 || j < 0 || j >= liste.length) return;
+  [liste[i], liste[j]] = [liste[j], liste[i]];
+  renderChecklistParams();
+  checklistSauver(type);
+}
+
+function renderChecklistParams() {
+  const connecte = !checklist.sessionRequise && !!loadArSession();
+  const loginEl = document.getElementById('checklist-login');
+  if (!loginEl) return;
+  loginEl.style.display = connecte ? 'none' : 'flex';
+  const peutReseau = connecte && checklist.estOlivier;
+  const ligne = (type, it, editable) => `<div class="ckl-item">
+      ${type === 'reseau' ? '<span class="ckl-badge">Réseau</span>' : ''}
+      <span class="ckl-texte">${checklistEsc(it.texte)}</span>
+      ${editable ? `<button title="Monter" onclick="checklistDeplacer('${type}','${it.id}',-1)">↑</button><button title="Descendre" onclick="checklistDeplacer('${type}','${it.id}',1)">↓</button><button title="Supprimer" onclick="checklistSupprimer('${type}','${it.id}')">🗑</button>` : ''}
+    </div>`;
+  document.getElementById('checklist-reseau-list').innerHTML = checklist.reseau.length
+    ? checklist.reseau.map(it => ligne('reseau', it, peutReseau)).join('')
+    : `<div class="ckl-hint">Aucun point réseau${peutReseau ? ' — ajoute-en un ci-dessous, il apparaîtra chez tous les AR.' : ' pour le moment.'}</div>`;
+  document.getElementById('checklist-reseau-add').style.display = peutReseau ? 'flex' : 'none';
+  document.getElementById('checklist-perso-list').innerHTML = checklist.perso.length
+    ? checklist.perso.map(it => ligne('perso', it, connecte)).join('')
+    : `<div class="ckl-hint">${connecte ? 'Aucun point personnel — ajoute tes propres rappels ci-dessous.' : 'Connecte-toi pour voir et modifier tes points.'}</div>`;
+  document.getElementById('checklist-perso-add').style.display = connecte ? 'flex' : 'none';
+}
+
+function checklistTous() {
+  return [...checklist.reseau.map(it => ({ ...it, type: 'reseau' })), ...checklist.perso.map(it => ({ ...it, type: 'perso' }))];
+}
+
+function checklistLoadEtat() {
+  const k = checklistEtatKey();
+  checklistEtat = {};
+  if (!k) return;
+  try { checklistEtat = JSON.parse(localStorage.getItem(k) || '{}') || {}; } catch(e) { checklistEtat = {}; }
+}
+function checklistSaveEtat() {
+  const k = checklistEtatKey();
+  if (k) try { localStorage.setItem(k, JSON.stringify(checklistEtat)); } catch(e) {}
+}
+function checklistClearEtat() {
+  const k = checklistEtatKey();
+  if (k) localStorage.removeItem(k);
+  checklistEtat = {};
+  updateChecklistFab();
+}
+
+function updateChecklistFab() {
+  const fab = document.getElementById('checklist-fab');
+  if (!fab) return;
+  const tous = checklistTous();
+  const enSaisie = document.getElementById('screen-saisie')?.classList.contains('active');
+  if (!enSaisie || !tous.length) { fab.style.display = 'none'; return; }
+  const faits = tous.filter(it => checklistEtat[it.id]).length;
+  document.getElementById('checklist-fab-count').textContent = faits + '/' + tous.length;
+  fab.classList.toggle('complete', faits === tous.length);
+  fab.style.display = 'flex';
+}
+
+function updateHomeChecklistLink() {
+  const el = document.getElementById('home-checklist-link');
+  if (!el) return;
+  const n = checklistTous().length;
+  el.textContent = n ? `📋 Ma checklist de passage · ${n} point${n > 1 ? 's' : ''} →` : '📋 Créer ma checklist de passage →';
+}
+
+function renderChecklistPanel() {
+  const tous = checklistTous();
+  document.getElementById('checklist-panel-list').innerHTML = tous.length ? tous.map(it => `
+    <label class="ckl-check ${checklistEtat[it.id] ? 'done' : ''}">
+      <input type="checkbox" ${checklistEtat[it.id] ? 'checked' : ''} onchange="checklistCocher('${it.id}', this.checked)">
+      <span class="ckl-texte">${it.type === 'reseau' ? '<span class="ckl-badge">Réseau</span> ' : ''}${checklistEsc(it.texte)}</span>
+    </label>`).join('') : '<div class="ckl-hint">Ta checklist est vide — ajoute des points dans Paramètres.</div>';
+}
+
+function checklistCocher(id, val) {
+  if (val) checklistEtat[id] = true; else delete checklistEtat[id];
+  checklistSaveEtat();
+  renderChecklistPanel(); updateChecklistFab();
+}
+
+function openChecklistPanel() { renderChecklistPanel(); document.getElementById('modal-checklist').classList.add('open'); }
+function closeChecklistPanel() { document.getElementById('modal-checklist').classList.remove('open'); }
+
+function checklistRestants() { return checklistTous().filter(it => !checklistEtat[it.id]); }
+
+function openChecklistAlerte(restants) {
+  document.getElementById('checklist-alerte-list').innerHTML = restants.map(it => `<div class="ckl-item">${it.type === 'reseau' ? '<span class="ckl-badge">Réseau</span>' : ''}<span class="ckl-texte">${checklistEsc(it.texte)}</span></div>`).join('');
+  document.getElementById('modal-checklist-alerte').classList.add('open');
+}
+function closeChecklistAlerte() { document.getElementById('modal-checklist-alerte').classList.remove('open'); }
+function checklistContinuerQuandMeme() {
+  closeChecklistAlerte();
+  checklistBypass = true;
+  finalizeBilan();
+}
+
+// État des points réseau joint au bilan envoyé en base (dashboard + récap hebdo).
+// Les points personnels ne sont jamais transmis.
+function checklistReseauPourBilan() {
+  return checklist.reseau.map(it => ({ id: it.id, texte: it.texte, coche: !!checklistEtat[it.id] }));
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  checklistLoadCache();
+  renderChecklistParams(); updateHomeChecklistLink();
+  checklistRefresh();
+});
+
 function goScreen(name) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
@@ -5167,6 +5468,8 @@ function goScreen(name) {
   if (name === 'history') renderHistory();
   if (name === 'saisie') initKpiSelect();
   if (name === 'analyse') initAnalyseScreen();
+  if (name === 'params') { renderChecklistParams(); checklistRefresh(); }
+  updateChecklistFab();
 }
 
 // ── TOAST ──
