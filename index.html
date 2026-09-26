@@ -874,7 +874,7 @@ function loadLogo() {
 }
 
 // ── VERSION APP ── (incrémenter à chaque mise à jour notable, pour déclencher l'invite de rechargement)
-const APP_VERSION = '2026.09.26-1'; // à bumper avec SW_VERSION (sw.js) ET version.json à chaque déploiement
+const APP_VERSION = '2026.09.26-2'; // à bumper avec SW_VERSION (sw.js) ET version.json à chaque déploiement
 
 // Token pour la route /store-bilan du Worker (persistance D1, doit correspondre à STORE_SECRET dans worker.js)
 const STORE_SECRET = 'OC-bilan-store-2026';
@@ -1082,8 +1082,8 @@ function renderPreviousActions() {
     const dateStr = a.date ? new Date(a.date).toLocaleDateString('fr-FR',{day:'numeric',month:'short'}) : '';
     row.innerHTML = `
       <div class="prev-action-info">
-        <div class="prev-action-text">${a.text}</div>
-        <div class="prev-action-meta">${a.comment ? a.comment + ' · ' : ''}${a.who || ''}${dateStr ? ' · ' + dateStr : ''}</div>
+        <div class="prev-action-text">${escapeHtmlLocal(a.text)}</div>
+        <div class="prev-action-meta">${a.comment ? escapeHtmlLocal(a.comment) + ' · ' : ''}${escapeHtmlLocal(a.who || '')}${dateStr ? ' · ' + dateStr : ''}</div>
       </div>
       <div class="prev-action-btns">
         <button class="prev-status-btn prev-status-done ${status==='done'?'active':''}" onclick="setPrevStatus(${i},'done')">✓ Fait</button>
@@ -2060,8 +2060,8 @@ function renderEntretiens() {
     row.className = 'action-item-row';
     row.innerHTML = `<div class="action-item-dot"></div>
       <div class="action-item-content">
-        <div class="action-item-text">${e.prenom}</div>
-        ${e.sujet ? `<div class="action-item-comment" style="font-size:11px;color:var(--muted);margin-top:2px">${e.sujet}</div>` : `<div class="action-item-comment" style="font-size:11px;color:var(--muted);margin-top:2px;font-style:italic">Sujet confidentiel</div>`}
+        <div class="action-item-text">${escapeHtmlLocal(e.prenom)}</div>
+        ${e.sujet ? `<div class="action-item-comment" style="font-size:11px;color:var(--muted);margin-top:2px">${escapeHtmlLocal(e.sujet)}</div>` : `<div class="action-item-comment" style="font-size:11px;color:var(--muted);margin-top:2px;font-style:italic">Sujet confidentiel</div>`}
       </div>
       <span class="action-item-del" onclick="removeEntretien(${i})">✕</span>`;
     list.appendChild(row);
@@ -2108,7 +2108,7 @@ function renderPoints(kind) {
     const row = document.createElement('div');
     row.className = 'action-item-row';
     row.innerHTML = `<div class="action-item-dot" style="background:${kind === 'forts' ? 'var(--green)' : 'var(--red)'}"></div>
-      <div class="action-item-content"><div class="action-item-text">${text}</div></div>
+      <div class="action-item-content"><div class="action-item-text">${escapeHtmlLocal(text)}</div></div>
       <span class="action-item-del" onclick="removePoint('${kind}', ${i})">✕</span>`;
     el.appendChild(row);
   });
@@ -2190,7 +2190,7 @@ function renderPeniches() {
       ${zone.n > 0 ? `
       <div class="peniche-comment-toggle" onclick="penicheToggleComment('${z.key}')">🗨️ ${zone.comment ? 'Modifier le commentaire' : 'Ajouter un commentaire'}</div>
       <div class="peniche-comment-box${zone.comment ? ' open' : ''}" id="pen-comment-${z.key}">
-        <textarea id="pen-comment-text-${z.key}" rows="2" placeholder="Ce que vous avez constaté..." onfocus="setMicTarget('pen-comment-text-${z.key}')" oninput="penicheCommentInput('${z.key}', this.value)">${zone.comment}</textarea>
+        <textarea id="pen-comment-text-${z.key}" rows="2" placeholder="Ce que vous avez constaté..." onfocus="setMicTarget('pen-comment-text-${z.key}')" oninput="penicheCommentInput('${z.key}', this.value)">${escapeHtmlLocal(zone.comment)}</textarea>
         <div class="peniche-tags">
           <div class="peniche-tag${zone.type === 'positif' ? ' active-positif' : ''}" onclick="penicheSetType('${z.key}', 'positif')">✅ Positif</div>
           <div class="peniche-tag${zone.type === 'vigilance' ? ' active-vigilance' : ''}" onclick="penicheSetType('${z.key}', 'vigilance')">⚠️ Vigilance</div>
@@ -2211,9 +2211,9 @@ function renderActions() {
     const isPrev = a._fromPrevious;
     row.innerHTML = `<div class="action-item-dot" style="${isPrev ? 'background:var(--muted)' : ''}"></div>
       <div class="action-item-content">
-        <div class="action-item-text">${isPrev ? '<span style="font-size:10px;background:#f0ede6;color:var(--muted);border-radius:4px;padding:1px 5px;margin-right:4px">↩ Report</span>' : ''}${a.text}</div>
-        ${a.comment ? `<div class="action-item-comment" style="font-size:11px;color:var(--muted);margin-top:2px">${a.comment}</div>` : ''}
-        <div class="action-item-meta">${a.who ? `<span>${a.who}</span>` : ''}<span style="color:var(--red)">${dateStr}</span></div>
+        <div class="action-item-text">${isPrev ? '<span style="font-size:10px;background:#f0ede6;color:var(--muted);border-radius:4px;padding:1px 5px;margin-right:4px">↩ Report</span>' : ''}${escapeHtmlLocal(a.text)}</div>
+        ${a.comment ? `<div class="action-item-comment" style="font-size:11px;color:var(--muted);margin-top:2px">${escapeHtmlLocal(a.comment)}</div>` : ''}
+        <div class="action-item-meta">${a.who ? `<span>${escapeHtmlLocal(a.who)}</span>` : ''}<span style="color:var(--red)">${dateStr}</span></div>
       </div>
       <span class="action-item-del" onclick="removeAction(${i})">✕</span>`;
     list.appendChild(row);
@@ -4367,8 +4367,8 @@ function renderHistory() {
       item.className = 'history-item';
       item.innerHTML = `
         <div class="history-item-info">
-          <div class="history-item-title">${d.magasin?.libelle || code} — Passage n°${d.passage || '?'}</div>
-          <div class="history-item-meta">${formatDate(d.date)} · ${d.ar || ''}${d.duree ? ' · ' + formatDuree(d.duree) : ''}</div>
+          <div class="history-item-title">${escapeHtmlLocal(d.magasin?.libelle || code)} — Passage n°${escapeHtmlLocal(d.passage || '?')}</div>
+          <div class="history-item-meta">${formatDate(d.date)} · ${escapeHtmlLocal(d.ar || '')}${d.duree ? ' · ' + formatDuree(d.duree) : ''}</div>
         </div>
         <div class="history-item-actions">
           <button class="icon-btn" title="Télécharger PDF" data-action="download" data-code="${code}" data-idx="${idx}">📥</button>
@@ -4868,8 +4868,11 @@ function computeHealthScore(s) {
   return Math.round(total / possible);
 }
 
+// 26/09 (sécurité) : accepte aussi les nombres et échappe les guillemets —
+// utilisé partout où du texte saisi (bilans, actions, analyses) est injecté
+// en innerHTML, pour qu'un texte piégé ne puisse pas s'exécuter.
 function escapeHtmlLocal(s) {
-  return (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
 // Comparaison insensible à la casse/accents pour la recherche magasin (écran Tournée)
@@ -5210,8 +5213,8 @@ async function runComHebdo() {
 
     const b = data.blocks;
     const card = (title, content) => `<div style="background:var(--bg4);border:1px solid var(--border);border-radius:10px;padding:12px">
-      <div style="font-size:11px;color:var(--red);font-weight:600;margin-bottom:6px;text-transform:uppercase">${title}</div>
-      <div style="font-size:13px;line-height:1.6;white-space:pre-wrap">${content}</div>
+      <div style="font-size:11px;color:var(--red);font-weight:600;margin-bottom:6px;text-transform:uppercase">${escapeHtmlLocal(title)}</div>
+      <div style="font-size:13px;line-height:1.6;white-space:pre-wrap">${escapeHtmlLocal(content)}</div>
     </div>`;
 
     resultEl.innerHTML =
@@ -5222,7 +5225,7 @@ async function runComHebdo() {
       card('Email — objet : ' + b.email_objet, b.email_corps);
     resultEl.style.display = 'flex';
   } catch(e) {
-    resultEl.innerHTML = '❌ ' + e.message;
+    resultEl.textContent = '❌ ' + e.message;
     resultEl.style.display = 'flex';
   } finally {
     loading.style.display = 'none';
