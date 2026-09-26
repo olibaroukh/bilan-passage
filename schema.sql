@@ -19,3 +19,13 @@ CREATE TABLE IF NOT EXISTS bilans (
 CREATE INDEX IF NOT EXISTS idx_bilans_magasin ON bilans(magasin_code);
 CREATE INDEX IF NOT EXISTS idx_bilans_ar ON bilans(ar);
 CREATE INDEX IF NOT EXISTS idx_bilans_date ON bilans(date);
+
+-- Fermetures réseau (26/09/2026) : Kippour ou toute fermeture de tous les magasins,
+-- saisies dans import.html. Retirées des jours attendus de lancement de journée.
+CREATE TABLE IF NOT EXISTS fermetures_reseau (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  intitule TEXT NOT NULL,
+  date_debut TEXT NOT NULL,
+  nb_jours INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT
+);

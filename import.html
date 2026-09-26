@@ -53,6 +53,14 @@ input[type=password],input[type=text],input[type=month]{background:var(--bg4);bo
 .modal-card ul{margin:0;padding-left:18px;font-size:13px;line-height:1.6}
 .modal-card ul.compact li{font-size:12.5px}
 .modal-close{align-self:flex-end;background:var(--red);color:#fff;border:none;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:600;font-family:'Barlow',sans-serif;cursor:pointer;margin-top:4px}
+input[type=date],input[type=number]{background:var(--bg4);border:1px solid var(--border);border-radius:8px;padding:11px 12px;font-size:14px;color:var(--text);font-family:'Barlow',sans-serif;width:100%;color-scheme:dark}
+.ferm-grid{display:grid;grid-template-columns:1fr 90px;gap:8px}
+.ferm-list{display:flex;flex-direction:column;gap:6px}
+.ferm-item{display:flex;align-items:center;justify-content:space-between;gap:8px;background:var(--bg4);border-radius:8px;padding:8px 10px;font-size:13px}
+.ferm-item.passee{opacity:.5}
+.ferm-item .ferm-dates{font-size:11px;color:var(--muted)}
+.ferm-item button{background:transparent;border:1px solid var(--border);color:var(--muted);border-radius:6px;padding:4px 8px;font-size:12px;cursor:pointer;font-family:'Barlow',sans-serif}
+.ferm-item button:hover{border-color:var(--red);color:var(--text)}
 </style>
 </head>
 <body>
@@ -126,6 +134,20 @@ input[type=password],input[type=text],input[type=month]{background:var(--bg4);bo
       <button class="btn-secondary" onclick="rollbackImportKaizen(event)">🗑️ Supprimer tout l'historique importé</button>
       <div id="result-kaizen" style="display:none"></div>
     </div>
+
+    <div style="height:8px"></div>
+    <div class="card">
+      <label>Fermetures réseau (tous les magasins)</label>
+      <div class="hint">Kippour ou toute autre fermeture de l'ensemble du réseau. Ces jours sont retirés des jours attendus de lancement de journée (score de santé, bilans hebdo/mensuel) et du préremplissage des jours ouvrés dans Pour être dans le vert. Dimanches et jours fériés sont déjà déduits automatiquement — inutile de les saisir.</div>
+      <div><label>Intitulé</label><input type="text" id="ferm-intitule" placeholder="ex. Kippour 2027" maxlength="120"></div>
+      <div class="ferm-grid">
+        <div><label>Date de début</label><input type="date" id="ferm-date"></div>
+        <div><label>Nb de jours</label><input type="number" id="ferm-nb" value="1" min="1" max="31"></div>
+      </div>
+      <button class="btn-primary" id="ferm-add-btn" onclick="ajouterFermeture()">Ajouter la fermeture</button>
+      <div id="ferm-error" class="error" style="display:none"></div>
+      <div class="ferm-list" id="ferm-list"><div class="hint">Chargement…</div></div>
+    </div>
   </div>
 </div>
 
@@ -184,6 +206,7 @@ async function doLogin() {
     localStorage.setItem(SESSION_KEY, JSON.stringify(session));
     document.getElementById('login-pass').value = '';
     showScreen();
+    chargerFermetures();
   } catch(e) {
     errEl.textContent = e.message || String(e);
     errEl.style.display = 'block';
@@ -473,7 +496,76 @@ function closeColsModal() {
   document.getElementById('cols-modal-overlay').classList.remove('open');
 }
 
+// ── Fermetures réseau (26/09) ──
+function fmtDateFr(iso) {
+  const [y, m, d] = iso.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
+}
+function escHtml(t) { return String(t).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+
+function renderFermetures(list) {
+  const el = document.getElementById('ferm-list');
+  if (!list.length) { el.innerHTML = '<div class="hint">Aucune fermeture enregistrée.</div>'; return; }
+  const today = new Date().toISOString().slice(0, 10);
+  el.innerHTML = list.map(f => {
+    const n = parseInt(f.nb_jours, 10) || 1;
+    const [y, m, d] = f.date_debut.split('-').map(Number);
+    const fin = new Date(Date.UTC(y, m - 1, d + n - 1)).toISOString().slice(0, 10);
+    const dates = n > 1 ? 'du ' + fmtDateFr(f.date_debut) + ' au ' + fmtDateFr(fin) + ' (' + n + ' j)' : fmtDateFr(f.date_debut);
+    return '<div class="ferm-item' + (fin < today ? ' passee' : '') + '"><div><div>' + escHtml(f.intitule) + '</div><div class="ferm-dates">' + dates + '</div></div>'
+      + '<button type="button" onclick="supprimerFermeture(' + f.id + ')" aria-label="Supprimer">🗑️</button></div>';
+  }).join('');
+}
+
+async function appelFermetures(body) {
+  const resp = await fetch(RELAY + '/fermetures-reseau', {
+    method: body ? 'POST' : 'GET',
+    headers: { 'Content-Type': 'application/json', 'X-Store-Token': STORE_SECRET, 'X-AR-Session': arSession.token },
+    body: body ? JSON.stringify(body) : undefined
+  });
+  const data = await resp.json();
+  if (!resp.ok || !data.ok) throw new Error(data.error || ('Erreur ' + resp.status));
+  renderFermetures(data.fermetures || []);
+}
+
+function afficherErreurFermeture(msg) {
+  const e = document.getElementById('ferm-error');
+  e.textContent = msg || ''; e.style.display = msg ? 'block' : 'none';
+}
+
+async function chargerFermetures() {
+  if (!arSession) return;
+  try { afficherErreurFermeture(''); await appelFermetures(null); }
+  catch (e) { document.getElementById('ferm-list').innerHTML = ''; afficherErreurFermeture(e.message || String(e)); }
+}
+
+async function ajouterFermeture() {
+  const intitule = document.getElementById('ferm-intitule').value.trim();
+  const date_debut = document.getElementById('ferm-date').value;
+  const nb_jours = parseInt(document.getElementById('ferm-nb').value, 10);
+  if (!intitule) return afficherErreurFermeture('Intitulé requis');
+  if (!date_debut) return afficherErreurFermeture('Date de début requise');
+  if (!(nb_jours >= 1 && nb_jours <= 31)) return afficherErreurFermeture('Nombre de jours entre 1 et 31');
+  const btn = document.getElementById('ferm-add-btn');
+  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>Ajout…';
+  try {
+    afficherErreurFermeture('');
+    await appelFermetures({ intitule, date_debut, nb_jours });
+    document.getElementById('ferm-intitule').value = '';
+    document.getElementById('ferm-date').value = '';
+    document.getElementById('ferm-nb').value = '1';
+  } catch (e) { afficherErreurFermeture(e.message || String(e)); }
+  finally { btn.disabled = false; btn.textContent = 'Ajouter la fermeture'; }
+}
+
+async function supprimerFermeture(id) {
+  if (!confirm('Supprimer cette fermeture ? Les jours seront de nouveau comptés comme attendus.')) return;
+  try { afficherErreurFermeture(''); await appelFermetures({ deleteId: id }); }
+  catch (e) { afficherErreurFermeture(e.message || String(e)); }
+}
+
 showScreen();
+chargerFermetures();
 </script>
 </body>
 </html>

@@ -874,7 +874,7 @@ function loadLogo() {
 }
 
 // ── VERSION APP ── (incrémenter à chaque mise à jour notable, pour déclencher l'invite de rechargement)
-const APP_VERSION = '2026.09.24-1'; // à bumper avec SW_VERSION (sw.js) ET version.json à chaque déploiement
+const APP_VERSION = '2026.09.26-1'; // à bumper avec SW_VERSION (sw.js) ET version.json à chaque déploiement
 
 // Token pour la route /store-bilan du Worker (persistance D1, doit correspondre à STORE_SECRET dans worker.js)
 const STORE_SECRET = 'OC-bilan-store-2026';
@@ -5544,7 +5544,7 @@ const HEALTH_SCORE_INFO_ITEMS = {
   equipe: { label: 'Niveau équipe', text: 'moyenne des responsabilités notées dans Évaluation Équipe (objectif 8/10), ramenée sur 100.' },
   kaizen: { label: 'Kaizen (audit 5S)', text: 'score du dernier mois clôturé (sur 50 pts, audit 5S), ramené sur 100. Le mois en cours n\'est pas utilisé tant qu\'il n\'est pas clôturé, pour ne pas pénaliser un audit encore en cours de remplissage.' },
   entretiens: { label: 'Entretiens individuels (Suivi Managers)', text: '% de collaborateurs (hors Manager) ayant eu au moins un entretien Écoute & Feedback ou Pilotage ce mois-ci (l\'entretien de recadrage ne compte pas). 0% si aucun entretien ce mois-ci.' },
-  lancements: { label: 'Lancements de journée (Suivi Managers)', text: 'jours du mois avec au moins un lancement de journée / jours ouvrés du magasin ce mois-ci (donnée saisie dans Pour être dans le vert). 0% si aucun lancement ce mois-ci.' },
+  lancements: { label: 'Lancements de journée (Suivi Managers)', text: 'jours du mois avec au moins un lancement de journée / jours attendus écoulés (jusqu\'à la veille). Jours attendus = calendrier réseau commun à tous les magasins : jours du mois hors dimanches, jours fériés (sauf lundi de Pentecôte) et fermetures réseau (Kippour…) ; Alsace-Moselle : + Vendredi saint et 26 décembre. Plafonné à 100 %. 0% si aucun lancement ce mois-ci.' },
 };
 
 function showHealthScoreInfo() {
