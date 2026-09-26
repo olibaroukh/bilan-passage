@@ -5,26 +5,26 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>Imports — Bilan de Passage</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
 :root{
   --bg:#0D0D0D;--bg2:#1a1a1a;--bg3:#222;--bg4:#2a2a2a;
-  --red:#CC1719;--red2:rgba(204,23,25,0.15);--red3:rgba(204,23,25,0.3);
-  --text:#F0EDE6;--muted:#888;--border:rgba(255,255,255,0.08);
+  --red:#E2231A;--red2:rgba(226,35,26,0.15);--red3:rgba(226,35,26,0.3);
+  --text:#F5F5F5;--muted:#888;--border:rgba(255,255,255,0.08);
   --green:#3fae5c;--green2:rgba(63,174,92,0.15);
 }
 *{box-sizing:border-box}
-html,body{margin:0;min-height:100%;background:linear-gradient(160deg,#1A1210 0%,#0D0D0D 40%,#111010 70%,#0A0A0A 100%);background-attachment:fixed;color:var(--text);font-family:'Barlow',sans-serif;font-size:15px}
+html,body{margin:0;min-height:100%;background:linear-gradient(160deg,#171717 0%,#0D0D0D 40%,#101010 70%,#0A0A0A 100%);background-attachment:fixed;color:var(--text);font-family:'Montserrat',sans-serif;font-size:15px}
 .wrap{max-width:520px;margin:0 auto;padding:24px 16px 60px;display:flex;flex-direction:column;gap:16px}
-h1{font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:700;margin:0 0 2px;letter-spacing:.3px}
+h1{font-family:'Montserrat',sans-serif;font-size:22px;font-weight:700;margin:0 0 2px;letter-spacing:.3px}
 .subtitle{font-size:12px;color:var(--muted);margin:0 0 8px}
 .card{background:rgba(20,16,16,0.85);border:1px solid var(--border);border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:10px}
 label{font-size:11px;color:var(--muted);font-weight:500;text-transform:uppercase;letter-spacing:.5px}
-input[type=password],input[type=text],input[type=month]{background:var(--bg4);border:1px solid var(--border);border-radius:8px;padding:11px 12px;font-size:14px;color:var(--text);font-family:'Barlow',sans-serif;width:100%}
-.btn-primary{background:var(--red);color:#fff;border:none;border-radius:10px;padding:14px;font-size:15px;font-weight:600;font-family:'Barlow',sans-serif;width:100%;cursor:pointer;letter-spacing:.3px}
+input[type=password],input[type=text],input[type=month]{background:var(--bg4);border:1px solid var(--border);border-radius:8px;padding:11px 12px;font-size:14px;color:var(--text);font-family:'Montserrat',sans-serif;width:100%}
+.btn-primary{background:var(--red);color:#fff;border:none;border-radius:10px;padding:14px;font-size:15px;font-weight:600;font-family:'Montserrat',sans-serif;width:100%;cursor:pointer;letter-spacing:.3px}
 .btn-primary:disabled{opacity:.5;cursor:default}
-.btn-secondary{background:transparent;color:var(--text);border:1px solid var(--border);border-radius:10px;padding:11px;font-size:13px;font-weight:500;font-family:'Barlow',sans-serif;width:100%;cursor:pointer}
+.btn-secondary{background:transparent;color:var(--text);border:1px solid var(--border);border-radius:10px;padding:11px;font-size:13px;font-weight:500;font-family:'Montserrat',sans-serif;width:100%;cursor:pointer}
 .error{color:var(--red);font-size:12px}
 .dropzone{border:1.5px dashed var(--border);border-radius:10px;padding:20px 14px;text-align:center;font-size:13px;color:var(--muted);cursor:pointer;transition:border-color .15s,background .15s}
 .dropzone.over{border-color:var(--red);background:var(--red2)}
@@ -36,31 +36,32 @@ input[type=password],input[type=text],input[type=month]{background:var(--bg4);bo
 .result .ok{color:var(--green)}
 .result .warn{color:var(--red)}
 .session-bar{display:flex;justify-content:space-between;align-items:center;font-size:11px;color:var(--muted)}
-.session-bar button{background:transparent;border:1px solid var(--border);color:var(--muted);border-radius:6px;padding:4px 8px;font-size:11px;font-family:'Barlow',sans-serif;cursor:pointer}
+.session-bar button{background:transparent;border:1px solid var(--border);color:var(--muted);border-radius:6px;padding:4px 8px;font-size:11px;font-family:'Montserrat',sans-serif;cursor:pointer}
 #screen-login{display:none}
 #screen-main{display:none}
 .spinner{display:inline-block;width:13px;height:13px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite;vertical-align:-2px;margin-right:6px}
 @keyframes spin{to{transform:rotate(360deg)}}
 .label-row{display:flex;align-items:center;justify-content:space-between;gap:8px}
-.info-btn{background:transparent;border:1px solid var(--border);color:var(--muted);border-radius:50%;width:20px;height:20px;min-width:20px;font-size:11px;font-family:'Barlow',sans-serif;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;line-height:1}
+.info-btn{background:transparent;border:1px solid var(--border);color:var(--muted);border-radius:50%;width:20px;height:20px;min-width:20px;font-size:11px;font-family:'Montserrat',sans-serif;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;line-height:1}
 .info-btn:hover{border-color:var(--red);color:var(--text)}
 .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:100;align-items:center;justify-content:center;padding:20px}
 .modal-overlay.open{display:flex}
 .modal-card{background:#161212;border:1px solid var(--border);border-radius:12px;padding:18px;max-width:440px;width:100%;max-height:80vh;overflow-y:auto;display:flex;flex-direction:column;gap:10px}
-.modal-card h3{font-family:'Barlow Condensed',sans-serif;color:var(--red);font-size:17px;font-weight:700;margin:0;letter-spacing:.3px}
+.modal-card h3{font-family:'Montserrat',sans-serif;color:var(--red);font-size:17px;font-weight:700;margin:0;letter-spacing:.3px}
 .modal-card .modal-sub{font-size:11px;color:var(--muted);margin:-6px 0 4px}
 .modal-card h4{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin:8px 0 2px}
 .modal-card ul{margin:0;padding-left:18px;font-size:13px;line-height:1.6}
 .modal-card ul.compact li{font-size:12.5px}
-.modal-close{align-self:flex-end;background:var(--red);color:#fff;border:none;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:600;font-family:'Barlow',sans-serif;cursor:pointer;margin-top:4px}
-input[type=date],input[type=number]{background:var(--bg4);border:1px solid var(--border);border-radius:8px;padding:11px 12px;font-size:14px;color:var(--text);font-family:'Barlow',sans-serif;width:100%;color-scheme:dark}
+.modal-close{align-self:flex-end;background:var(--red);color:#fff;border:none;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:600;font-family:'Montserrat',sans-serif;cursor:pointer;margin-top:4px}
+input[type=date],input[type=number]{background:var(--bg4);border:1px solid var(--border);border-radius:8px;padding:11px 12px;font-size:14px;color:var(--text);font-family:'Montserrat',sans-serif;width:100%;color-scheme:dark}
 .ferm-grid{display:grid;grid-template-columns:1fr 90px;gap:8px}
 .ferm-list{display:flex;flex-direction:column;gap:6px}
 .ferm-item{display:flex;align-items:center;justify-content:space-between;gap:8px;background:var(--bg4);border-radius:8px;padding:8px 10px;font-size:13px}
 .ferm-item.passee{opacity:.5}
 .ferm-item .ferm-dates{font-size:11px;color:var(--muted)}
-.ferm-item button{background:transparent;border:1px solid var(--border);color:var(--muted);border-radius:6px;padding:4px 8px;font-size:12px;cursor:pointer;font-family:'Barlow',sans-serif}
+.ferm-item button{background:transparent;border:1px solid var(--border);color:var(--muted);border-radius:6px;padding:4px 8px;font-size:12px;cursor:pointer;font-family:'Montserrat',sans-serif}
 .ferm-item button:hover{border-color:var(--red);color:var(--text)}
+select,input,textarea,button{font-family:inherit}
 </style>
 </head>
 <body>

@@ -10,13 +10,13 @@
 <meta name="apple-mobile-web-app-title" content="Dashboard OC">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <style>
   :root {
     --dark: #0D0D0D;
-    --red: #CC1719;
-    --cream: #F0EDE6;
+    --red: #E2231A;
+    --cream: #F5F5F5;
     --green: #2E7D32;
     --green-bg: #E6F4E6;
     --orange: #B8710A;
@@ -26,7 +26,7 @@
   * { box-sizing: border-box; }
   body {
     margin: 0;
-    font-family: 'Barlow', -apple-system, sans-serif;
+    font-family: 'Montserrat', -apple-system, sans-serif;
     background: var(--cream);
     color: var(--dark);
   }
@@ -156,6 +156,7 @@
   }
 
   .loading { text-align: center; padding: 40px; color: var(--gray); }
+select,input,textarea,button{font-family:inherit}
 </style>
 </head>
 <body>
@@ -355,7 +356,7 @@ function renderNetworkChart() {
     type: 'line',
     data: {
       labels: networkTrend.map(p => fmtDate(p.periode)),
-      datasets: [{ data: networkTrend.map(p => p.score), borderColor: '#CC1719', backgroundColor: 'rgba(204,23,25,0.08)', fill: true, tension: 0.3, pointRadius: 0, borderWidth: 2 }],
+      datasets: [{ data: networkTrend.map(p => p.score), borderColor: '#E2231A', backgroundColor: 'rgba(226,35,26,0.08)', fill: true, tension: 0.3, pointRadius: 0, borderWidth: 2 }],
     },
     options: {
       responsive: true, maintainAspectRatio: false,
@@ -550,7 +551,7 @@ function renderArView(d) {
   if (history.length) {
     detailChart = new Chart(ctx, {
       type: 'line',
-      data: { labels: history.map(h => fmtDate(h.periode)), datasets: [{ data: history.map(h => h.score), borderColor: '#CC1719', backgroundColor: 'rgba(204,23,25,0.08)', fill: true, tension: 0.3, pointRadius: 2, borderWidth: 2 }] },
+      data: { labels: history.map(h => fmtDate(h.periode)), datasets: [{ data: history.map(h => h.score), borderColor: '#E2231A', backgroundColor: 'rgba(226,35,26,0.08)', fill: true, tension: 0.3, pointRadius: 2, borderWidth: 2 }] },
       options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { min: 0, max: 100 }, x: { grid: { display: false } } } },
     });
   } else {
@@ -790,7 +791,7 @@ function renderDetailChart(history) {
     type: 'line',
     data: {
       labels: history.map(h => fmtDate(h.periode)),
-      datasets: [{ data: history.map(h => h.score), borderColor: '#CC1719', backgroundColor: 'rgba(204,23,25,0.08)', fill: true, tension: 0.3, pointRadius: 2, borderWidth: 2 }],
+      datasets: [{ data: history.map(h => h.score), borderColor: '#E2231A', backgroundColor: 'rgba(226,35,26,0.08)', fill: true, tension: 0.3, pointRadius: 2, borderWidth: 2 }],
     },
     options: {
       responsive: true, maintainAspectRatio: false,
@@ -818,7 +819,7 @@ function openSubModal(key) {
     type: 'line',
     data: {
       labels: points.map(p => fmtDate(p.periode)),
-      datasets: [{ data: points.map(p => p.val), borderColor: '#CC1719', backgroundColor: 'rgba(204,23,25,0.08)', fill: true, tension: 0.3, pointRadius: 2, borderWidth: 2 }],
+      datasets: [{ data: points.map(p => p.val), borderColor: '#E2231A', backgroundColor: 'rgba(226,35,26,0.08)', fill: true, tension: 0.3, pointRadius: 2, borderWidth: 2 }],
     },
     options: {
       responsive: true, maintainAspectRatio: false,
