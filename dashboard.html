@@ -685,6 +685,9 @@ function renderDetailView(d) {
 
   const managerLabel = d.manager || '—';
 
+  // 26/09 (Suivi Managers v2) : la couverture compte pilotage optique/audio,
+  // valorisation et remotivation (TYPES_ENTRETIENS_COMPTES du Worker) — d'où le
+  // libellé « entretien individuel » au lieu de « pilotage », + le détail par type.
   // Suivi Managers (18/09, revu 18/09) — 4 lignes dans la carte Effectif :
   // pilotage et lancements gardent le ratio "fait/éligible" (couverture
   // collaborateurs / jours ouvrés, déjà calculé par getEntretiensLancementsMap
@@ -692,14 +695,15 @@ function renderDetailView(d) {
   // bruts du mois (pas de notion d'éligibilité pour ces deux-là).
   // d.entretiensLancements vient de buildStoreHealthResults, jamais recalculé
   // ici. 0 partout si le champ est absent (magasin sans donnée ce mois-ci).
-  const el2 = d.entretiensLancements || { nbVus: 0, nbEligibles: 0, joursLances: 0, joursOuverts: 0, nbEcouteFb: 0, nbRecadrage: 0 };
+  const el2 = d.entretiensLancements || { nbVus: 0, nbEligibles: 0, joursLances: 0, joursOuverts: 0, nbPilotage: 0, nbValorisation: 0, nbRemotivation: 0, nbEcouteFb: 0, nbRecadrage: 0 };
   const moisLabelCourt = new Date().toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
   const suiviManagersHtml = `
     <p style="font-size:11px;letter-spacing:.04em;color:var(--gray);margin:12px 0 6px">Suivi Managers — ${moisLabelCourt}</p>
-    <div class="item-row"><span>Entretiens de pilotage</span><span style="font-weight:700">${el2.nbVus}/${el2.nbEligibles}</span></div>
+    <div class="item-row"><span>Collaborateurs vus en entretien individuel</span><span style="font-weight:700">${el2.nbVus}/${el2.nbEligibles}</span></div>
+    <div class="item-row" style="padding-left:12px;font-size:12px;color:var(--gray)"><span>Entretiens pilotage / valorisation / remotivation</span><span>${el2.nbPilotage || 0} / ${el2.nbValorisation || 0} / ${el2.nbRemotivation || 0}</span></div>
     <div class="item-row"><span>Lancements de journée</span><span style="font-weight:700">${el2.joursLances}/${el2.joursOuverts || '?'}</span></div>
-    <div class="item-row"><span>Écoute &amp; Feedback</span><span style="font-weight:700">${el2.nbEcouteFb}</span></div>
-    <div class="item-row"><span>Entretiens de recadrage</span><span style="font-weight:700">${el2.nbRecadrage}</span></div>
+    <div class="item-row"><span>Écoute &amp; Feedback <span style="font-weight:400;color:var(--gray)">(hors score)</span></span><span style="font-weight:700">${el2.nbEcouteFb}</span></div>
+    <div class="item-row"><span>Entretiens de recadrage <span style="font-weight:400;color:var(--gray)">(hors score)</span></span><span style="font-weight:700">${el2.nbRecadrage}</span></div>
   `;
 
   el.innerHTML = `
