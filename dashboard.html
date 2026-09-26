@@ -195,6 +195,10 @@
 </div>
 
 <script>
+// 26/09 (sécurité) : échappement du texte libre saisi dans les bilans avant
+// injection en innerHTML — évite qu'un texte piégé s'exécute dans le dashboard.
+function escDash(t) { return String(t == null ? '' : t).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+
 const RELAY = 'https://zimbra-relay.oli-baroukh.workers.dev';
 const STORE_TOKEN = 'OC-bilan-store-2026';
 
@@ -412,7 +416,7 @@ function renderArView(d) {
   currentEquipeTaches = d.equipeTachesAgregees || [];
 
   const actionsHtml = (d.actionsAgregees && d.actionsAgregees.length)
-    ? d.actionsAgregees.map(a => '<div class="item-row"><span>' + a.magasin + ' — ' + a.text + '</span><span style="color:var(--red)">' + (a.repriseCount + 1) + ' visites</span></div>').join('')
+    ? d.actionsAgregees.map(a => '<div class="item-row"><span>' + escDash(a.magasin) + ' — ' + escDash(a.text) + '</span><span style="color:var(--red)">' + (a.repriseCount + 1) + ' visites</span></div>').join('')
     : '<p style="color:var(--gray);font-size:13px;margin:0">Aucune action non soldée.</p>';
 
   const kaizenHtml = (d.kaizenAgreges && d.kaizenAgreges.length)
@@ -602,7 +606,7 @@ function renderDetailView(d) {
 
   const actionsHtml = (d.actionsNonSoldees && d.actionsNonSoldees.items && d.actionsNonSoldees.items.filter(a => a.fromPrevious).length)
     ? d.actionsNonSoldees.items.filter(a => a.fromPrevious).map(a =>
-        '<div class="item-row"><span>' + a.text + '</span><span style="color:var(--red)">' + (a.repriseCount + 1) + ' visites</span></div>'
+        '<div class="item-row"><span>' + escDash(a.text) + '</span><span style="color:var(--red)">' + (a.repriseCount + 1) + ' visites</span></div>'
       ).join('')
     : '<p style="color:var(--gray);font-size:13px;margin:0">Aucune action non soldée.</p>';
 
