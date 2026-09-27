@@ -156,6 +156,30 @@
   }
 
   .loading { text-align: center; padding: 40px; color: var(--gray); }
+
+  /* ---- Liens vers les applis (27/09) ---- */
+  .section-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; margin: 22px 0 8px; }
+  .section-head .section-label { margin: 0; }
+  .card-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; margin: 0 0 10px; }
+  .card-head h4 { margin: 0; }
+  .app-links { display: flex; gap: 14px; flex-wrap: wrap; }
+  a.app-link { font-size: 12px; font-weight: 600; color: var(--red); text-decoration: none; white-space: nowrap; }
+  a.app-link:hover { text-decoration: underline; }
+
+  /* ---- Suivi manager (27/09) ---- */
+  .sv-summary { font-size: 13px; margin: 0 0 8px; }
+  .sv-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; font-size: 13px; padding: 8px 0; border-bottom: 1px solid #f0efe9; }
+  .sv-row:last-child { border-bottom: none; }
+  .sv-lib { font-weight: 600; }
+  .sv-meta { display: block; font-size: 12px; color: var(--gray); font-weight: 400; margin-top: 2px; }
+  .sv-ech { white-space: nowrap; text-align: right; font-size: 12px; }
+  .sv-ech b { display: block; font-size: 13px; }
+  .sv-retard { color: var(--red); }
+  .sv-bientot { color: var(--orange); }
+  .sv-later { color: var(--gray); }
+  details.sv-clos { margin-top: 10px; font-size: 13px; }
+  details.sv-clos summary { cursor: pointer; color: var(--gray); font-size: 12px; }
+
 select,input,textarea,button{font-family:inherit}
 </style>
 </head>
@@ -208,6 +232,59 @@ const SUB_LABELS = {
   pedlv: 'Pedlv', avis: 'Avis', equipe: 'Équipe', kaizen: 'Kaizen',
   entretiens: 'Entretiens', lancements: 'Lancements',
 };
+
+// 27/09 : liens directs vers les applis depuis la fiche magasin. Toutes les
+// applis sont sur le même domaine (olibaroukh.github.io) : elles lisent la
+// session AR du dashboard (localStorage 'bilan_ar_session') quand elles sont
+// ouvertes avec ?magasin=CODE, et se positionnent directement sur le magasin.
+const APPS_BASE = 'https://olibaroukh.github.io/';
+function appLink(app, code, label) {
+  return '<a class="app-link" href="' + APPS_BASE + app + '/?magasin=' + encodeURIComponent(code) + '" target="_blank" rel="noopener">' + escDash(label) + ' &#8599;</a>';
+}
+
+const SV_TYPES = {
+  ecoute_fb: 'Écoute & Feedback', pilotage_optique: 'Pilotage Optique', pilotage_audio: 'Pilotage Audio',
+  valorisation: 'Valorisation', remotivation: 'Remotivation', recadrage: 'Recadrage',
+};
+function svDateFr(iso) { return iso ? String(iso).slice(0, 10).split('-').reverse().join('/') : '—'; }
+function svJours(fromIso, toIso) { return Math.round((Date.parse(toIso + 'T00:00:00Z') - Date.parse(fromIso + 'T00:00:00Z')) / 86400000); }
+
+// Section « Suivi manager » (27/09) : actions / objectifs datés fixés lors des
+// entretiens Suivi Managers (d.suivisManager, route /store-health-detail).
+function renderSuiviManagerHtml(sm) {
+  if (!sm) return '<p style="color:var(--gray);font-size:13px;margin:0">Données indisponibles (Worker à mettre à jour).</p>';
+  const today = sm.today || new Date().toISOString().slice(0, 10);
+  const ouverts = sm.ouverts || [];
+  const clotures = sm.clotures || [];
+  if (!ouverts.length && !clotures.length) {
+    return '<p style="color:var(--gray);font-size:13px;margin:0">Aucun suivi en cours pour ce magasin. Les actions et objectifs datés fixés lors des entretiens Suivi Managers apparaîtront ici.</p>';
+  }
+  const meta = s => [s.collaborateur, SV_TYPES[s.type] || s.type, s.poseLe ? 'fixé le ' + svDateFr(s.poseLe) + (s.posePar ? ' par ' + s.posePar : '') : ''].filter(Boolean).map(escDash).join(' · ');
+  const nbRetard = ouverts.filter(s => s.echeance && s.echeance < today).length;
+  let html = '<p class="sv-summary"><b>' + ouverts.length + '</b> action' + (ouverts.length > 1 ? 's' : '') + ' en cours'
+    + (nbRetard ? ' · <b class="sv-retard">' + nbRetard + ' en retard</b>' : '') + '</p>';
+  html += ouverts.length ? ouverts.map(s => {
+    const j = s.echeance ? svJours(today, s.echeance) : null;
+    let cls = 'sv-later', txt = '';
+    if (j === null) { txt = 'sans date'; }
+    else if (j < 0) { cls = 'sv-retard'; txt = 'en retard de ' + (-j) + ' j'; }
+    else if (j === 0) { cls = 'sv-bientot'; txt = "aujourd'hui"; }
+    else if (j <= 7) { cls = 'sv-bientot'; txt = 'dans ' + j + ' j'; }
+    else { txt = 'dans ' + j + ' j'; }
+    return '<div class="sv-row"><span><span class="sv-lib">' + escDash(s.libelle) + '</span><span class="sv-meta">' + meta(s) + '</span></span>'
+      + '<span class="sv-ech ' + cls + '"><b>' + svDateFr(s.echeance) + '</b>' + txt + '</span></div>';
+  }).join('') : '<p style="color:var(--gray);font-size:13px;margin:0">Aucune action en cours.</p>';
+  if (clotures.length) {
+    html += '<details class="sv-clos"><summary>Clôturées ces 30 derniers jours (' + clotures.length + ')</summary>'
+      + clotures.map(s => {
+        const fait = s.statut === 'fait';
+        return '<div class="sv-row"><span><span class="sv-lib">' + escDash(s.libelle) + '</span><span class="sv-meta">' + meta(s) + '</span></span>'
+          + '<span class="sv-ech" style="color:' + (fait ? 'var(--green)' : 'var(--red)') + '"><b>' + (fait ? '✓ Fait' : '✗ Pas fait') + '</b>'
+          + 'le ' + svDateFr(s.clotureLe) + (s.cloturePar ? ' · ' + escDash(s.cloturePar) : '') + '<br>échéance ' + svDateFr(s.echeance) + '</span></div>';
+      }).join('') + '</details>';
+  }
+  return html;
+}
 
 let session = null;
 let allResults = [];
@@ -734,8 +811,8 @@ function renderDetailView(d) {
 
     <p class="section-label">Terrain</p>
     <div class="two-col">
-      <div class="card"><h4>Actions non soldées (bilan de passage)</h4>${actionsHtml}</div>
-      <div class="card"><h4>Kaizen — points non résolus</h4>${scoreMoisHtml}${kaizenHtml}${cumulHtml}</div>
+      <div class="card"><div class="card-head"><h4>Actions non soldées (bilan de passage)</h4>${appLink('bilan-passage', d.magasin.code, 'Bilan de Passage')}</div>${actionsHtml}</div>
+      <div class="card"><div class="card-head"><h4>Kaizen — points non résolus</h4>${d.magasin.concept ? appLink('kaizen', d.magasin.code, 'Kaizen') : ''}</div>${scoreMoisHtml}${kaizenHtml}${cumulHtml}</div>
     </div>
     <div class="card" style="margin-top:12px"><h4>Checklist réseau — derniers passages</h4>${checklistHtml}</div>
 
@@ -747,7 +824,7 @@ function renderDetailView(d) {
     <p class="section-label">Équipe</p>
     <div class="two-col">
       <div class="card">
-        <h4>Évaluation équipe</h4>
+        <div class="card-head"><h4>Évaluation équipe</h4>${appLink('evaluation-equipe', d.magasin.code, 'Évaluation Équipe')}</div>
         ${moyenneEquipeHtml}
         ${equipeRows ? '<table style="width:100%;border-collapse:collapse;font-size:13px"><tbody>' + equipeRows + '</tbody></table>' : '<p style="color:var(--gray);font-size:13px;margin:0">Pas de détail par tâche.</p>'}
       </div>
@@ -759,6 +836,12 @@ function renderDetailView(d) {
         ${suiviManagersHtml}
       </div>
     </div>
+
+    <div class="section-head">
+      <p class="section-label">Suivi manager — actions et échéances</p>
+      <div class="app-links">${appLink('suivi-managers', d.magasin.code, 'Suivi Managers')}${session && session.ar === 'ALL' ? appLink('accompagnement-manager', d.magasin.code, 'Accompagnement Manager') : ''}</div>
+    </div>
+    <div class="card">${renderSuiviManagerHtml(d.suivisManager)}</div>
 
     <p class="section-label">Conseils</p>
     <div class="card">

@@ -879,7 +879,7 @@ function loadLogo() {
 }
 
 // ── VERSION APP ── (incrémenter à chaque mise à jour notable, pour déclencher l'invite de rechargement)
-const APP_VERSION = '2026.09.26-3'; // à bumper avec SW_VERSION (sw.js) ET version.json à chaque déploiement
+const APP_VERSION = '2026.09.27-1'; // à bumper avec SW_VERSION (sw.js) ET version.json à chaque déploiement
 
 // Token pour la route /store-bilan du Worker (persistance D1, doit correspondre à STORE_SECRET dans worker.js)
 const STORE_SECRET = 'OC-bilan-store-2026';
@@ -1492,8 +1492,40 @@ window.addEventListener('load', async () => {
   initKpiSelect();
   initParamsUI();
   setToday();
-  loadMagasins();
+  loadMagasins().then(applyDeepLinkMagasin);
 });
+
+// 27/09 : ouverture depuis la fiche magasin du Dashboard réseau
+// (…/bilan-passage/?magasin=CODE) — on présélectionne l'AR et le magasin sur
+// l'écran « Nouveau bilan » ; l'AR n'a plus qu'à démarrer. Le paramètre est
+// lu une seule fois puis retiré de l'adresse (un rechargement ne le rejoue pas).
+const DEEP_LINK_MAGASIN = (() => {
+  try {
+    const code = (new URLSearchParams(location.search).get('magasin') || '').trim();
+    if (code) history.replaceState(null, '', location.pathname);
+    return code || null;
+  } catch(e) { return null; }
+})();
+
+function applyDeepLinkMagasin() {
+  if (!DEEP_LINK_MAGASIN) return;
+  const m = magasins.find(x => String(x.code) === DEEP_LINK_MAGASIN);
+  if (!m) { showToast('Magasin ' + DEEP_LINK_MAGASIN + ' introuvable dans le référentiel'); return; }
+  let dashSession = null;
+  try { dashSession = JSON.parse(localStorage.getItem('bilan_ar_session') || 'null'); } catch(e) {}
+  const arList = getARList();
+  const arCible = (dashSession && dashSession.ar === 'ALL') || !arList.includes(m.animateur)
+    ? 'Olivier (tout le réseau)' : m.animateur;
+  goScreen('select');
+  const selAr = document.getElementById('sel-ar');
+  selAr.value = arCible;
+  onARChange();
+  const selMag = document.getElementById('sel-mag');
+  selMag.value = m.code;
+  if (selMag.value !== m.code) return;
+  onMagChange();
+  showToast(m.libelle + ' présélectionné');
+}
 
 function setToday() {
   const d = document.getElementById('f-date');
