@@ -881,7 +881,7 @@ function renderDetailView(d) {
       <div class="app-links">${appLink('suivi-managers', d.magasin.code, 'Suivi Managers')}${session && session.ar === 'ALL' ? appLink('accompagnement-manager', d.magasin.code, 'Accompagnement Manager') : ''}</div>
     </div>
     <div class="card">
-      ${'accompagnement' in d ? '<div class="sv-block">' + renderAccompagnementHtml(d.accompagnement, true) + '</div>' : ''}
+      <div class="sv-block">${'accompagnement' in d ? renderAccompagnementHtml(d.accompagnement, true) : '<p class="sv-sub">Dernière visite d\'accompagnement</p><p style="color:var(--gray);font-size:13px;margin:0">Worker pas encore mis à jour : redéployer zimbra-relay depuis GitHub.</p>'}</div>
       <div class="sv-block">${renderSuiviManagerHtml(d.suivisManager)}</div>
     </div>
 
