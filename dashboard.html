@@ -721,11 +721,28 @@ function renderDetailView(d) {
   const el = document.getElementById('view-detail');
   const sub = d.subScores || {};
 
-  const actionsHtml = (d.actionsNonSoldees && d.actionsNonSoldees.items && d.actionsNonSoldees.items.filter(a => a.fromPrevious).length)
-    ? d.actionsNonSoldees.items.filter(a => a.fromPrevious).map(a =>
-        '<div class="item-row"><span>' + escDash(a.text) + '</span><span style="color:var(--red)">' + (a.repriseCount + 1) + ' visites</span></div>'
-      ).join('')
-    : '<p style="color:var(--gray);font-size:13px;margin:0">Aucune action non soldée.</p>';
+  // 27/09 : deux listes bien distinctes. 1) Actions reportées d'un bilan à
+  // l'autre sans être soldées (fromPrevious) : seules à peser sur le score de
+  // santé (règle inchangée). 2) Actions du dernier bilan dont l'échéance est
+  // dépassée mais pas encore reprises à un passage : simple alerte, hors score.
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const actItems = (d.actionsNonSoldees && d.actionsNonSoldees.items) || [];
+  const actScore = actItems.filter(a => a.fromPrevious);
+  const actDepassees = actItems.filter(a => !a.fromPrevious && a.date && a.date < todayIso);
+  const actEch = a => a.date ? '<span class="sv-meta">Échéance ' + svDateFr(a.date) + (a.date < todayIso ? ' · <span class="sv-retard">dépassée de ' + svJours(a.date, todayIso) + ' j</span>' : '') + (a.who ? ' · ' + escDash(a.who) : '') + '</span>' : (a.who ? '<span class="sv-meta">' + escDash(a.who) + '</span>' : '');
+  const actionsHtml =
+    '<p class="sv-sub">Impactent le score santé</p>'
+    + (actScore.length
+      ? actScore.map(a =>
+          '<div class="item-row"><span>' + escDash(a.text) + actEch(a) + '</span><span style="color:var(--red);white-space:nowrap">' + (a.repriseCount + 1) + ' visites</span></div>'
+        ).join('')
+      : '<p style="color:var(--gray);font-size:13px;margin:0 0 4px">Aucune action reportée sans être soldée.</p>')
+    + '<p class="sv-sub" style="margin-top:14px">Échéance dépassée — sans impact sur le score</p>'
+    + (actDepassees.length
+      ? actDepassees.map(a =>
+          '<div class="item-row"><span>' + escDash(a.text) + actEch(a) + '</span><span style="color:var(--orange);white-space:nowrap">à reprendre au prochain passage</span></div>'
+        ).join('')
+      : '<p style="color:var(--gray);font-size:13px;margin:0">Aucune action du dernier bilan en retard.</p>');
 
   // 19/09 : score du mois en cours (audit pas forcément clôturé — d.kaizenScoreMois
   // vient de getKaizenHealthMap, distinct de dernierScoreCloture utilisé dans le
@@ -850,7 +867,7 @@ function renderDetailView(d) {
 
     <p class="section-label">Terrain</p>
     <div class="two-col">
-      <div class="card"><div class="card-head"><h4>Actions non soldées (bilan de passage)</h4>${appLink('bilan-passage', d.magasin.code, 'Bilan de Passage')}</div>${actionsHtml}</div>
+      <div class="card"><div class="card-head"><h4>Actions du bilan de passage</h4>${appLink('bilan-passage', d.magasin.code, 'Bilan de Passage')}</div>${actionsHtml}</div>
       <div class="card"><div class="card-head"><h4>Kaizen — points non résolus</h4>${d.magasin.concept ? appLink('kaizen', d.magasin.code, 'Kaizen') : ''}</div>${scoreMoisHtml}${kaizenHtml}${cumulHtml}</div>
     </div>
     <div class="card" style="margin-top:12px"><h4>Checklist réseau — derniers passages</h4>${checklistHtml}</div>
