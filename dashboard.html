@@ -179,6 +179,10 @@
   .sv-later { color: var(--gray); }
   details.sv-clos { margin-top: 10px; font-size: 13px; }
   details.sv-clos summary { cursor: pointer; color: var(--gray); font-size: 12px; }
+  .sv-sub { font-size: 11px; letter-spacing: .04em; text-transform: uppercase; color: var(--gray); margin: 0 0 6px; }
+  .sv-sub + .sv-summary { margin-top: 0; }
+  .sv-block + .sv-block { margin-top: 18px; padding-top: 14px; border-top: 1px solid #e5e2d9; }
+  .sv-fait { color: var(--green); }
 
 select,input,textarea,button{font-family:inherit}
 </style>
@@ -253,15 +257,16 @@ function svJours(fromIso, toIso) { return Math.round((Date.parse(toIso + 'T00:00
 // entretiens Suivi Managers (d.suivisManager, route /store-health-detail).
 function renderSuiviManagerHtml(sm) {
   if (!sm) return '<p style="color:var(--gray);font-size:13px;margin:0">Données indisponibles (Worker à mettre à jour).</p>';
+  const titre = '<p class="sv-sub">Entretiens Suivi Managers</p>';
   const today = sm.today || new Date().toISOString().slice(0, 10);
   const ouverts = sm.ouverts || [];
   const clotures = sm.clotures || [];
   if (!ouverts.length && !clotures.length) {
-    return '<p style="color:var(--gray);font-size:13px;margin:0">Aucun suivi en cours pour ce magasin. Les actions et objectifs datés fixés lors des entretiens Suivi Managers apparaîtront ici.</p>';
+    return titre + '<p style="color:var(--gray);font-size:13px;margin:0">Aucune action ni objectif daté fixé en entretien pour l\'instant.</p>';
   }
   const meta = s => [s.collaborateur, SV_TYPES[s.type] || s.type, s.poseLe ? 'fixé le ' + svDateFr(s.poseLe) + (s.posePar ? ' par ' + s.posePar : '') : ''].filter(Boolean).map(escDash).join(' · ');
   const nbRetard = ouverts.filter(s => s.echeance && s.echeance < today).length;
-  let html = '<p class="sv-summary"><b>' + ouverts.length + '</b> action' + (ouverts.length > 1 ? 's' : '') + ' en cours'
+  let html = titre + '<p class="sv-summary"><b>' + ouverts.length + '</b> action' + (ouverts.length > 1 ? 's' : '') + ' en cours'
     + (nbRetard ? ' · <b class="sv-retard">' + nbRetard + ' en retard</b>' : '') + '</p>';
   html += ouverts.length ? ouverts.map(s => {
     const j = s.echeance ? svJours(today, s.echeance) : null;
@@ -283,6 +288,40 @@ function renderSuiviManagerHtml(sm) {
           + 'le ' + svDateFr(s.clotureLe) + (s.cloturePar ? ' · ' + escDash(s.cloturePar) : '') + '<br>échéance ' + svDateFr(s.echeance) + '</span></div>';
       }).join('') + '</details>';
   }
+  return html;
+}
+
+// 27/09 : plan d'action de la dernière visite Accompagnement Manager
+// (d.accompagnement, route /store-health-detail). Non faites d'abord, par échéance.
+function renderAccompagnementHtml(acc, withData) {
+  const titre = '<p class="sv-sub">Dernière visite d\'accompagnement</p>';
+  if (!withData) return '';
+  if (!acc) return titre + '<p style="color:var(--gray);font-size:13px;margin:0">Aucune visite d\'accompagnement enregistrée pour ce magasin.</p>';
+  const today = new Date().toISOString().slice(0, 10);
+  const statutVisite = acc.statut === 'finalise' ? 'finalisée' : 'brouillon, pas encore finalisée';
+  const entete = 'Visite du <b>' + svDateFr(acc.dateVisite) + '</b>' + (acc.itinerant ? ' par ' + escDash(acc.itinerant) : '')
+    + (acc.manager ? ' · manager : ' + escDash(acc.manager) : '') + ' <span style="color:var(--gray)">(' + statutVisite + ')</span>';
+  const actions = (acc.actions || []).slice().sort((a, b) =>
+    ((a.statut === 'Fait') - (b.statut === 'Fait')) || String(a.echeance || '9999').localeCompare(String(b.echeance || '9999')));
+  if (!actions.length) return titre + '<p class="sv-summary">' + entete + '</p><p style="color:var(--gray);font-size:13px;margin:0">Aucune action au plan.</p>';
+  const nbOuvertes = actions.filter(a => a.statut !== 'Fait').length;
+  const nbRetard = actions.filter(a => a.statut !== 'Fait' && a.echeance && a.echeance < today).length;
+  let html = titre + '<p class="sv-summary">' + entete + '<br><b>' + nbOuvertes + '</b> action' + (nbOuvertes > 1 ? 's' : '') + ' non faite' + (nbOuvertes > 1 ? 's' : '')
+    + ' sur ' + actions.length + (nbRetard ? ' · <b class="sv-retard">' + nbRetard + ' en retard</b>' : '') + '</p>';
+  html += actions.map(a => {
+    const meta = [a.responsable ? 'Responsable : ' + a.responsable : '', a.statut, a.origine === 'bilan' ? 'reprise du bilan de passage' : ''].filter(Boolean).map(escDash).join(' · ');
+    let cls = 'sv-later', txt = '';
+    if (a.statut === 'Fait') { cls = 'sv-fait'; txt = 'fait'; }
+    else if (!a.echeance) { txt = 'sans date'; }
+    else {
+      const j = svJours(today, a.echeance);
+      if (j < 0) { cls = 'sv-retard'; txt = 'en retard de ' + (-j) + ' j'; }
+      else if (j === 0) { cls = 'sv-bientot'; txt = "aujourd'hui"; }
+      else { cls = j <= 7 ? 'sv-bientot' : 'sv-later'; txt = 'dans ' + j + ' j'; }
+    }
+    return '<div class="sv-row"><span><span class="sv-lib"' + (a.statut === 'Fait' ? ' style="text-decoration:line-through;color:var(--gray)"' : '') + '>' + escDash(a.action) + '</span><span class="sv-meta">' + meta + '</span></span>'
+      + '<span class="sv-ech ' + cls + '"><b>' + svDateFr(a.echeance) + '</b>' + txt + '</span></div>';
+  }).join('');
   return html;
 }
 
@@ -841,7 +880,10 @@ function renderDetailView(d) {
       <p class="section-label">Suivi manager — actions et échéances</p>
       <div class="app-links">${appLink('suivi-managers', d.magasin.code, 'Suivi Managers')}${session && session.ar === 'ALL' ? appLink('accompagnement-manager', d.magasin.code, 'Accompagnement Manager') : ''}</div>
     </div>
-    <div class="card">${renderSuiviManagerHtml(d.suivisManager)}</div>
+    <div class="card">
+      ${'accompagnement' in d ? '<div class="sv-block">' + renderAccompagnementHtml(d.accompagnement, true) + '</div>' : ''}
+      <div class="sv-block">${renderSuiviManagerHtml(d.suivisManager)}</div>
+    </div>
 
     <p class="section-label">Conseils</p>
     <div class="card">
