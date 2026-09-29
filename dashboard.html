@@ -102,6 +102,11 @@
   table.dash-table td { padding: 10px 12px; font-size: 13px; border-bottom: 1px solid #f0efe9; }
   table.dash-table tr.row-clickable { cursor: pointer; }
   table.dash-table tr.row-clickable:hover { background: #faf9f5; }
+  /* Tri des colonnes (29/09) */
+  table.dash-table th.sortable { cursor: pointer; user-select: none; white-space: nowrap; }
+  table.dash-table th.sortable:hover { color: var(--dark); }
+  table.dash-table th.sorted { color: var(--red); }
+  table.dash-table th .sort-ind { font-size: 10px; margin-left: 3px; }
 
   .badge { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: 600; }
   .badge-vert { background: var(--green-bg); color: var(--green); }
@@ -418,6 +423,53 @@ async function showNetworkView() {
   }
 }
 
+// ---------------------------------------------------------------- Tri des tableaux (29/09)
+// Clic sur un en-tête : tri croissant, second clic : décroissant. Les valeurs
+// absentes (« — », « jamais ») restent toujours en bas, quel que soit le sens.
+const SORT_GETTERS = {
+  libelle: r => r.libelle || null,
+  animateur: r => r.animateur || null,
+  score: r => (r.score === null || r.score === undefined) ? null : Number(r.score),
+  kaizen: r => (r.kaizenDernierScoreCloture !== null && r.kaizenDernierScoreCloture !== undefined && r.kaizenDernierScoreMax)
+    ? r.kaizenDernierScoreCloture / r.kaizenDernierScoreMax : null,
+  actions: r => r.actionsNonSoldees ? r.actionsNonSoldees.count : 0,
+  // « jamais visité » = le plus ancien : tout en haut en tri décroissant, tout en bas en croissant.
+  visite: r => (r.daysSinceVisit === null || r.daysSinceVisit === undefined) ? Infinity : r.daysSinceVisit,
+};
+const tableSorts = { network: { key: 'score', dir: 1 }, ar: { key: 'score', dir: 1 } };
+
+function sortRows(rows, sort) {
+  const get = SORT_GETTERS[sort.key];
+  return rows.slice().sort((a, b) => {
+    const va = get(a), vb = get(b);
+    if (va === null && vb === null) return 0;
+    if (va === null) return 1;
+    if (vb === null) return -1;
+    const cmp = (typeof va === 'string' || typeof vb === 'string')
+      ? String(va).localeCompare(String(vb), 'fr', { sensitivity: 'base' })
+      : (va === vb ? 0 : (va < vb ? -1 : 1));
+    return cmp * sort.dir || String(a.libelle || '').localeCompare(String(b.libelle || ''), 'fr');
+  });
+}
+
+function thSort(table, key, label) {
+  const s = tableSorts[table];
+  const active = s.key === key;
+  return '<th class="sortable' + (active ? ' sorted' : '') + '" data-table="' + table + '" data-key="' + key + '" onclick="setTableSort(\'' + table + '\', \'' + key + '\')" title="Trier">'
+    + label + '<span class="sort-ind">' + (active ? (s.dir === 1 ? '▲' : '▼') : '↕') + '</span></th>';
+}
+
+function setTableSort(table, key) {
+  const s = tableSorts[table];
+  if (s.key === key) s.dir = -s.dir; else { s.key = key; s.dir = 1; }
+  document.querySelectorAll('th.sortable[data-table="' + table + '"]').forEach(th => {
+    const active = th.dataset.key === s.key;
+    th.classList.toggle('sorted', active);
+    th.querySelector('.sort-ind').textContent = active ? (s.dir === 1 ? '▲' : '▼') : '↕';
+  });
+  if (table === 'network') renderTable(); else renderArStoresRows();
+}
+
 function renderNetworkView() {
   const el = document.getElementById('view-network');
   const ars = [...new Set(allResults.map(r => r.animateur).filter(Boolean))].sort();
@@ -436,7 +488,7 @@ function renderNetworkView() {
     <div class="table-wrap">
     <table class="dash-table">
       <thead><tr>
-        <th>Magasin</th><th>Animateur</th><th>Santé</th><th>Kaizen</th><th>Actions</th><th>Dernière visite</th>
+        ${thSort('network', 'libelle', 'Magasin')}${thSort('network', 'animateur', 'Animateur')}${thSort('network', 'score', 'Santé')}${thSort('network', 'kaizen', 'Kaizen')}${thSort('network', 'actions', 'Actions')}${thSort('network', 'visite', 'Dernière visite')}
       </tr></thead>
       <tbody id="table-body"></tbody>
     </table>
@@ -493,7 +545,7 @@ function renderTable() {
   let rows = allResults;
   if (arFilter) rows = rows.filter(r => r.animateur === arFilter);
   if (search) rows = rows.filter(r => r.libelle.toLowerCase().includes(search));
-  rows = rows.slice().sort((a, b) => (a.score ?? 999) - (b.score ?? 999));
+  rows = sortRows(rows, tableSorts.network);
 
   document.getElementById('table-body').innerHTML = rows.map(r => `
     <tr class="row-clickable" onclick="showDetailView('${r.code}')">
@@ -509,6 +561,19 @@ function renderTable() {
 
 // ---------------------------------------------------------------- Vue "Mon dashboard" (agrégé par AR)
 let lastArContext = null;
+let currentArResults = [];
+
+function renderArStoresRows() {
+  const body = document.getElementById('ar-stores-body');
+  if (!body) return;
+  body.innerHTML = sortRows(currentArResults, tableSorts.ar).map(r => `
+    <tr class="row-clickable" onclick="showDetailView('${r.code}')">
+      <td>${r.libelle}</td>
+      <td><span class="badge ${scoreClass(r.score)}">${r.score !== null ? r.score : '—'}</span></td>
+      <td style="${r.actionsNonSoldees && r.actionsNonSoldees.count > 0 ? 'color:var(--red)' : 'color:var(--gray)'}">${r.actionsNonSoldees ? r.actionsNonSoldees.count : 0}</td>
+      <td style="color:var(--gray)">${r.daysSinceVisit !== null ? r.daysSinceVisit + ' j.' : 'jamais'}</td>
+    </tr>`).join('');
+}
 
 async function showArView(arName) {
   if (!arName) return;
@@ -540,13 +605,7 @@ function renderArView(d) {
     ? d.kaizenAgreges.map(k => '<div class="item-row"><span>' + k.magasin + ' — ' + k.label + (k.zoneNom ? ' (' + k.zoneNom + ')' : '') + '</span><span style="color:var(--red)">' + k.moisConsecutifs + ' mois</span></div>').join('')
     : '<p style="color:var(--gray);font-size:13px;margin:0">Aucun point non résolu.</p>';
 
-  const storesRows = (d.results || []).slice().sort((a, b) => (a.score ?? 999) - (b.score ?? 999)).map(r => `
-    <tr class="row-clickable" onclick="showDetailView('${r.code}')">
-      <td>${r.libelle}</td>
-      <td><span class="badge ${scoreClass(r.score)}">${r.score !== null ? r.score : '—'}</span></td>
-      <td style="${r.actionsNonSoldees && r.actionsNonSoldees.count > 0 ? 'color:var(--red)' : 'color:var(--gray)'}">${r.actionsNonSoldees ? r.actionsNonSoldees.count : 0}</td>
-      <td style="color:var(--gray)">${r.daysSinceVisit !== null ? r.daysSinceVisit + ' j.' : 'jamais'}</td>
-    </tr>`).join('');
+  currentArResults = d.results || [];
 
   const pedlvRowsAr = (d.pedlvIndicateursAgreges || []).map(i => {
     const valeurAffichee = i.cle === 'tva' && i.valeurMoyenne !== null ? Math.round(i.valeurMoyenne) : (i.valeurMoyenne ?? '—');
@@ -645,12 +704,13 @@ function renderArView(d) {
     <p class="section-label">Magasins du périmètre</p>
     <div class="table-wrap">
     <table class="dash-table">
-      <thead><tr><th>Magasin</th><th>Santé</th><th>Actions</th><th>Dernière visite</th></tr></thead>
-      <tbody>${storesRows}</tbody>
+      <thead><tr>${thSort('ar', 'libelle', 'Magasin')}${thSort('ar', 'score', 'Santé')}${thSort('ar', 'actions', 'Actions')}${thSort('ar', 'visite', 'Dernière visite')}</tr></thead>
+      <tbody id="ar-stores-body"></tbody>
     </table>
     </div>
   `;
 
+  renderArStoresRows();
   const grid = document.getElementById('ar-sub-grid');
   const sub = d.subScoresMoyens || {};
   grid.innerHTML = Object.keys(SUB_LABELS).map(key => {
