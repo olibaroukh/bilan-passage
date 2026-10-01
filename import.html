@@ -88,7 +88,8 @@ select,input,textarea,button{font-family:inherit}
     <div class="card">
       <label>Mois concerné</label>
       <input type="month" id="mois-input">
-      <div class="hint">Import RH mensuel — le mois des 2 exports (agenda validés + effectif). Un import remplace uniquement les données de ce mois — les mois précédents ne sont jamais écrasés.</div>
+      <div class="hint">Import RH mensuel — le mois des 2 exports (agenda validés + effectif). Un import remplace uniquement les données de ce mois — les mois précédents ne sont jamais écrasés. Seuls les salariés rattachés à un magasin de magasins.csv sont enregistrés.</div>
+      <div class="hint" id="mois-existants" style="margin-top:6px"></div>
     </div>
 
     <div class="card">
@@ -180,6 +181,7 @@ function showScreen() {
     document.getElementById('screen-login').style.display = 'none';
     document.getElementById('screen-main').style.display = 'flex';
     document.getElementById('session-info').textContent = 'Connecté — session valable jusqu\'à ' + new Date(arSession.exp).toLocaleTimeString('fr-FR', {hour:'2-digit', minute:'2-digit'});
+    chargerMoisExistants();
   } else {
     document.getElementById('screen-login').style.display = 'flex';
     document.getElementById('screen-main').style.display = 'none';
@@ -223,10 +225,42 @@ function logout() {
 }
 
 function defaultMois() {
-  // Par défaut, le mois calendaire précédent (l'export du 1er porte sur le mois qui vient de se terminer)
+  // À partir du 20, l'export porte sur le mois en cours (import de fin de mois) ;
+  // avant le 20, sur le mois qui vient de se terminer. Le 30/09, l'ancienne
+  // règle (toujours le mois précédent) a fait importer septembre sous août.
   const d = new Date();
-  d.setMonth(d.getMonth() - 1);
+  d.setDate(1);
+  if (new Date().getDate() < 20) d.setMonth(d.getMonth() - 1);
   return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+}
+
+function libelleMois(ym) {
+  const [y, m] = String(ym || '').split('-');
+  const noms = ['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];
+  return (noms[+m - 1] || ym) + ' ' + (y || '');
+}
+
+// Mois déjà en base (rafraîchi après chaque import) — sert à demander une
+// confirmation avant d'écraser un mois existant.
+let moisExistants = null;
+async function chargerMoisExistants() {
+  const el = document.getElementById('mois-existants');
+  if (!arSession) return;
+  try {
+    const resp = await fetch(RELAY + '/rh-import/mois-existants', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Store-Token': STORE_SECRET, 'X-AR-Session': arSession.token },
+      body: '{}'
+    });
+    const data = await resp.json();
+    if (!resp.ok || !data.ok) throw new Error(data.error || resp.status);
+    moisExistants = new Map((data.mois || []).map(r => [r.mois, r.nb]));
+    const derniers = (data.mois || []).slice(0, 3).map(r => libelleMois(r.mois) + ' (' + r.nb + ' salariés)');
+    el.textContent = derniers.length ? 'Déjà en base : ' + derniers.join(', ') + (data.mois.length > 3 ? '…' : '') : 'Aucun mois RH en base.';
+  } catch (e) {
+    moisExistants = null;
+    el.textContent = '';
+  }
 }
 
 function setupDropzone(zoneId, inputId, onFile) {
@@ -271,6 +305,11 @@ function renderResult(html) {
 async function lancerImport() {
   const mois = document.getElementById('mois-input').value;
   if (!mois || !fileAgenda || !fileEffectif) return;
+  if (moisExistants && moisExistants.has(mois)) {
+    if (!confirm(libelleMois(mois) + ' est déjà importé (' + moisExistants.get(mois) + ' salariés).\n\nLes données de ' + libelleMois(mois) + ' vont être remplacées par ces fichiers. Continuer ?')) return;
+  } else if (!confirm('Importer ces fichiers comme ' + libelleMois(mois).toUpperCase() + ' ?')) {
+    return;
+  }
   const btn = document.getElementById('submit-btn');
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner"></span>Import en cours...';
@@ -282,15 +321,8 @@ async function lancerImport() {
       parseXlsFile(fileEffectif),
     ]);
 
-    renderResult('<div class="result">Envoi de l\'agenda validés (' + rowsAgenda.length + ' lignes)…</div>');
-    const respAgenda = await fetch(RELAY + '/rh-import/agenda', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Store-Token': STORE_SECRET, 'X-AR-Session': arSession.token },
-      body: JSON.stringify({ mois, rows: rowsAgenda })
-    });
-    const dataAgenda = await respAgenda.json();
-    if (!respAgenda.ok || !dataAgenda.ok) throw new Error('Agenda validés : ' + (dataAgenda.error || respAgenda.status));
-
+    // Effectif d'abord : le Worker s'en sert pour ne garder de l'agenda que
+    // les salariés du réseau.
     renderResult('<div class="result">Envoi de l\'effectif (' + rowsEffectif.length + ' lignes)…</div>');
     const respEffectif = await fetch(RELAY + '/rh-import/effectif', {
       method: 'POST',
@@ -300,15 +332,27 @@ async function lancerImport() {
     const dataEffectif = await respEffectif.json();
     if (!respEffectif.ok || !dataEffectif.ok) throw new Error('Effectif : ' + (dataEffectif.error || respEffectif.status));
 
+    renderResult('<div class="result">Envoi de l\'agenda validés (' + rowsAgenda.length + ' lignes)…</div>');
+    const respAgenda = await fetch(RELAY + '/rh-import/agenda', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Store-Token': STORE_SECRET, 'X-AR-Session': arSession.token },
+      body: JSON.stringify({ mois, rows: rowsAgenda })
+    });
+    const dataAgenda = await respAgenda.json();
+    if (!respAgenda.ok || !dataAgenda.ok) throw new Error('Agenda validés : ' + (dataAgenda.error || respAgenda.status));
+
     let html = '<div class="result">';
-    html += '<div class="ok">✓ Agenda validés — ' + dataAgenda.nbSalaries + ' salariés, ' + dataAgenda.nbLongueDuree + ' en absence longue durée</div>';
-    html += '<div class="ok">✓ Effectif — ' + dataEffectif.nbSalaries + ' salariés' + (dataEffectif.nbSansSite ? ', ' + dataEffectif.nbSansSite + ' sans site renseigné' : '') + '</div>';
+    html += '<div class="ok">✓ ' + libelleMois(mois) + ' importé</div>';
+    html += '<div class="ok">✓ Effectif — ' + dataEffectif.nbImportes + ' salariés du réseau enregistrés</div>';
+    html += '<div class="ok">✓ Agenda validés — ' + dataAgenda.nbImportes + ' salariés, ' + dataAgenda.nbLongueDuree + ' en absence longue durée</div>';
+    html += '<div class="hint" style="margin-top:6px">Ignorés (hors réseau) : ' + dataEffectif.nbHorsReseau + ' salariés rattachés à d\'autres sites' + (dataEffectif.nbSansSite ? ', ' + dataEffectif.nbSansSite + ' sans site renseigné' : '') + ' — sur ' + dataEffectif.nbSalaries + ' lignes dans l\'export.</div>';
     if (dataEffectif.sitesNonReconnus && dataEffectif.sitesNonReconnus.length) {
-      html += '<div class="warn" style="margin-top:8px">⚠ Codes sites non reconnus dans magasins.csv (' + dataEffectif.sitesNonReconnus.length + ') :</div>';
+      html += '<div class="warn" style="margin-top:8px">⚠ Salariés du réseau également rattachés à des sites hors magasins.csv (' + dataEffectif.sitesNonReconnus.length + ' sites) :</div>';
       html += '<div style="margin-top:2px">' + dataEffectif.sitesNonReconnus.map(s => (s.nom || '?') + ' (' + s.code + ')').join(', ') + '</div>';
     }
     html += '</div>';
     renderResult(html);
+    chargerMoisExistants();
   } catch(e) {
     renderResult('<div class="result warn">✗ ' + (e.message || String(e)) + '</div>');
   } finally {
