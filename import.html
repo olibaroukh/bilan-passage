@@ -62,6 +62,24 @@ input[type=date],input[type=number]{background:var(--bg4);border:1px solid var(-
 .ferm-item button{background:transparent;border:1px solid var(--border);color:var(--muted);border-radius:6px;padding:4px 8px;font-size:12px;cursor:pointer;font-family:'Montserrat',sans-serif}
 .ferm-item button:hover{border-color:var(--red);color:var(--text)}
 select,input,textarea,button{font-family:inherit}
+/* Page d'accueil — administration (02/10) */
+select,textarea{background:var(--bg4);border:1px solid var(--border);border-radius:8px;padding:11px 12px;font-size:14px;color:var(--text);font-family:'Montserrat',sans-serif;width:100%;color-scheme:dark}
+textarea{min-height:64px;resize:vertical;line-height:1.45}
+.acc-sec{font-size:10.5px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--red);margin:8px 0 2px}
+.acc-app{display:flex;align-items:center;gap:10px;background:var(--bg4);border-radius:10px;padding:8px 10px;font-size:13px}
+.acc-app.off{opacity:.5}
+.acc-app .nm{flex:1;min-width:0}
+.acc-app .nm small{display:block;font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.acc-ico{width:40px;height:40px;min-width:40px;border-radius:10px;overflow:hidden;background:linear-gradient(145deg,#2a2a2a,#171717);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:14px;color:var(--red)}
+.acc-ico img{width:100%;height:100%;object-fit:cover}
+.acc-ico.big{width:72px;height:72px;min-width:72px;border-radius:18px;font-size:24px}
+.acc-app button,.acc-row button{background:transparent;border:1px solid var(--border);color:var(--muted);border-radius:6px;padding:5px 9px;font-size:12px;cursor:pointer}
+.acc-app button:hover,.acc-row button:hover{border-color:var(--red);color:var(--text)}
+.acc-row{display:flex;align-items:center;justify-content:space-between;gap:8px;background:var(--bg4);border-radius:8px;padding:8px 10px;font-size:13px}
+.acc-row small{color:var(--muted);font-size:11px}
+.acc-ico-zone{display:flex;align-items:center;gap:12px}
+.acc-check{display:flex;align-items:center;gap:8px;font-size:13px;text-transform:none;letter-spacing:0;color:var(--text)}
+.acc-check input{width:auto}
 </style>
 </head>
 <body>
@@ -150,6 +168,55 @@ select,input,textarea,button{font-family:inherit}
       <div id="ferm-error" class="error" style="display:none"></div>
       <div class="ferm-list" id="ferm-list"><div class="hint">Chargement…</div></div>
     </div>
+
+    <div style="height:8px"></div>
+    <div class="card">
+      <label>Page d'accueil — applis</label>
+      <div class="hint">Les applis affichées sur <a href="accueil/" style="color:var(--text)">la page d'accueil</a>, par section. Une appli masquée reste enregistrée mais n'apparaît plus.</div>
+      <div id="acc-apps"><div class="hint">Chargement…</div></div>
+      <button class="btn-secondary" onclick="ouvrirAppli(null)">+ Ajouter une appli</button>
+      <div id="acc-error" class="error" style="display:none"></div>
+    </div>
+
+    <div class="card">
+      <label>Page d'accueil — accès nominatifs</label>
+      <div class="hint">Vous voyez toujours toutes les sections, et les animateurs de magasins.csv voient automatiquement « Animateurs réseau ». Ajoutez ici les autres personnes (ex. Formation).</div>
+      <div class="ferm-list" id="acc-acces"></div>
+      <div class="ferm-grid" style="grid-template-columns:1fr 130px">
+        <div><label>Adresse Zimbra</label><input type="text" id="acc-email" placeholder="prenom.nom@optical-center.com"></div>
+        <div><label>Section</label><select id="acc-email-section"><option value="formation">Formation</option><option value="animateurs">Animateurs</option><option value="olivier">Direction</option></select></div>
+      </div>
+      <button class="btn-primary" id="acc-acces-btn" onclick="ajouterAcces()">Donner l'accès</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="acc-modal" onclick="if(event.target===this) fermerAppli()">
+  <div class="modal-card" style="max-height:90vh">
+    <h3 id="acc-modal-titre">Appli</h3>
+    <div class="acc-ico-zone">
+      <div class="acc-ico big" id="acc-f-preview"></div>
+      <div style="display:flex;flex-direction:column;gap:6px;flex:1">
+        <button type="button" class="btn-secondary" onclick="document.getElementById('acc-f-file').click()">Choisir une icône…</button>
+        <button type="button" class="btn-secondary" onclick="retirerIcone()">Retirer l'icône</button>
+      </div>
+      <input type="file" id="acc-f-file" accept="image/*" style="display:none">
+    </div>
+    <div class="hint">Image carrée de préférence (PNG ou JPG), redimensionnée automatiquement. Sans icône, les initiales s'affichent.</div>
+    <div><label>Nom</label><input type="text" id="acc-f-nom" maxlength="60"></div>
+    <div><label>Lien</label><input type="text" id="acc-f-url" placeholder="https://…"></div>
+    <div class="ferm-grid">
+      <div><label>Section</label><select id="acc-f-section"><option value="tous">Pour tous</option><option value="animateurs">Animateurs réseau</option><option value="formation">Formation</option><option value="olivier">Direction réseau</option></select></div>
+      <div><label>Ordre</label><input type="number" id="acc-f-ordre" min="0" max="99"></div>
+    </div>
+    <div><label>À quoi ça sert</label><textarea id="acc-f-description" maxlength="600"></textarea></div>
+    <div><label>Comment l'utiliser</label><textarea id="acc-f-usage" maxlength="600"></textarea></div>
+    <div><label>Fréquence</label><input type="text" id="acc-f-frequence" maxlength="200" placeholder="ex. Une fois par mois"></div>
+    <label class="acc-check"><input type="checkbox" id="acc-f-actif"> Visible sur la page d'accueil</label>
+    <div id="acc-f-error" class="error" style="display:none"></div>
+    <button class="btn-primary" id="acc-f-save" onclick="enregistrerAppli()">Enregistrer</button>
+    <button class="btn-secondary" id="acc-f-delete" onclick="supprimerAppli()">🗑️ Supprimer l'appli</button>
+    <button class="btn-secondary" onclick="fermerAppli()">Annuler</button>
   </div>
 </div>
 
@@ -210,6 +277,7 @@ async function doLogin() {
     document.getElementById('login-pass').value = '';
     showScreen();
     chargerFermetures();
+    chargerAccueil();
   } catch(e) {
     errEl.textContent = e.message || String(e);
     errEl.style.display = 'block';
@@ -609,8 +677,135 @@ async function supprimerFermeture(id) {
   catch (e) { afficherErreurFermeture(e.message || String(e)); }
 }
 
+// ── Page d'accueil — administration (02/10) ──
+const ACC_SECTIONS = { tous: 'Pour tous', animateurs: 'Animateurs réseau', formation: 'Formation', olivier: 'Direction réseau' };
+let accApps = [], accEdit = null, accIcone = '';
+
+function accMono(nom) {
+  const vides = ['de','du','des','le','la','les','dans','être','et','au','aux','en'];
+  const mots = String(nom || '?').split(/[\s'’\-]+/).filter(Boolean);
+  const u = mots.filter(m => !vides.includes(m.toLowerCase())); const b = u.length ? u : mots;
+  return (b.length > 1 ? b[0][0] + b[b.length - 1][0] : (b[0] || '?').slice(0, 2)).toUpperCase();
+}
+function accIco(icone, nom) { return icone ? '<img src="' + escHtml(icone) + '" alt="">' : escHtml(accMono(nom)); }
+function accErreur(id, msg) { const e = document.getElementById(id); e.textContent = msg || ''; e.style.display = msg ? 'block' : 'none'; }
+
+async function appelAccueil(body) {
+  const resp = await fetch(RELAY + '/accueil-admin', {
+    method: body ? 'POST' : 'GET',
+    headers: { 'Content-Type': 'application/json', 'X-Store-Token': STORE_SECRET, 'X-AR-Session': arSession.token },
+    body: body ? JSON.stringify(body) : undefined
+  });
+  const data = await resp.json();
+  if (!resp.ok || !data.ok) throw new Error(data.error || ('Erreur ' + resp.status));
+  accApps = data.apps || [];
+  renderAccueil(data.acces || []);
+}
+
+function renderAccueil(acces) {
+  const el = document.getElementById('acc-apps');
+  el.innerHTML = Object.keys(ACC_SECTIONS).map(sec => {
+    const apps = accApps.filter(a => a.section === sec);
+    return '<div class="acc-sec">' + ACC_SECTIONS[sec] + '</div><div class="ferm-list">' + (apps.length ? apps.map(a =>
+      '<div class="acc-app' + (a.actif ? '' : ' off') + '"><div class="acc-ico">' + accIco(a.icone, a.nom) + '</div>'
+      + '<div class="nm">' + escHtml(a.nom) + (a.actif ? '' : ' · <em>masquée</em>') + '<small>' + escHtml(a.url) + '</small></div>'
+      + '<button type="button" onclick="ouvrirAppli(' + a.id + ')">Modifier</button></div>').join('')
+      : '<div class="hint">Aucune appli.</div>') + '</div>';
+  }).join('');
+  document.getElementById('acc-acces').innerHTML = acces.length ? acces.map(a =>
+    '<div class="acc-row"><div>' + escHtml(a.email) + '<br><small>' + (ACC_SECTIONS[a.section] || a.section) + '</small></div>'
+    + '<button type="button" onclick="retirerAcces(' + a.id + ')" aria-label="Retirer">🗑️</button></div>').join('')
+    : '<div class="hint">Aucun accès nominatif.</div>';
+}
+
+async function chargerAccueil() {
+  if (!arSession) return;
+  try { accErreur('acc-error', ''); await appelAccueil(null); }
+  catch (e) { document.getElementById('acc-apps').innerHTML = ''; accErreur('acc-error', e.message || String(e)); }
+}
+
+function majApercuIcone() {
+  document.getElementById('acc-f-preview').innerHTML = accIco(accIcone, document.getElementById('acc-f-nom').value);
+}
+function ouvrirAppli(id) {
+  accEdit = id ? accApps.find(a => a.id === id) : null;
+  const a = accEdit || { nom: '', url: 'https://', section: 'tous', ordre: (accApps.length + 1), description: '', usage: '', frequence: '', actif: 1, icone: '' };
+  document.getElementById('acc-modal-titre').textContent = accEdit ? 'Modifier l\'appli' : 'Nouvelle appli';
+  for (const k of ['nom', 'url', 'section', 'ordre', 'description', 'usage', 'frequence']) document.getElementById('acc-f-' + k).value = a[k] ?? '';
+  document.getElementById('acc-f-actif').checked = !!a.actif;
+  document.getElementById('acc-f-delete').style.display = accEdit ? '' : 'none';
+  accIcone = a.icone || '';
+  majApercuIcone(); accErreur('acc-f-error', '');
+  document.getElementById('acc-modal').classList.add('open');
+}
+function fermerAppli() { document.getElementById('acc-modal').classList.remove('open'); }
+function retirerIcone() { accIcone = ''; majApercuIcone(); }
+
+// Icône recadrée en carré et réduite à 256 px dans le navigateur (reste sous la limite du Worker).
+function preparerIcone(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('Lecture du fichier impossible'));
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error('Image non reconnue'));
+      img.onload = () => {
+        const T = 256, c = document.createElement('canvas'); c.width = T; c.height = T;
+        const side = Math.min(img.naturalWidth || T, img.naturalHeight || T);
+        const sx = ((img.naturalWidth || T) - side) / 2, sy = ((img.naturalHeight || T) - side) / 2;
+        c.getContext('2d').drawImage(img, sx, sy, side, side, 0, 0, T, T);
+        let url = c.toDataURL('image/png');
+        if (url.length > 300000) url = c.toDataURL('image/jpeg', 0.88);
+        resolve(url);
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+document.getElementById('acc-f-file').addEventListener('change', async e => {
+  const f = e.target.files[0]; e.target.value = '';
+  if (!f) return;
+  try { accIcone = await preparerIcone(f); majApercuIcone(); accErreur('acc-f-error', ''); }
+  catch (err) { accErreur('acc-f-error', err.message); }
+});
+document.getElementById('acc-f-nom').addEventListener('input', () => { if (!accIcone) majApercuIcone(); });
+
+async function enregistrerAppli() {
+  const g = k => document.getElementById('acc-f-' + k).value;
+  const app = { nom: g('nom').trim(), url: g('url').trim(), section: g('section'), ordre: parseInt(g('ordre'), 10) || 0,
+    description: g('description').trim(), usage: g('usage').trim(), frequence: g('frequence').trim(),
+    actif: document.getElementById('acc-f-actif').checked ? 1 : 0, icone: accIcone };
+  if (accEdit) app.id = accEdit.id;
+  if (!app.nom) return accErreur('acc-f-error', 'Nom requis');
+  if (!/^https:\/\/\S+$/.test(app.url)) return accErreur('acc-f-error', 'Le lien doit commencer par https://');
+  const btn = document.getElementById('acc-f-save');
+  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>Enregistrement…';
+  try { await appelAccueil({ action: 'app-save', app }); fermerAppli(); }
+  catch (e) { accErreur('acc-f-error', e.message || String(e)); }
+  finally { btn.disabled = false; btn.textContent = 'Enregistrer'; }
+}
+async function supprimerAppli() {
+  if (!accEdit || !confirm('Supprimer définitivement « ' + accEdit.nom + ' » de la page d\'accueil ? (Pour la retirer temporairement, décochez plutôt « Visible ».)')) return;
+  try { await appelAccueil({ action: 'app-delete', id: accEdit.id }); fermerAppli(); }
+  catch (e) { accErreur('acc-f-error', e.message || String(e)); }
+}
+async function ajouterAcces() {
+  const email = document.getElementById('acc-email').value.trim();
+  const section = document.getElementById('acc-email-section').value;
+  if (!email) return accErreur('acc-error', 'Adresse requise');
+  try { accErreur('acc-error', ''); await appelAccueil({ action: 'acces-add', email, section }); document.getElementById('acc-email').value = ''; }
+  catch (e) { accErreur('acc-error', e.message || String(e)); }
+}
+async function retirerAcces(id) {
+  if (!confirm('Retirer cet accès ?')) return;
+  try { accErreur('acc-error', ''); await appelAccueil({ action: 'acces-delete', id }); }
+  catch (e) { accErreur('acc-error', e.message || String(e)); }
+}
+
 showScreen();
 chargerFermetures();
+chargerAccueil();
 </script>
 </body>
 </html>
