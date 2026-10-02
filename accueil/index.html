@@ -22,7 +22,10 @@
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;min-height:100%;background:var(--bg);color:var(--text);font-family:'Montserrat',sans-serif}
 body{background:radial-gradient(120% 60% at 50% -10%,#241414 0%,#0D0D0D 55%) fixed;padding-bottom:env(safe-area-inset-bottom)}
-.wrap{max-width:760px;margin:0 auto;padding:calc(20px + env(safe-area-inset-top)) 16px 48px}
+/* Filigrane Optical Center (fichier logo-filigrane.png, à remplacer seul quand le logo groupe changera) */
+body::before{content:'';position:fixed;top:55%;left:50%;transform:translate(-50%,-50%);width:min(80vw,520px);height:min(56vw,300px);
+  background:url('logo-filigrane.png') center/contain no-repeat;mix-blend-mode:screen;opacity:.07;pointer-events:none;z-index:0}
+.wrap{position:relative;z-index:1;max-width:760px;margin:0 auto;padding:calc(20px + env(safe-area-inset-top)) 16px 48px}
 
 header{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:28px}
 .brand small{display:block;font-size:10px;font-weight:700;letter-spacing:2.5px;color:var(--red);text-transform:uppercase;margin-bottom:6px}
@@ -132,7 +135,7 @@ input:focus{outline:none;border-color:var(--red)}
 </div>
 
 <script>
-const APP_VERSION = '2026.10.02-1';
+const APP_VERSION = '2026.10.02-2';
 const WORKER = 'https://zimbra-relay.oli-baroukh.workers.dev';
 const STORE_SECRET = 'OC-bilan-store-2026';
 const K_SESSION = 'accueil_session', K_CACHE = 'accueil_apps_cache', K_USER = 'accueil_last_user';
