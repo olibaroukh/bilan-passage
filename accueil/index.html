@@ -43,19 +43,19 @@ section{margin-bottom:30px}
 .sec-head h2::before{content:'';display:inline-block;width:8px;height:8px;border-radius:2px;background:var(--red);margin-right:8px;vertical-align:1px}
 .sec-head span{font-size:11px;color:var(--muted)}
 
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(84px,1fr));gap:18px 10px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:22px 10px}
 .tile{position:relative;display:flex;flex-direction:column;align-items:center;gap:8px;text-decoration:none;color:var(--text);
   -webkit-touch-callout:none;-webkit-user-select:none;user-select:none;padding:4px 0}
-.icon{width:64px;height:64px;border-radius:16px;overflow:hidden;display:flex;align-items:center;justify-content:center;
+.icon{width:84px;height:84px;border-radius:21px;overflow:hidden;display:flex;align-items:center;justify-content:center;
   background:linear-gradient(145deg,#2a2a2a,#171717);border:1px solid var(--border);box-shadow:0 6px 18px rgba(0,0,0,.45);
   transition:transform .15s ease,box-shadow .15s ease}
 .icon img{width:100%;height:100%;object-fit:cover;display:block}
-.icon .mono{font-size:22px;font-weight:800;color:var(--red);letter-spacing:-.5px}
+.icon .mono{font-size:29px;font-weight:800;color:var(--red);letter-spacing:-.5px}
 .tile:hover .icon{transform:translateY(-2px);box-shadow:0 10px 24px rgba(0,0,0,.55),0 0 0 1px rgba(226,35,26,.35)}
 .tile:active .icon{transform:scale(.94)}
-.tile .label{font-size:11px;font-weight:600;text-align:center;line-height:1.25;max-width:92px}
-.info-btn{position:absolute;top:-2px;right:calc(50% - 40px);width:20px;height:20px;border-radius:50%;border:none;
-  background:var(--bg4);color:var(--text);font:700 11px Georgia,serif;font-style:italic;cursor:pointer;
+.tile .label{font-size:12px;font-weight:600;text-align:center;line-height:1.25;max-width:110px}
+.info-btn{position:absolute;top:-2px;right:calc(50% - 52px);width:24px;height:24px;border-radius:50%;border:none;
+  background:var(--bg4);color:var(--text);font:700 13px Georgia,serif;font-style:italic;cursor:pointer;
   display:flex;align-items:center;justify-content:center;box-shadow:0 2px 6px rgba(0,0,0,.5)}
 .info-btn:hover{background:var(--red)}
 
@@ -135,7 +135,7 @@ input:focus{outline:none;border-color:var(--red)}
 </div>
 
 <script>
-const APP_VERSION = '2026.10.02-2';
+const APP_VERSION = '2026.10.02-3';
 const WORKER = 'https://zimbra-relay.oli-baroukh.workers.dev';
 const STORE_SECRET = 'OC-bilan-store-2026';
 const K_SESSION = 'accueil_session', K_CACHE = 'accueil_apps_cache', K_USER = 'accueil_last_user';
