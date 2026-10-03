@@ -139,7 +139,7 @@ input:focus{outline:none;border-color:var(--red)}
 </div>
 
 <script>
-const APP_VERSION = '2026.10.02-6';
+const APP_VERSION = '2026.10.03-1';
 const WORKER = 'https://zimbra-relay.oli-baroukh.workers.dev';
 const STORE_SECRET = 'OC-bilan-store-2026';
 const K_SESSION = 'accueil_session', K_CACHE = 'accueil_apps_cache', K_USER = 'accueil_last_user';
@@ -228,7 +228,8 @@ async function loadApps() {
 
 // Session AR standard déposée pour que Bilan de Passage, le Dashboard et la
 // page d'import soient déjà connectés (même domaine). On n'écrase jamais
-// une session encore valide.
+// une session encore valide… sauf si elle est au nom de quelqu'un d'autre
+// (03/10 : sessions « tout le réseau » délivrées à tort avant le correctif).
 function deposerSessionAr(arSession) {
   if (!arSession || !arSession.token) return;
   const obj = { token: arSession.token, ar: arSession.ar, exp: Date.now() + (arSession.expiresInMs || 12 * 3600 * 1000) };
@@ -236,7 +237,7 @@ function deposerSessionAr(arSession) {
   if (arSession.ar === 'ALL') cles.push('rh_import_ar_session');
   for (const k of cles) {
     const exist = lsGet(k);
-    if (!exist || !exist.exp || exist.exp < Date.now()) lsSet(k, obj);
+    if (!exist || !exist.exp || exist.exp < Date.now() || exist.ar !== obj.ar) lsSet(k, obj);
   }
 }
 
