@@ -532,38 +532,75 @@ const SORT_GETTERS = {
   // « jamais visité » = le plus ancien : tout en haut en tri décroissant, tout en bas en croissant.
   visite: r => (r.daysSinceVisit === null || r.daysSinceVisit === undefined) ? Infinity : r.daysSinceVisit,
 };
-const tableSorts = { network: { key: 'score', dir: 1 }, ar: { key: 'score', dir: 1 } };
+const tableSorts = { network: { key: 'score', dir: 1 }, ar: { key: 'score', dir: 1 }, today: { key: 'libelle', dir: 1 }, mensuel: { key: 'score', dir: -1 } };
 
-function sortRows(rows, sort) {
-  const get = SORT_GETTERS[sort.key];
+// 03/10 : tri par colonne aussi sur « Aujourd'hui » et « Score mensuel ».
+// Valeur null = case vide/non applicable, toujours en bas quel que soit le sens.
+const LANCEMENT_RANG = { manquant: 1, attendu: 2, non_attendu: null };
+const TODAY_GETTERS = {
+  libelle: m => m.libelle || null,
+  lancement: m => m.lancement.statut === 'fait' ? (m.lancement.enRetard ? 3 : 4) : LANCEMENT_RANG[m.lancement.statut] ?? null,
+  bilan: m => m.bilan ? 0 : (m.bilanJours ?? null),
+  pedlv: m => m.pedlv ? (m.pedlv.fait ? 0 : m.pedlv.joursDepuis) : null,
+  kaizen: m => !m.kaizen ? null : (m.kaizen.fait ? 100 + m.kaizen.nbItems : (m.kaizen.scoreMax ? (m.kaizen.score || 0) / m.kaizen.scoreMax * 100 : 0)),
+  entretien: m => m.entretien ? m.entretien.nb : 0,
+  observation: m => m.observation ? m.observation.nb : 0,
+  equipe: m => m.equipe ? 0 : (m.equipeJours ?? null),
+  activite: m => nbOutilsFaits(m) * 10 + (m.lancement.statut === 'manquant' ? 0 : m.lancement.enRetard ? 1 : 2),
+};
+function smValeurDim(m, k) {
+  const n = m.neutralisations || {};
+  if (n[k] || n['*'] || (m.exclusions && m.exclusions[k])) return null;
+  const v = m.sous ? m.sous[k] : null;
+  return v === null || v === undefined ? null : v;
+}
+const SM_GETTERS = {
+  libelle: m => m.libelle || null,
+  score: m => m.score ?? null,
+  evol: m => (m.score != null && m.scorePrecedent != null) ? m.score - m.scorePrecedent : null,
+  couv: m => m.couverture ?? null,
+};
+['actions', 'effectif', 'absenteisme', 'positionnement', 'pedlv', 'avis', 'equipe', 'kaizen', 'entretiens', 'lancements'].forEach(k => { SM_GETTERS[k] = m => smValeurDim(m, k); });
+const GETTERS_PAR_TABLE = { today: TODAY_GETTERS, mensuel: SM_GETTERS };
+
+function sortRows(rows, sort, getters) {
+  const get = (getters || SORT_GETTERS)[sort.key];
   return rows.slice().sort((a, b) => {
     const va = get(a), vb = get(b);
-    if (va === null && vb === null) return 0;
+    if (va === null && vb === null) return String(a.libelle || '').localeCompare(String(b.libelle || ''), 'fr', { numeric: true });
     if (va === null) return 1;
     if (vb === null) return -1;
     const cmp = (typeof va === 'string' || typeof vb === 'string')
-      ? String(va).localeCompare(String(vb), 'fr', { sensitivity: 'base' })
+      ? String(va).localeCompare(String(vb), 'fr', { sensitivity: 'base', numeric: true })
       : (va === vb ? 0 : (va < vb ? -1 : 1));
-    return cmp * sort.dir || String(a.libelle || '').localeCompare(String(b.libelle || ''), 'fr');
+    return cmp * sort.dir || String(a.libelle || '').localeCompare(String(b.libelle || ''), 'fr', { numeric: true });
   });
 }
 
-function thSort(table, key, label) {
+function thSort(table, key, label, cls, title) {
   const s = tableSorts[table];
   const active = s.key === key;
-  return '<th class="sortable' + (active ? ' sorted' : '') + '" data-table="' + table + '" data-key="' + key + '" onclick="setTableSort(\'' + table + '\', \'' + key + '\')" title="Trier">'
+  return '<th class="sortable' + (cls ? ' ' + cls : '') + (active ? ' sorted' : '') + '" data-table="' + table + '" data-key="' + key + '" onclick="setTableSort(\'' + table + '\', \'' + key + '\')" title="' + escDash(title ? title + ' — trier' : 'Trier') + '">'
     + label + '<span class="sort-ind">' + (active ? (s.dir === 1 ? '▲' : '▼') : '↕') + '</span></th>';
 }
 
-function setTableSort(table, key) {
+function majIndicateursTri(table) {
   const s = tableSorts[table];
-  if (s.key === key) s.dir = -s.dir; else { s.key = key; s.dir = 1; }
   document.querySelectorAll('th.sortable[data-table="' + table + '"]').forEach(th => {
     const active = th.dataset.key === s.key;
     th.classList.toggle('sorted', active);
     th.querySelector('.sort-ind').textContent = active ? (s.dir === 1 ? '▲' : '▼') : '↕';
   });
-  if (table === 'network') renderTable(); else renderArStoresRows();
+}
+
+function setTableSort(table, key) {
+  const s = tableSorts[table];
+  if (s.key === key) s.dir = -s.dir; else { s.key = key; s.dir = 1; }
+  majIndicateursTri(table);
+  if (table === 'network') renderTable();
+  else if (table === 'ar') renderArStoresRows();
+  else if (table === 'today') { syncTodaySortSelect(); renderTodayBody(); }
+  else if (table === 'mensuel') renderMonthlyBody();
 }
 
 function renderNetworkView() {
@@ -1290,7 +1327,6 @@ function renderTodayView() {
   const d = todayData;
   const prevAr = document.getElementById('today-ar') ? document.getElementById('today-ar').value : '';
   const prevSearch = document.getElementById('today-search') ? document.getElementById('today-search').value : '';
-  const prevSort = document.getElementById('today-sort') ? document.getElementById('today-sort').value : 'libelle';
   const ars = [...new Set(d.magasins.map(m => m.animateur).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'fr'));
   const jours = todayJoursDisponibles();
   if (!jours.includes(d.jour)) jours.push(d.jour);
@@ -1302,10 +1338,11 @@ function renderTodayView() {
         ${jours.map(j => '<option value="' + j + '"' + (j === d.jour ? ' selected' : '') + '>' + escDash(jourLabel(j, d.today)) + '</option>').join('')}
       </select>
       ${ars.length > 1 ? '<select id="today-ar" onchange="renderTodayBody()"><option value="">Tous les animateurs</option>' + ars.map(a => '<option value="' + escDash(a) + '"' + (a === prevAr ? ' selected' : '') + '>' + escDash(a) + '</option>').join('') + '</select>' : ''}
-      <select id="today-sort" onchange="renderTodayBody()">
-        <option value="libelle"${prevSort === 'libelle' ? ' selected' : ''}>Tri : magasin</option>
-        <option value="moins"${prevSort === 'moins' ? ' selected' : ''}>Tri : moins actifs d'abord</option>
-        <option value="plus"${prevSort === 'plus' ? ' selected' : ''}>Tri : plus actifs d'abord</option>
+      <select id="today-sort" onchange="applyTodaySortPreset(this.value)">
+        <option value="libelle">Tri : magasin</option>
+        <option value="moins">Tri : moins actifs d'abord</option>
+        <option value="plus">Tri : plus actifs d'abord</option>
+        <option value="col" disabled>Tri : par colonne</option>
       </select>
       <input type="text" id="today-search" placeholder="Rechercher un magasin" value="${escDash(prevSearch)}" oninput="renderTodayBody()">
     </div>
@@ -1315,7 +1352,7 @@ function renderTodayView() {
       <button class="link-btn" onclick="loadToday()">Actualiser</button></p>
     <div class="kpi-row today-kpis" id="today-kpis"></div>
     <div class="table-wrap sticky-wrap"><table class="dash-table today-table">
-      <thead><tr><th>Magasin</th>${TODAY_OUTILS.map(o => '<th class="c">' + o.label + '</th>').join('')}</tr></thead>
+      <thead><tr>${thSort('today', 'libelle', 'Magasin')}${TODAY_OUTILS.map(o => thSort('today', o.key, o.label, 'c')).join('')}</tr></thead>
       <tbody id="today-body"></tbody>
     </table></div>
     <div class="card" style="margin-top:16px">
@@ -1323,6 +1360,19 @@ function renderTodayView() {
       <div id="today-feed"></div>
     </div>
   `;
+  syncTodaySortSelect();
+  renderTodayBody();
+}
+
+function syncTodaySortSelect() {
+  const sel = document.getElementById('today-sort');
+  if (!sel) return;
+  const s = tableSorts.today;
+  sel.value = s.key === 'libelle' && s.dir === 1 ? 'libelle' : s.key === 'activite' ? (s.dir === 1 ? 'moins' : 'plus') : 'col';
+}
+function applyTodaySortPreset(v) {
+  tableSorts.today = v === 'moins' ? { key: 'activite', dir: 1 } : v === 'plus' ? { key: 'activite', dir: -1 } : { key: 'libelle', dir: 1 };
+  majIndicateursTri('today');
   renderTodayBody();
 }
 
@@ -1380,11 +1430,7 @@ function renderTodayBody() {
   const d = todayData;
   if (!d) return;
   const { rows: base, ar } = todayFiltered();
-  const sortSel = document.getElementById('today-sort').value;
-  let rows = base.slice();
-  if (sortSel === 'moins') rows.sort((a, b) => nbOutilsFaits(a) - nbOutilsFaits(b) || (b.lancement.statut === 'manquant') - (a.lancement.statut === 'manquant') || (!!b.lancement.enRetard) - (!!a.lancement.enRetard) || a.libelle.localeCompare(b.libelle, 'fr'));
-  else if (sortSel === 'plus') rows.sort((a, b) => nbOutilsFaits(b) - nbOutilsFaits(a) || a.libelle.localeCompare(b.libelle, 'fr'));
-  else rows.sort((a, b) => a.libelle.localeCompare(b.libelle, 'fr'));
+  const rows = sortRows(base, tableSorts.today, TODAY_GETTERS);
   const jourEnCours = d.jour === d.today;
 
   // Compteurs (sur le périmètre filtré par AR, indépendamment de la recherche texte)
@@ -1554,7 +1600,7 @@ function renderMonthlyView() {
     ${propsHtml}
     <div class="kpi-row" id="sm-kpis"></div>
     <div class="table-wrap sticky-wrap"><table class="dash-table today-table sm-table">
-      <thead><tr><th>Magasin</th><th class="c">Score</th><th class="c">Évol.</th>${d.dims.map(k => '<th class="c" title="' + escDash(SUB_LABELS[k] + ' — poids ' + d.poids[k]) + '">' + SM_DIM_COURT[k] + '</th>').join('')}<th class="c">Couv.</th></tr></thead>
+      <thead><tr>${thSort('mensuel', 'libelle', 'Magasin')}${thSort('mensuel', 'score', 'Score', 'c')}${thSort('mensuel', 'evol', 'Évol.', 'c', 'Évolution vs mois précédent')}${d.dims.map(k => thSort('mensuel', k, SM_DIM_COURT[k], 'c', SUB_LABELS[k] + ' — poids ' + d.poids[k])).join('')}${thSort('mensuel', 'couv', 'Couv.', 'c', 'Couverture')}</tr></thead>
       <tbody id="sm-body"></tbody>
     </table></div>
     <p class="sm-legende"><span class="sm-n">N</span> neutralisé (motif au survol) · <span class="t-gris">—</span> exclu, donnée réseau absente · Couv. = part du poids total réellement comptée (score attribué à partir de 50 %). Clic sur un magasin pour le détail${d.estOlivier ? ' et les neutralisations' : ' et proposer une neutralisation'}.</p>
@@ -1570,7 +1616,7 @@ function renderMonthlyBody() {
   let rows = d.magasins.slice();
   if (ar) rows = rows.filter(m => m.animateur === ar);
   if (search) rows = rows.filter(m => String(m.libelle || '').toLowerCase().includes(search));
-  rows.sort((a, b) => (b.score ?? -1) - (a.score ?? -1) || String(a.libelle).localeCompare(String(b.libelle), 'fr'));
+  rows = sortRows(rows, tableSorts.mensuel, SM_GETTERS);
 
   const perim = ar ? d.magasins.filter(m => m.animateur === ar) : d.magasins;
   const notes = perim.filter(m => m.score !== null && m.score !== undefined);
