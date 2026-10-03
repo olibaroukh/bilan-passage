@@ -1596,8 +1596,13 @@ function smExplication(dim, e) {
     case 'actions': return e.bilan ? 'Bilan du ' + svDateFr(e.bilan.date) + ' : ' + e.bilan.actionsReportees + ' action(s) reportée(s), dont ' + e.bilan.actionsAFaire + ' « à faire » (−25) et ' + (e.bilan.actionsReportees - e.bilan.actionsAFaire) + ' « en cours » (−15).' : 'Aucun bilan de passage dans le mois.';
     case 'positionnement': return e.bilan ? 'Positionnement annuel saisi dans le bilan du ' + svDateFr(e.bilan.date) + ' : ' + f(e.bilan.positionnementAnnuel) + ' %.' : 'Aucun bilan de passage dans le mois.';
     case 'equipe': return e.equipe ? 'Niveau Évaluation équipe au dernier jour du mois : ' + e.equipe.niveau + '/10 (' + e.equipe.nbTaches + ' tâche(s)).' : 'Aucune évaluation équipe cette année.';
-    case 'effectif': return e.effectif ? 'Effectif disponible (RH) ' + e.effectif.effectifDispo + ' pour ' + f(e.effTheo) + ' théorique (écart ' + e.effectif.delta + ')' + (e.effectif.sousEffectifSoutenu ? ' · sous-effectif soutenu 3 mois (écart moyen ' + e.effectif.ecartMoyen3Mois + ')' : '') + '.' : '';
-    case 'absenteisme': return e.absenteisme ? "Taux d'absentéisme du mois : " + e.absenteisme.tauxPct + ' %.' : '';
+    case 'effectif': {
+      if (!e.effectif) return '';
+      const val = e.effectif.effectif !== undefined ? e.effectif.effectif : e.effectif.effectifDispo;
+      const src = e.effectif.source === 'bilan' ? 'Effectif saisi dans le bilan du ' + svDateFr(e.effectif.bilanDate) : 'Effectif disponible (RH' + (e.effectif.rhMois ? ' ' + smMoisLabel(e.effectif.rhMois) : '') + ', hors longue durée)';
+      return (e.effectif.indicatif ? '[Aperçu, indicatif] ' : '') + src + ' : ' + val + ' pour ' + f(e.effTheo) + ' théorique (écart ' + e.effectif.delta + ')' + (e.effectif.sousEffectifSoutenu ? ' · sous-effectif RH soutenu 3 mois (écart moyen ' + e.effectif.ecartMoyen3Mois + ')' : '') + '.';
+    }
+    case 'absenteisme': return e.absenteisme ? (e.absenteisme.indicatif ? '[Aperçu, indicatif] Dernier import RH (' + smMoisLabel(e.absenteisme.rhMois) + ')' : "Taux d'absentéisme du mois") + ' : ' + e.absenteisme.tauxPct + ' %.' : '';
     case 'pedlv': return e.pedlv ? 'Envoi PEDLV du ' + smDateFr(e.pedlv.envoyeLe) + ' (période ' + e.pedlv.periode + ') : ' + e.pedlv.rouges + ' indicateur(s) rouge(s) sur ' + e.pedlv.total + '.' : 'Aucun envoi PEDLV pour ce mois.';
     case 'avis': return e.avis && e.avis.rating ? 'Note Google ' + e.avis.rating + '/5 (' + f(e.avis.reviews) + ' avis), mise à jour le ' + smDateFr(e.avis.majLe) + '.' : '';
     case 'kaizen': return e.kaizen ? 'Audit Kaizen du mois : ' + e.kaizen.score + '/' + e.kaizen.scoreMax + (e.kaizen.cloture ? ' (clôturé).' : ' (non clôturé).') : 'Aucun audit Kaizen ce mois-ci.';
