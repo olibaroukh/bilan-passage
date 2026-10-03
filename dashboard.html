@@ -228,6 +228,37 @@
     table.today-table td:first-child, table.today-table th:first-child { min-width: 120px; max-width: 140px; }
   }
 
+  /* ---- Score mensuel (03/10) ---- */
+  .sm-banner { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; padding: 10px 14px; border-radius: 8px; font-size: 13px; margin: 0 0 12px; }
+  .sm-banner b { font-size: 14px; }
+  .sm-b-apercu { background: #eee; color: var(--dark); }
+  .sm-b-prov { background: var(--orange-bg); color: var(--orange); }
+  .sm-b-valide { background: var(--green-bg); color: var(--green); }
+  .sm-actions { display: flex; gap: 8px; flex-wrap: wrap; margin: 0 0 14px; }
+  .sm-btn { background: #fff; border: 1px solid #ccc; border-radius: 6px; padding: 8px 14px; font-size: 13px; font-weight: 600; cursor: pointer; color: var(--dark); }
+  .sm-btn:hover { border-color: var(--dark); }
+  .sm-btn-red { background: var(--red); border-color: var(--red); color: #fff; }
+  .sm-btn-red:hover { border-color: #b51a12; background: #b51a12; }
+  .sm-btn-sm { padding: 4px 10px; font-size: 12px; }
+  .sm-props { margin: 0 0 14px; }
+  .sm-prop-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; font-size: 13px; padding: 8px 0; border-bottom: 1px solid #f0efe9; }
+  .sm-prop-row:last-child { border-bottom: none; }
+  .sm-prop-btns { display: flex; gap: 6px; flex-shrink: 0; }
+  .sm-v { font-weight: 700; font-size: 13px; }
+  .sm-ok { color: var(--green); } .sm-moy { color: var(--orange); } .sm-bas { color: var(--red); }
+  .sm-n { display: inline-block; background: #e8e6e1; color: var(--gray); font-weight: 700; font-size: 11px; padding: 1px 6px; border-radius: 4px; }
+  .sm-up { color: var(--green); font-weight: 700; font-size: 12px; } .sm-down { color: var(--red); font-weight: 700; font-size: 12px; }
+  .sm-legende { font-size: 12px; color: var(--gray); margin: 10px 2px 0; line-height: 1.6; }
+  .sm-modal-box { width: 560px; max-height: 88vh; overflow-y: auto; }
+  .sm-dim-row { display: grid; grid-template-columns: 1fr 44px; gap: 2px 10px; padding: 8px 0; border-bottom: 1px solid #f0efe9; font-size: 13px; }
+  .sm-dim-row label { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .sm-dim-v { text-align: right; font-weight: 700; }
+  .sm-dim-etat { grid-column: 1 / -1; padding-left: 19px; }
+  .sm-dim-etat .sv-meta { display: inline; }
+  .sm-neutra-form { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
+  .sm-neutra-form input[type=text], .sm-neutra-form select { padding: 9px 10px; border: 1px solid #ccc; border-radius: 6px; font-size: 13px; }
+  .sm-entier { font-size: 13px; display: flex; gap: 6px; align-items: center; }
+
 select,input,textarea,button{font-family:inherit}
 </style>
 </head>
@@ -255,12 +286,21 @@ select,input,textarea,button{font-family:inherit}
     <nav class="main-tabs" id="main-tabs">
       <button data-tab="network" class="active" onclick="showNetworkView()">Santé réseau</button>
       <button data-tab="today" onclick="showTodayView()">Aujourd'hui</button>
+      <button data-tab="mensuel" onclick="showMonthlyView()">Score mensuel</button>
     </nav>
     <div id="view-network"></div>
     <div id="view-today" style="display:none"></div>
+    <div id="view-mensuel" style="display:none"></div>
     <div id="view-detail" style="display:none"></div>
     <div id="view-ar" style="display:none"></div>
   </main>
+</div>
+
+<div class="modal-overlay" id="sm-modal" onclick="if (event.target === this) smFermer()">
+  <div class="modal-box sm-modal-box">
+    <button class="modal-close" onclick="smFermer()">&times;</button>
+    <div id="sm-modal-content"></div>
+  </div>
 </div>
 
 <div class="modal-overlay" id="modal-overlay">
@@ -453,6 +493,7 @@ async function showNetworkView() {
   currentListView = 'network';
   setTabs('network');
   document.getElementById('view-today').style.display = 'none';
+  document.getElementById('view-mensuel').style.display = 'none';
   document.getElementById('view-detail').style.display = 'none';
   document.getElementById('view-ar').style.display = 'none';
   const el = document.getElementById('view-network');
@@ -627,6 +668,7 @@ async function showArView(arName) {
   lastArContext = arName;
   document.getElementById('view-network').style.display = 'none';
   document.getElementById('view-today').style.display = 'none';
+  document.getElementById('view-mensuel').style.display = 'none';
   setTabs(null);
   document.getElementById('view-detail').style.display = 'none';
   const el = document.getElementById('view-ar');
@@ -813,6 +855,7 @@ async function generateArAdvice(arName) {
 async function showDetailView(code) {
   document.getElementById('view-network').style.display = 'none';
   document.getElementById('view-today').style.display = 'none';
+  document.getElementById('view-mensuel').style.display = 'none';
   setTabs(null);
   document.getElementById('view-ar').style.display = 'none';
   const el = document.getElementById('view-detail');
@@ -1163,7 +1206,9 @@ function setTabs(active) {
 }
 
 function goBack() {
-  if (currentListView === 'today') showTodayView(); else showNetworkView();
+  if (currentListView === 'today') showTodayView();
+  else if (currentListView === 'mensuel') showMonthlyView();
+  else showNetworkView();
 }
 
 function parisTodayIsoDash() { return new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Paris' }); }
@@ -1188,6 +1233,7 @@ function stopTodayTimer() { if (todayTimer) { clearInterval(todayTimer); todayTi
 
 async function showTodayView() {
   currentListView = 'today';
+  document.getElementById('view-mensuel').style.display = 'none';
   document.getElementById('view-network').style.display = 'none';
   document.getElementById('view-detail').style.display = 'none';
   document.getElementById('view-ar').style.display = 'none';
@@ -1365,6 +1411,341 @@ function renderTodayBody() {
       <span class="feed-h">${e.heure ? escDash(e.heure) : '—'}</span>
       <span class="feed-txt"><b>${escDash(e.libelle)}</b> · ${escDash(e.outil === 'entretien' ? 'Entretien ' + (SV_TYPES[e.detail] || e.detail || '') : e.detail || TODAY_OUTIL_LABELS[e.outil])}${e.par ? ' <span class="feed-par">— ' + escDash(e.par) + '</span>' : ''}</span>
     </div>`).join('') : '<p style="color:var(--gray);font-size:13px;margin:0">Rien de saisi pour le moment.</p>';
+}
+
+// ---------------------------------------------------------------- Onglet « Score mensuel » (03/10)
+// Score de santé mensuel « primes » (route /sante-mensuel). Olivier : calcul,
+// neutralisations, validation, export Excel. AR : lecture de ses magasins et
+// propositions de neutralisation (sans effet tant qu'Olivier ne les a pas acceptées).
+let smData = null;
+let smMois = null;
+let smDetailCode = null;
+const SM_DIM_COURT = {
+  actions: 'Act.', effectif: 'Eff.', absenteisme: 'Abs.', positionnement: 'Pos.', pedlv: 'PEDLV',
+  avis: 'Avis', equipe: 'Équipe', kaizen: 'Kaizen', entretiens: 'Entr.', lancements: 'Lanc.',
+};
+const SM_MOIS_NOMS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+function smMoisLabel(m) { const [y, mm] = m.split('-').map(Number); const s = SM_MOIS_NOMS[mm - 1] + ' ' + y; return s.charAt(0).toUpperCase() + s.slice(1); }
+function smDateFr(iso) { if (!iso) return '—'; const d = new Date(iso); return isNaN(d) ? svDateFr(iso) : d.toLocaleDateString('fr-FR', { timeZone: 'Europe/Paris' }) + ' ' + d.toLocaleTimeString('fr-FR', { timeZone: 'Europe/Paris', hour: '2-digit', minute: '2-digit' }); }
+function smMoisDecale(m, n) { const [y, mm] = m.split('-').map(Number); return new Date(Date.UTC(y, mm - 1 + n, 1)).toISOString().slice(0, 7); }
+
+async function showMonthlyView() {
+  currentListView = 'mensuel';
+  ['view-network', 'view-detail', 'view-ar', 'view-today'].forEach(id => { document.getElementById(id).style.display = 'none'; });
+  setTabs('mensuel');
+  const el = document.getElementById('view-mensuel');
+  el.style.display = 'block';
+  if (!smData) el.innerHTML = '<div class="loading">Chargement…</div>';
+  await loadMonthly();
+}
+
+async function loadMonthly(withJournal) {
+  const el = document.getElementById('view-mensuel');
+  try {
+    const resp = await fetch(RELAY + '/sante-mensuel' + (smMois ? '?mois=' + encodeURIComponent(smMois) : '') + (withJournal ? (smMois ? '&' : '?') + 'journal=1' : ''), { headers: authHeaders() });
+    const data = await resp.json();
+    if (resp.status === 401) { logout(); return null; }
+    if (!resp.ok || !data.ok) throw new Error(data.error || 'Erreur de chargement');
+    if (withJournal) return data;
+    smData = data; smMois = data.mois;
+    renderMonthlyView();
+    return data;
+  } catch (e) {
+    if (withJournal) { alert('Erreur : ' + e.message); return null; }
+    el.innerHTML = '<div class="loading">Erreur : ' + escDash(e.message) + '</div>';
+    return null;
+  }
+}
+
+async function smPost(body) {
+  const d = smData;
+  if (d && d.statut === 'valide' && !body.motifRevision && body.action !== 'valider') {
+    const motif = prompt('Ce mois est validé. Toute modification est une révision tracée.\nMotif de la révision :');
+    if (!motif || !motif.trim()) return null;
+    body.motifRevision = motif.trim();
+  }
+  const resp = await fetch(RELAY + '/sante-mensuel', { method: 'POST', headers: { ...authHeaders(), 'Content-Type': 'application/json' }, body: JSON.stringify({ mois: smMois, ...body }) });
+  const data = await resp.json().catch(() => ({}));
+  if (resp.status === 401) { logout(); return null; }
+  if (!resp.ok || !data.ok) {
+    if (data.error === 'RH_ABSENT') {
+      const motif = prompt("L'import RH de ce mois n'a pas été fait (effectif et absentéisme sont exclus du calcul).\nPour valider quand même, indique le motif :");
+      if (motif && motif.trim()) return smPost({ ...body, motifSansRh: motif.trim() });
+      return null;
+    }
+    alert(data.error || ('Erreur ' + resp.status));
+    return null;
+  }
+  return data;
+}
+
+function changeSmMois(v) { smMois = v; smData = null; showMonthlyView(); }
+
+function smCellule(m, dim) {
+  const n = (m.neutralisations || {})[dim] || (m.neutralisations || {})['*'];
+  if (n) return '<td class="c" title="' + escDash('Neutralisé : ' + (n.motif || '')) + '"><span class="sm-n">N</span></td>';
+  if (m.exclusions && m.exclusions[dim]) return '<td class="c" title="' + escDash('Exclu : ' + m.exclusions[dim]) + '"><span class="t-gris">—</span></td>';
+  const v = m.sous ? m.sous[dim] : null;
+  if (v === null || v === undefined) return '<td class="c"><span class="t-gris">—</span></td>';
+  return '<td class="c"><span class="sm-v ' + (v >= 80 ? 'sm-ok' : v >= 60 ? 'sm-moy' : 'sm-bas') + '">' + Math.round(v) + '</span></td>';
+}
+
+function renderMonthlyView() {
+  const el = document.getElementById('view-mensuel');
+  const d = smData;
+  const prevAr = document.getElementById('sm-ar') ? document.getElementById('sm-ar').value : '';
+  const prevSearch = document.getElementById('sm-search') ? document.getElementById('sm-search').value : '';
+  const moisOptions = [];
+  for (let i = 0; i <= 12; i++) moisOptions.push(smMoisDecale(d.moisCourant, -i));
+  (d.moisCalcules || []).forEach(m => { if (!moisOptions.includes(m.mois)) moisOptions.push(m.mois); });
+  moisOptions.sort().reverse();
+  const etatMois = {}; (d.moisCalcules || []).forEach(m => { etatMois[m.mois] = m.statut; });
+  const ars = [...new Set(d.magasins.map(m => m.animateur).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'fr'));
+  const enCours = d.mois === d.moisCourant;
+
+  let bandeau;
+  if (d.apercu) {
+    bandeau = '<div class="sm-banner sm-b-apercu"><b>' + (enCours ? 'Mois en cours — aperçu indicatif' : 'Mois non encore calculé — aperçu indicatif') + '</b><span>Rien n\'est enregistré, les chiffres évoluent jusqu\'au calcul. Non opposable.</span></div>';
+  } else if (d.statut === 'valide') {
+    bandeau = '<div class="sm-banner sm-b-valide"><b>Validé</b><span>le ' + escDash(smDateFr(d.valideLe)) + ' par ' + escDash(d.validePar || '') + ' · version ' + d.version + (d.reviseLe ? ' · révisé le ' + escDash(smDateFr(d.reviseLe)) : '') + '</span></div>';
+  } else {
+    bandeau = '<div class="sm-banner sm-b-prov"><b>Provisoire — version ' + d.version + '</b><span>Calculé le ' + escDash(smDateFr(d.calculeLe)) + ' (' + escDash(d.calculePar || '') + ') · contestation jusqu\'au ' + escDash(svDateFr(d.dateLimite)) + '</span></div>';
+  }
+
+  let actions = '';
+  if (d.estOlivier) {
+    const btns = [];
+    if (!enCours) btns.push('<button class="sm-btn" onclick="smCalculer()">' + (d.apercu ? 'Calculer le mois' : 'Recalculer') + '</button>');
+    if (!d.apercu && d.statut !== 'valide') btns.push('<button class="sm-btn sm-btn-red" onclick="smValider()">Valider le mois</button>');
+    if (!d.apercu) btns.push('<button class="sm-btn" onclick="smArAbsentModal()">AR absent…</button>');
+    btns.push('<button class="sm-btn" onclick="smExporter()">Exporter Excel</button>');
+    actions = '<div class="sm-actions">' + btns.join('') + '</div>';
+  }
+
+  const props = d.propositions || [];
+  const propsHtml = props.length ? `
+    <div class="card sm-props">
+      <div class="card-head"><h4>Propositions de neutralisation (${props.length})</h4>${d.estOlivier ? '<button class="link-btn" onclick="smDecider(null, true)">Tout accepter</button>' : ''}</div>
+      ${props.map(p => `<div class="sm-prop-row">
+        <span><b>${escDash(p.libelle)}</b> · ${escDash(p.dimension === '*' ? 'Magasin entier' : (SUB_LABELS[p.dimension] || p.dimension))}<span class="sv-meta">${escDash(p.motif || '')} — proposé par ${escDash(p.propose_par || '')}</span></span>
+        ${d.estOlivier ? '<span class="sm-prop-btns"><button class="sm-btn sm-btn-sm" onclick="smDecider(' + p.id + ', true)">Accepter</button><button class="sm-btn sm-btn-sm" onclick="smDecider(' + p.id + ', false)">Refuser</button></span>' : '<span class="t-gris">en attente d\'Olivier</span>'}
+      </div>`).join('')}
+    </div>` : '';
+
+  el.innerHTML = `
+    <div class="filters">
+      <select id="sm-mois" onchange="changeSmMois(this.value)">
+        ${moisOptions.map(m => '<option value="' + m + '"' + (m === d.mois ? ' selected' : '') + '>' + escDash(smMoisLabel(m)) + (etatMois[m] === 'valide' ? ' · validé' : etatMois[m] ? ' · provisoire' : (m === d.moisCourant ? ' · en cours' : '')) + '</option>').join('')}
+      </select>
+      ${ars.length > 1 ? '<select id="sm-ar" onchange="renderMonthlyBody()"><option value="">Tous les animateurs</option>' + ars.map(a => '<option value="' + escDash(a) + '"' + (a === prevAr ? ' selected' : '') + '>' + escDash(a) + '</option>').join('') + '</select>' : ''}
+      <input type="text" id="sm-search" placeholder="Rechercher un magasin" value="${escDash(prevSearch)}" oninput="renderMonthlyBody()">
+    </div>
+    ${bandeau}
+    ${actions}
+    ${propsHtml}
+    <div class="kpi-row" id="sm-kpis"></div>
+    <div class="table-wrap"><table class="dash-table today-table sm-table">
+      <thead><tr><th>Magasin</th><th class="c">Score</th><th class="c">Évol.</th>${d.dims.map(k => '<th class="c" title="' + escDash(SUB_LABELS[k] + ' — poids ' + d.poids[k]) + '">' + SM_DIM_COURT[k] + '</th>').join('')}<th class="c">Couv.</th></tr></thead>
+      <tbody id="sm-body"></tbody>
+    </table></div>
+    <p class="sm-legende"><span class="sm-n">N</span> neutralisé (motif au survol) · <span class="t-gris">—</span> exclu, donnée réseau absente · Couv. = part du poids total réellement comptée (score attribué à partir de 50 %). Clic sur un magasin pour le détail${d.estOlivier ? ' et les neutralisations' : ' et proposer une neutralisation'}.</p>
+  `;
+  renderMonthlyBody();
+}
+
+function renderMonthlyBody() {
+  const d = smData;
+  const arSel = document.getElementById('sm-ar');
+  const ar = arSel ? arSel.value : '';
+  const search = (document.getElementById('sm-search').value || '').trim().toLowerCase();
+  let rows = d.magasins.slice();
+  if (ar) rows = rows.filter(m => m.animateur === ar);
+  if (search) rows = rows.filter(m => String(m.libelle || '').toLowerCase().includes(search));
+  rows.sort((a, b) => (b.score ?? -1) - (a.score ?? -1) || String(a.libelle).localeCompare(String(b.libelle), 'fr'));
+
+  const perim = ar ? d.magasins.filter(m => m.animateur === ar) : d.magasins;
+  const notes = perim.filter(m => m.score !== null && m.score !== undefined);
+  const moy = notes.length ? Math.round(notes.reduce((s, m) => s + m.score, 0) / notes.length) : null;
+  const nbNeutra = perim.filter(m => Object.keys(m.neutralisations || {}).length).length;
+  document.getElementById('sm-kpis').innerHTML = `
+    <div class="kpi-card"><p class="lbl">Score moyen</p><p class="val">${moy ?? '—'}</p></div>
+    <div class="kpi-card"><p class="lbl">Magasins notés</p><p class="val">${notes.length}<span class="kpi-sub"> / ${perim.length}</span></p></div>
+    <div class="kpi-card"><p class="lbl">Avec neutralisation</p><p class="val">${nbNeutra}</p></div>
+    <div class="kpi-card"><p class="lbl">Propositions en attente</p><p class="val" style="color:${(d.propositions || []).length ? 'var(--orange)' : 'inherit'}">${(d.propositions || []).length}</p></div>
+  `;
+  document.getElementById('sm-body').innerHTML = rows.length ? rows.map(m => {
+    const ev = (m.score !== null && m.score !== undefined && m.scorePrecedent !== null && m.scorePrecedent !== undefined) ? m.score - m.scorePrecedent : null;
+    const evHtml = ev === null ? '<span class="t-gris">—</span>' : (ev > 0 ? '<span class="sm-up">▲ ' + ev + '</span>' : ev < 0 ? '<span class="sm-down">▼ ' + (-ev) + '</span>' : '<span class="t-gris">=</span>');
+    return `<tr class="row-clickable" onclick="smDetail('${escDash(m.code)}')">
+      <td><span class="t-mag">${escDash(m.libelle)}</span>${!ar && m.animateur ? '<span class="t-ar">' + escDash(m.animateur) + '</span>' : ''}</td>
+      <td class="c"><span class="badge ${scoreClass(m.score ?? null)}" title="${m.score === null || m.score === undefined ? 'Pas de score : moins de 50 % du poids couvert' : ''}">${m.score ?? '—'}</span></td>
+      <td class="c">${evHtml}</td>
+      ${d.dims.map(k => smCellule(m, k)).join('')}
+      <td class="c"><span class="t-gris">${m.couverture != null ? Math.round(m.couverture) + ' %' : '—'}</span></td>
+    </tr>`;
+  }).join('') : '<tr><td colspan="14" style="color:var(--gray)">Aucun magasin.</td></tr>';
+}
+
+function smExplication(dim, e) {
+  e = e || {};
+  const f = (x) => x === null || x === undefined ? '—' : x;
+  switch (dim) {
+    case 'actions': return e.bilan ? 'Bilan du ' + svDateFr(e.bilan.date) + ' : ' + e.bilan.actionsReportees + ' action(s) reportée(s), dont ' + e.bilan.actionsAFaire + ' « à faire » (−25) et ' + (e.bilan.actionsReportees - e.bilan.actionsAFaire) + ' « en cours » (−15).' : 'Aucun bilan de passage dans le mois.';
+    case 'positionnement': return e.bilan ? 'Positionnement annuel saisi dans le bilan du ' + svDateFr(e.bilan.date) + ' : ' + f(e.bilan.positionnementAnnuel) + ' %.' : 'Aucun bilan de passage dans le mois.';
+    case 'equipe': return e.equipe ? 'Niveau Évaluation équipe au dernier jour du mois : ' + e.equipe.niveau + '/10 (' + e.equipe.nbTaches + ' tâche(s)).' : 'Aucune évaluation équipe cette année.';
+    case 'effectif': return e.effectif ? 'Effectif disponible (RH) ' + e.effectif.effectifDispo + ' pour ' + f(e.effTheo) + ' théorique (écart ' + e.effectif.delta + ')' + (e.effectif.sousEffectifSoutenu ? ' · sous-effectif soutenu 3 mois (écart moyen ' + e.effectif.ecartMoyen3Mois + ')' : '') + '.' : '';
+    case 'absenteisme': return e.absenteisme ? "Taux d'absentéisme du mois : " + e.absenteisme.tauxPct + ' %.' : '';
+    case 'pedlv': return e.pedlv ? 'Envoi PEDLV du ' + smDateFr(e.pedlv.envoyeLe) + ' (période ' + e.pedlv.periode + ') : ' + e.pedlv.rouges + ' indicateur(s) rouge(s) sur ' + e.pedlv.total + '.' : 'Aucun envoi PEDLV pour ce mois.';
+    case 'avis': return e.avis && e.avis.rating ? 'Note Google ' + e.avis.rating + '/5 (' + f(e.avis.reviews) + ' avis), mise à jour le ' + smDateFr(e.avis.majLe) + '.' : '';
+    case 'kaizen': return e.kaizen ? 'Audit Kaizen du mois : ' + e.kaizen.score + '/' + e.kaizen.scoreMax + (e.kaizen.cloture ? ' (clôturé).' : ' (non clôturé).') : 'Aucun audit Kaizen ce mois-ci.';
+    case 'entretiens': return e.entretiens ? e.entretiens.vus + ' collaborateur(s) vu(s) en entretien sur ' + e.entretiens.eligibles + ' éligible(s) (RH ' + e.entretiens.rhMois + ').' : '';
+    case 'lancements': return e.lancements ? e.lancements.joursLances + ' jour(s) lancé(s) sur ' + e.lancements.joursOuverts + ' jour(s) ouvert(s).' : '';
+  }
+  return '';
+}
+
+function smDetail(code) {
+  smDetailCode = code;
+  const d = smData;
+  const m = d.magasins.find(x => x.code === code);
+  if (!m) return;
+  const neutra = m.neutralisations || {};
+  const lignes = d.dims.map(k => {
+    const n = neutra[k];
+    const excl = m.exclusions && m.exclusions[k];
+    const v = m.sous ? m.sous[k] : null;
+    const etat = n ? '<span class="sm-n">Neutralisé</span> <span class="sv-meta">' + escDash(n.motif || '') + ' — ' + escDash(n.par || '') + (d.estOlivier && !d.apercu ? ' · <a href="#" onclick="smRetirer(' + n.id + ');return false">retirer</a>' : '') + '</span>'
+      : excl ? '<span class="t-gris">Exclu</span> <span class="sv-meta">' + escDash(excl) + '</span>'
+      : '<span class="sv-meta">' + escDash(smExplication(k, m.entrees)) + '</span>';
+    const coche = (!n && !d.apercu) ? '<input type="checkbox" class="sm-dim-cb" value="' + k + '">' : '<span style="display:inline-block;width:13px"></span>';
+    return '<div class="sm-dim-row"><label>' + coche + ' <b>' + escDash(SUB_LABELS[k]) + '</b> <span class="t-gris">poids ' + d.poids[k] + '</span></label><span class="sm-dim-v">' + (n || excl || v === null || v === undefined ? '—' : Math.round(v)) + '</span><div class="sm-dim-etat">' + etat + '</div></div>';
+  }).join('');
+  const entier = neutra['*'];
+  const form = d.apercu ? '<p class="sv-meta" style="margin-top:12px">Les neutralisations se font une fois le mois calculé.</p>' : `
+    <div class="sm-neutra-form">
+      <label class="sm-entier"><input type="checkbox" id="sm-entier"> Neutraliser le magasin entier (pas de score ce mois-ci)</label>
+      <input type="text" id="sm-motif" placeholder="Motif (obligatoire)">
+      <button class="sm-btn sm-btn-red" onclick="smNeutraliser()">${d.estOlivier ? 'Neutraliser la sélection' : 'Proposer la neutralisation'}</button>
+      ${d.estOlivier ? '' : '<p class="sv-meta">Ta proposition n\'aura d\'effet qu\'après validation par Olivier.</p>'}
+    </div>`;
+  document.getElementById('sm-modal-content').innerHTML = `
+    <h3>${escDash(m.libelle)}</h3>
+    <p class="sv-meta" style="margin:0 0 10px">${escDash(m.animateur || '')} · ${escDash(smMoisLabel(d.mois))} · score <b>${m.score ?? '—'}</b> · couverture ${m.couverture != null ? Math.round(m.couverture) + ' %' : '—'}${entier ? ' · <span class="sm-n">magasin neutralisé</span> (' + escDash(entier.motif || '') + (d.estOlivier ? ', <a href="#" onclick="smRetirer(' + entier.id + ');return false">retirer</a>' : '') + ')' : ''}</p>
+    ${lignes}
+    ${form}`;
+  document.getElementById('sm-modal').style.display = 'flex';
+}
+function smFermer() { document.getElementById('sm-modal').style.display = 'none'; smDetailCode = null; }
+
+async function smNeutraliser() {
+  const motif = (document.getElementById('sm-motif').value || '').trim();
+  const dims = [...document.querySelectorAll('.sm-dim-cb:checked')].map(c => c.value);
+  if (document.getElementById('sm-entier').checked) dims.push('*');
+  if (!dims.length) { alert('Coche au moins une dimension (ou le magasin entier).'); return; }
+  if (!motif) { alert('Le motif est obligatoire.'); return; }
+  const r = await smPost({ action: 'neutraliser', magasins: [smDetailCode], dimensions: dims, motif });
+  if (!r) return;
+  const code = smDetailCode;
+  await loadMonthly();
+  if (r.statut === 'proposee') { alert('Proposition envoyée à Olivier.'); smFermer(); } else smDetail(code);
+}
+async function smRetirer(id) {
+  if (!confirm('Retirer cette neutralisation ? La dimension sera de nouveau comptée.')) return;
+  const code = smDetailCode;
+  if (await smPost({ action: 'retirer', id })) { await loadMonthly(); if (code) smDetail(code); }
+}
+async function smDecider(id, accepter) {
+  const ids = id ? [id] : (smData.propositions || []).map(p => p.id);
+  if (!id && !confirm('Accepter les ' + ids.length + ' proposition(s) ?')) return;
+  if (await smPost({ action: 'decider', ids, accepter })) loadMonthly();
+}
+async function smCalculer() {
+  const d = smData;
+  const msg = d.apercu ? 'Calculer le score de ' + smMoisLabel(d.mois) + ' ? Les poids actuels seront figés pour ce mois.' : 'Recalculer ' + smMoisLabel(d.mois) + ' à partir des données actuelles ? Une nouvelle version sera créée (la précédente est conservée), avec les mêmes poids.';
+  if (!confirm(msg)) return;
+  if (await smPost({ action: 'calculer' })) loadMonthly();
+}
+async function smValider() {
+  if (!confirm('Valider définitivement ' + smMoisLabel(smData.mois) + ' ? Le score sera gelé ; toute modification ultérieure sera une révision tracée avec motif.')) return;
+  if (await smPost({ action: 'valider' })) loadMonthly();
+}
+function smArAbsentModal() {
+  const ars = [...new Set(smData.magasins.map(m => m.animateur).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'fr'));
+  document.getElementById('sm-modal-content').innerHTML = `
+    <h3>AR absent — ${escDash(smMoisLabel(smData.mois))}</h3>
+    <p class="sv-meta" style="margin:0 0 12px">Neutralise, pour tous les magasins de l'animateur, ce qui vient de Bilan de Passage et d'Évaluation équipe : ${smData.dimsArAbsent.map(k => escDash(SUB_LABELS[k])).join(', ')}.</p>
+    <div class="sm-neutra-form">
+      <select id="sm-ar-absent">${ars.map(a => '<option value="' + escDash(a) + '">' + escDash(a) + '</option>').join('')}</select>
+      <input type="text" id="sm-motif-ar" placeholder="Motif (obligatoire)">
+      <button class="sm-btn sm-btn-red" onclick="smArAbsent()">Neutraliser</button>
+    </div>`;
+  document.getElementById('sm-modal').style.display = 'flex';
+}
+async function smArAbsent() {
+  const ar = document.getElementById('sm-ar-absent').value;
+  const motif = (document.getElementById('sm-motif-ar').value || '').trim();
+  if (!motif) { alert('Le motif est obligatoire.'); return; }
+  if (await smPost({ action: 'neutraliser', arAbsent: ar, motif })) { smFermer(); loadMonthly(); }
+}
+
+function smChargerXlsx() {
+  if (window.XLSX) return Promise.resolve();
+  return new Promise((ok, ko) => {
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+    s.onload = ok; s.onerror = () => ko(new Error('Impossible de charger le module Excel'));
+    document.head.appendChild(s);
+  });
+}
+async function smExporter() {
+  try { await smChargerXlsx(); } catch (e) { alert(e.message); return; }
+  const d = await loadMonthly(true);
+  if (!d) return;
+  const statut = d.apercu ? 'APERÇU (non enregistré)' : d.statut === 'valide' ? 'VALIDÉ' : 'PROVISOIRE';
+  const mags = d.magasins.slice();
+  const notes = mags.filter(m => m.score !== null && m.score !== undefined).sort((a, b) => b.score - a.score);
+  const rangReseau = {}; notes.forEach((m, i) => { rangReseau[m.code] = i + 1; });
+  const rangAr = {}; const parAr = {};
+  notes.forEach(m => { (parAr[m.animateur || ''] ??= []).push(m); });
+  Object.values(parAr).forEach(arr => arr.forEach((m, i) => { rangAr[m.code] = i + 1; }));
+  const etatDim = (m, k) => { const n = (m.neutralisations || {})[k] || (m.neutralisations || {})['*']; if (n) return 'Neutralisé : ' + (n.motif || ''); if (m.exclusions && m.exclusions[k]) return 'Exclu : ' + m.exclusions[k]; return 'Compté'; };
+  const synthese = mags.sort((a, b) => String(a.libelle).localeCompare(String(b.libelle), 'fr')).map(m => ({
+    'Mois': d.mois, 'Statut': statut, 'Version': d.version ?? '', 'Code': m.code, 'Magasin': m.libelle, 'AR': m.animateur || '',
+    'Score du mois': m.score ?? 'Pas de score', 'Score mois précédent': m.scorePrecedent ?? '',
+    'Évolution': (m.score != null && m.scorePrecedent != null) ? m.score - m.scorePrecedent : '',
+    'Couverture %': m.couverture ?? '', 'Rang réseau': rangReseau[m.code] ?? '', 'Rang AR': rangAr[m.code] ?? '',
+  }));
+  const detail = mags.map(m => {
+    const row = { 'Mois': d.mois, 'Statut': statut, 'Code': m.code, 'Magasin': m.libelle, 'AR': m.animateur || '', 'Score du mois': m.score ?? 'Pas de score' };
+    d.dims.forEach(k => {
+      const v = m.sous ? m.sous[k] : null;
+      row[SUB_LABELS[k] + ' — sous-score'] = (v === null || v === undefined) ? '' : Math.round(v * 10) / 10;
+      row[SUB_LABELS[k] + ' — poids'] = d.poids[k];
+      row[SUB_LABELS[k] + ' — état'] = etatDim(m, k);
+      row[SUB_LABELS[k] + ' — justification'] = smExplication(k, m.entrees);
+    });
+    return row;
+  });
+  const neutra = (d.neutralisationsHistorique || []).map(n => ({
+    'Code': n.magasin_code, 'Magasin': (mags.find(m => m.code === n.magasin_code) || {}).libelle || '', 'Dimension': n.dimension === '*' ? 'Magasin entier' : (SUB_LABELS[n.dimension] || n.dimension),
+    'Statut': n.statut, 'Origine': n.origine, 'Motif': n.motif || '', 'Proposé par': n.propose_par || '', 'Proposé le': n.propose_le || '', 'Décidé par': n.decide_par || '', 'Décidé le': n.decide_le || '',
+  }));
+  const journal = (d.journal || []).map(j => ({ 'Date': j.le, 'Action': j.action, 'Auteur': j.auteur || '', 'Magasin': j.magasin_code || '', 'Motif': j.motif || '', 'Détail': j.detail || '' }));
+  const params = [
+    { 'Paramètre': 'Mois', 'Valeur': d.mois }, { 'Paramètre': 'Statut', 'Valeur': statut }, { 'Paramètre': 'Version', 'Valeur': d.version ?? '' },
+    { 'Paramètre': 'Calculé le', 'Valeur': d.calculeLe || '' }, { 'Paramètre': 'Validé le', 'Valeur': d.valideLe || '' }, { 'Paramètre': 'Validé par', 'Valeur': d.validePar || '' },
+    { 'Paramètre': 'Révisé le', 'Valeur': d.reviseLe || '' }, { 'Paramètre': 'Date limite de contestation', 'Valeur': d.dateLimite },
+    { 'Paramètre': 'Version des règles', 'Valeur': d.reglesVersion }, { 'Paramètre': 'Seuil de couverture', 'Valeur': '50 % du poids total' },
+    ...d.dims.map(k => ({ 'Paramètre': 'Poids — ' + SUB_LABELS[k], 'Valeur': d.poids[k] })),
+  ];
+  const wb = XLSX.utils.book_new();
+  const ajouter = (rows, nom, vide) => XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows.length ? rows : [{ '': vide }]), nom);
+  ajouter(synthese, 'Synthèse', 'Aucun magasin');
+  ajouter(detail, 'Détail', 'Aucun magasin');
+  ajouter(neutra, 'Neutralisations', 'Aucune neutralisation');
+  ajouter(journal, 'Journal', 'Aucune action enregistrée');
+  ajouter(params, 'Paramètres', '');
+  XLSX.writeFile(wb, 'score-sante-mensuel-' + d.mois + (d.version ? '-v' + d.version : '-apercu') + (d.statut === 'valide' ? '-valide' : '') + '.xlsx');
 }
 
 // ---------------------------------------------------------------- Boot
