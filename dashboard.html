@@ -1303,6 +1303,12 @@ function todayCell(key, m, jourEnCours) {
     if (v.fait) return ok(v.heure, 'Kaizen — ' + v.nbItems + ' item(s) contrôlé(s)' + (v.par ? ', ' + v.par : ''));
     return gris((v.score != null ? v.score : 0) + '/' + (v.scoreMax || 50), 'Audit du mois en cours, rien de contrôlé ce jour');
   }
+  if (!v && (key === 'bilan' || key === 'equipe')) {
+    const j = key === 'bilan' ? m.bilanJours : m.equipeJours;
+    const lib = key === 'bilan' ? ['Aucun bilan de passage enregistré', 'Dernier bilan de passage'] : ['Aucune évaluation équipe enregistrée', 'Dernière évaluation équipe'];
+    if (j === null || j === undefined) return gris('—', lib[0]);
+    return gris('il y a ' + j + ' j', lib[1] + ' il y a ' + j + ' jour' + (j > 1 ? 's' : ''));
+  }
   if (!v) return vide;
   if (key === 'entretien') {
     const types = (v.types || []).map(t => SV_TYPES[t] || t).join(', ');
