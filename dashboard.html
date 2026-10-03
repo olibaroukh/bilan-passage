@@ -189,6 +189,42 @@
   .sv-block + .sv-block { margin-top: 18px; padding-top: 14px; border-top: 1px solid #e5e2d9; }
   .sv-fait { color: var(--green); }
 
+  /* ---- Onglets + vue « Aujourd'hui » (03/10) ---- */
+  .main-tabs { display: flex; gap: 4px; margin: 0 0 18px; border-bottom: 1px solid #e5e2d9; }
+  .main-tabs button { background: none; border: none; border-bottom: 3px solid transparent; padding: 10px 14px; font-size: 14px; font-weight: 600; color: var(--gray); cursor: pointer; margin-bottom: -1px; }
+  .main-tabs button.active { color: var(--dark); border-bottom-color: var(--red); }
+  .today-status { font-size: 13px; color: var(--gray); margin: -6px 0 14px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .live-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); display: inline-block; animation: livepulse 2s infinite; }
+  @keyframes livepulse { 0%,100% { opacity: 1; } 50% { opacity: .3; } }
+  .link-btn { background: none; border: none; color: var(--red); font-weight: 600; font-size: 13px; cursor: pointer; padding: 0; }
+  .kpi-sub { font-size: 14px; font-weight: 500; color: var(--gray); }
+  table.today-table th.c, table.today-table td.c { text-align: center; padding-left: 6px; padding-right: 6px; white-space: nowrap; }
+  table.today-table td.c { min-width: 62px; }
+  .t-mag { font-weight: 600; display: block; }
+  .t-ar { display: block; font-size: 11px; color: var(--gray); margin-top: 2px; }
+  .t-ok { color: var(--green); font-weight: 800; font-size: 16px; display: block; line-height: 1.1; }
+  .t-ko { color: var(--red); font-weight: 800; font-size: 15px; display: block; line-height: 1.1; }
+  .t-h { display: block; font-size: 11px; color: var(--gray); margin-top: 1px; }
+  .t-ko-txt { color: var(--red); }
+  .t-gris { font-size: 12px; color: #a3a3a0; }
+  tr.t-inactif .t-mag { color: var(--gray); }
+  .feed-row { display: flex; gap: 12px; font-size: 13px; padding: 7px 0; border-bottom: 1px solid #f0efe9; }
+  .feed-row:last-child { border-bottom: none; }
+  .feed-h { font-weight: 700; min-width: 42px; color: var(--dark); }
+  .feed-par { color: var(--gray); }
+  .today-kpis { grid-template-columns: repeat(auto-fit, minmax(108px, 1fr)); }
+  table.today-table th:first-child, table.today-table td:first-child { position: sticky; left: 0; background: #fff; z-index: 1; min-width: 150px; }
+  table.today-table tr.row-clickable:hover td:first-child { background: #faf9f5; }
+  @media (max-width: 480px) {
+    .main-tabs button { padding: 10px 10px; font-size: 13px; }
+    .today-kpis { grid-template-columns: repeat(4, 1fr); gap: 6px; }
+    .today-kpis .kpi-card { padding: 8px; }
+    .today-kpis .kpi-card .lbl { font-size: 10px; }
+    .today-kpis .kpi-card .val { font-size: 17px; }
+    .today-kpis .kpi-sub { font-size: 11px; }
+    table.today-table td:first-child, table.today-table th:first-child { min-width: 120px; max-width: 140px; }
+  }
+
 select,input,textarea,button{font-family:inherit}
 </style>
 </head>
@@ -213,7 +249,12 @@ select,input,textarea,button{font-family:inherit}
     <button onclick="logout()">Déconnexion</button>
   </header>
   <main>
+    <nav class="main-tabs" id="main-tabs">
+      <button data-tab="network" class="active" onclick="showNetworkView()">Santé réseau</button>
+      <button data-tab="today" onclick="showTodayView()">Aujourd'hui</button>
+    </nav>
     <div id="view-network"></div>
+    <div id="view-today" style="display:none"></div>
     <div id="view-detail" style="display:none"></div>
     <div id="view-ar" style="display:none"></div>
   </main>
@@ -406,6 +447,9 @@ function fmtDate(iso) {
 
 // ---------------------------------------------------------------- Vue réseau
 async function showNetworkView() {
+  currentListView = 'network';
+  setTabs('network');
+  document.getElementById('view-today').style.display = 'none';
   document.getElementById('view-detail').style.display = 'none';
   document.getElementById('view-ar').style.display = 'none';
   const el = document.getElementById('view-network');
@@ -579,6 +623,8 @@ async function showArView(arName) {
   if (!arName) return;
   lastArContext = arName;
   document.getElementById('view-network').style.display = 'none';
+  document.getElementById('view-today').style.display = 'none';
+  setTabs(null);
   document.getElementById('view-detail').style.display = 'none';
   const el = document.getElementById('view-ar');
   el.style.display = 'block';
@@ -589,7 +635,7 @@ async function showArView(arName) {
     if (!resp.ok || !data.ok) throw new Error(data.error || 'Erreur de chargement');
     renderArView(data);
   } catch(e) {
-    el.innerHTML = '<button class="back-btn" onclick="showNetworkView()">&larr; Retour</button><div class="loading">Erreur : ' + e.message + '</div>';
+    el.innerHTML = '<button class="back-btn" onclick="goBack()">&larr; Retour</button><div class="loading">Erreur : ' + e.message + '</div>';
   }
 }
 
@@ -650,7 +696,7 @@ function renderArView(d) {
     : '<p style="font-size:13px;color:var(--gray);margin:0 0 6px">Aucun magasin en sur-effectif.</p>';
 
   el.innerHTML = `
-    <button class="back-btn" onclick="showNetworkView()">&larr; Retour au réseau</button>
+    <button class="back-btn" onclick="goBack()">&larr; Retour</button>
     <div class="detail-header">
       <div>
         <h2>${d.ar}</h2>
@@ -763,6 +809,8 @@ async function generateArAdvice(arName) {
 // ---------------------------------------------------------------- Vue détail
 async function showDetailView(code) {
   document.getElementById('view-network').style.display = 'none';
+  document.getElementById('view-today').style.display = 'none';
+  setTabs(null);
   document.getElementById('view-ar').style.display = 'none';
   const el = document.getElementById('view-detail');
   el.style.display = 'block';
@@ -773,7 +821,7 @@ async function showDetailView(code) {
     if (!resp.ok || !data.ok) throw new Error(data.error || 'Erreur de chargement');
     renderDetailView(data);
   } catch(e) {
-    el.innerHTML = '<button class="back-btn" onclick="showNetworkView()">&larr; Retour</button><div class="loading">Erreur : ' + e.message + '</div>';
+    el.innerHTML = '<button class="back-btn" onclick="goBack()">&larr; Retour</button><div class="loading">Erreur : ' + e.message + '</div>';
   }
 }
 
@@ -900,7 +948,7 @@ function renderDetailView(d) {
   `;
 
   el.innerHTML = `
-    <button class="back-btn" onclick="showNetworkView()">&larr; Retour au réseau</button>
+    <button class="back-btn" onclick="goBack()">&larr; Retour</button>
     <div class="detail-header">
       <div>
         <h2>${d.magasin.libelle} <span style="color:var(--gray);font-weight:400;font-size:14px"> — ${d.magasin.code}</span></h2>
@@ -1077,6 +1125,237 @@ async function generateAdvice(code) {
   } finally {
     btn.disabled = false;
   }
+}
+
+// ---------------------------------------------------------------- Onglet « Aujourd'hui » (03/10)
+// Activité du jour par magasin (route /activite-jour). Même périmètre que la vue
+// réseau : Olivier voit tout le réseau, chaque AR ses magasins (filtré côté Worker).
+// Lancement de journée = seul outil attendu chaque jour ouvert, « manquant » après
+// l'heure butoir. Rafraîchissement automatique toutes les 2 min 30 tant que l'onglet
+// est affiché sur le jour en cours.
+let currentListView = 'network';
+let todayData = null;
+let todayJour = null;
+let todayTimer = null;
+const TODAY_REFRESH_MS = 150000;
+const TODAY_OUTILS = [
+  { key: 'lancement', label: 'Lancement' },
+  { key: 'bilan', label: 'Bilan' },
+  { key: 'pedlv', label: 'PEDLV' },
+  { key: 'kaizen', label: 'Kaizen' },
+  { key: 'entretien', label: 'Entretien' },
+  { key: 'observation', label: 'Obs.' },
+  { key: 'equipe', label: 'Éval. équipe' },
+];
+const TODAY_OUTIL_LABELS = {
+  lancement: 'Lancement', bilan: 'Bilan de passage', pedlv: 'PEDLV', kaizen: 'Kaizen',
+  entretien: 'Entretien', observation: 'Observation', equipe: 'Évaluation équipe',
+};
+
+function setTabs(active) {
+  const nav = document.getElementById('main-tabs');
+  if (!nav) return;
+  nav.style.display = active ? 'flex' : 'none';
+  nav.querySelectorAll('button').forEach(b => b.classList.toggle('active', b.dataset.tab === active));
+}
+
+function goBack() {
+  if (currentListView === 'today') showTodayView(); else showNetworkView();
+}
+
+function parisTodayIsoDash() { return new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Paris' }); }
+function addDaysIsoDash(iso, n) { const d = new Date(iso + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); }
+// Jours consultables : du lundi de la semaine en cours à aujourd'hui (au-delà,
+// les observations et les envois PEDLV bruts ont été purgés le dimanche soir).
+function todayJoursDisponibles() {
+  const today = parisTodayIsoDash();
+  const dow = new Date(today + 'T00:00:00Z').getUTCDay();
+  const nb = (dow + 6) % 7;
+  const jours = [];
+  for (let i = 0; i <= nb; i++) jours.push(addDaysIsoDash(today, -i));
+  return jours;
+}
+function jourLabel(iso, today) {
+  if (iso === today) return "Aujourd'hui";
+  if (iso === addDaysIsoDash(today, -1)) return 'Hier';
+  const d = new Date(iso + 'T12:00:00Z');
+  const s = d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' });
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+function stopTodayTimer() { if (todayTimer) { clearInterval(todayTimer); todayTimer = null; } }
+
+async function showTodayView() {
+  currentListView = 'today';
+  document.getElementById('view-network').style.display = 'none';
+  document.getElementById('view-detail').style.display = 'none';
+  document.getElementById('view-ar').style.display = 'none';
+  setTabs('today');
+  const el = document.getElementById('view-today');
+  el.style.display = 'block';
+  if (!todayJour) todayJour = parisTodayIsoDash();
+  if (!todayData) el.innerHTML = '<div class="loading">Chargement…</div>';
+  await loadToday();
+  stopTodayTimer();
+  todayTimer = setInterval(() => {
+    if (document.hidden || currentListView !== 'today' || document.getElementById('view-today').style.display === 'none') return;
+    if (todayJour !== parisTodayIsoDash()) return;
+    loadToday(true);
+  }, TODAY_REFRESH_MS);
+}
+
+async function loadToday(silent) {
+  const el = document.getElementById('view-today');
+  try {
+    const resp = await fetch(RELAY + '/activite-jour?jour=' + encodeURIComponent(todayJour), { headers: authHeaders() });
+    const data = await resp.json();
+    if (resp.status === 401) { logout(); return; }
+    if (!resp.ok || !data.ok) throw new Error(data.error || 'Erreur de chargement');
+    todayData = data;
+    renderTodayView();
+  } catch (e) {
+    if (silent && todayData) return; // on garde l'affichage précédent sur un échec de rafraîchissement
+    el.innerHTML = '<div class="loading">Erreur : ' + escDash(e.message) + '</div>';
+  }
+}
+
+function changeTodayJour(v) { todayJour = v; todayData = null; showTodayView(); }
+
+function magasinActif(m) {
+  return (m.lancement && m.lancement.statut === 'fait') || !!m.bilan || (m.pedlv && m.pedlv.fait)
+    || (m.kaizen && m.kaizen.fait) || !!m.entretien || !!m.observation || !!m.equipe;
+}
+function nbOutilsFaits(m) {
+  return [m.lancement && m.lancement.statut === 'fait', !!m.bilan, m.pedlv && m.pedlv.fait, m.kaizen && m.kaizen.fait,
+    !!m.entretien, !!m.observation, !!m.equipe].filter(Boolean).length;
+}
+
+function renderTodayView() {
+  const el = document.getElementById('view-today');
+  const d = todayData;
+  const prevAr = document.getElementById('today-ar') ? document.getElementById('today-ar').value : '';
+  const prevSearch = document.getElementById('today-search') ? document.getElementById('today-search').value : '';
+  const prevSort = document.getElementById('today-sort') ? document.getElementById('today-sort').value : 'libelle';
+  const ars = [...new Set(d.magasins.map(m => m.animateur).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'fr'));
+  const jours = todayJoursDisponibles();
+  if (!jours.includes(d.jour)) jours.push(d.jour);
+  const enDirect = d.jour === d.today;
+
+  el.innerHTML = `
+    <div class="filters">
+      <select id="today-jour" onchange="changeTodayJour(this.value)">
+        ${jours.map(j => '<option value="' + j + '"' + (j === d.jour ? ' selected' : '') + '>' + escDash(jourLabel(j, d.today)) + '</option>').join('')}
+      </select>
+      ${ars.length > 1 ? '<select id="today-ar" onchange="renderTodayBody()"><option value="">Tous les animateurs</option>' + ars.map(a => '<option value="' + escDash(a) + '"' + (a === prevAr ? ' selected' : '') + '>' + escDash(a) + '</option>').join('') + '</select>' : ''}
+      <select id="today-sort" onchange="renderTodayBody()">
+        <option value="libelle"${prevSort === 'libelle' ? ' selected' : ''}>Tri : magasin</option>
+        <option value="moins"${prevSort === 'moins' ? ' selected' : ''}>Tri : moins actifs d'abord</option>
+        <option value="plus"${prevSort === 'plus' ? ' selected' : ''}>Tri : plus actifs d'abord</option>
+      </select>
+      <input type="text" id="today-search" placeholder="Rechercher un magasin" value="${escDash(prevSearch)}" oninput="renderTodayBody()">
+    </div>
+    <p class="today-status">${enDirect
+      ? '<span><span class="live-dot"></span> En direct · actualisé à ' + escDash(d.maintenant) + ' · lancement attendu avant ' + escDash(d.butoir.replace(':', 'h')) + '</span>'
+      : '<span>Journée du ' + escDash(d.jour.split('-').reverse().join('/')) + '</span>'}
+      <button class="link-btn" onclick="loadToday()">Actualiser</button></p>
+    <div class="kpi-row today-kpis" id="today-kpis"></div>
+    <div class="table-wrap"><table class="dash-table today-table">
+      <thead><tr><th>Magasin</th>${TODAY_OUTILS.map(o => '<th class="c">' + o.label + '</th>').join('')}</tr></thead>
+      <tbody id="today-body"></tbody>
+    </table></div>
+    <div class="card" style="margin-top:16px">
+      <h4>Fil de la journée</h4>
+      <div id="today-feed"></div>
+    </div>
+  `;
+  renderTodayBody();
+}
+
+function todayFiltered() {
+  const d = todayData;
+  const arSel = document.getElementById('today-ar');
+  const ar = arSel ? arSel.value : '';
+  const search = (document.getElementById('today-search').value || '').trim().toLowerCase();
+  let rows = d.magasins;
+  if (ar) rows = rows.filter(m => m.animateur === ar);
+  if (search) rows = rows.filter(m => String(m.libelle || '').toLowerCase().includes(search));
+  return { rows, ar, search };
+}
+
+function todayCell(key, m, jourEnCours) {
+  const v = m[key];
+  const ok = (heure, title) => '<td class="c" title="' + escDash(title) + '"><span class="t-ok">✓</span>' + (heure ? '<span class="t-h">' + escDash(heure) + '</span>' : '') + '</td>';
+  const gris = (txt, title) => '<td class="c" title="' + escDash(title || '') + '"><span class="t-gris">' + escDash(txt) + '</span></td>';
+  const vide = '<td class="c"></td>';
+  if (key === 'lancement') {
+    if (v.statut === 'fait') return ok(v.heure, 'Lancement' + (v.heure ? ' — ' + v.heure : '') + (v.par ? ', ' + v.par : ''));
+    if (v.statut === 'manquant') return '<td class="c"><span class="t-ko">✕</span><span class="t-h t-ko-txt">manquant</span></td>';
+    if (v.statut === 'attendu') return gris(jourEnCours ? 'avant ' + todayData.butoir.replace(':', 'h') : '…', 'Attendu avant ' + todayData.butoir);
+    return gris('—', 'Pas de lancement attendu (dimanche, férié ou fermeture réseau)');
+  }
+  if (key === 'pedlv') {
+    if (!v) return gris('—', 'Aucun envoi PEDLV récent');
+    if (v.fait) return ok(v.heure, 'PEDLV envoyé' + (v.heure ? ' — ' + v.heure : ''));
+    return gris('il y a ' + v.joursDepuis + ' j', 'Dernier envoi PEDLV il y a ' + v.joursDepuis + ' jour(s)');
+  }
+  if (key === 'kaizen') {
+    if (!v) return gris('—', 'Aucun audit Kaizen ouvert ce mois-ci');
+    if (v.fait) return ok(v.heure, 'Kaizen — ' + v.nbItems + ' item(s) contrôlé(s)' + (v.par ? ', ' + v.par : ''));
+    return gris((v.score != null ? v.score : 0) + '/' + (v.scoreMax || 50), 'Audit du mois en cours, rien de contrôlé ce jour');
+  }
+  if (!v) return vide;
+  if (key === 'entretien') {
+    const types = (v.types || []).map(t => SV_TYPES[t] || t).join(', ');
+    return ok((v.nb > 1 ? v.nb + ' · ' : '') + (v.heure || ''), v.nb + ' entretien(s) : ' + types + (v.par ? ' — ' + v.par : ''));
+  }
+  if (key === 'bilan') return ok(v.heure, 'Bilan de passage' + (v.heure ? ' — ' + v.heure : '') + (v.par ? ', ' + v.par : ''));
+  if (key === 'observation') return ok(v.nb > 1 ? v.nb + ' obs.' : v.heure, v.nb + ' observation(s)');
+  if (key === 'equipe') return ok(v.heure, v.nb + ' contrôle(s) Évaluation équipe' + (v.par ? ' — ' + v.par : ''));
+  return vide;
+}
+
+function renderTodayBody() {
+  const d = todayData;
+  if (!d) return;
+  const { rows: base, ar } = todayFiltered();
+  const sortSel = document.getElementById('today-sort').value;
+  let rows = base.slice();
+  if (sortSel === 'moins') rows.sort((a, b) => nbOutilsFaits(a) - nbOutilsFaits(b) || (b.lancement.statut === 'manquant') - (a.lancement.statut === 'manquant') || a.libelle.localeCompare(b.libelle, 'fr'));
+  else if (sortSel === 'plus') rows.sort((a, b) => nbOutilsFaits(b) - nbOutilsFaits(a) || a.libelle.localeCompare(b.libelle, 'fr'));
+  else rows.sort((a, b) => a.libelle.localeCompare(b.libelle, 'fr'));
+  const jourEnCours = d.jour === d.today;
+
+  // Compteurs (sur le périmètre filtré par AR, indépendamment de la recherche texte)
+  const perim = ar ? d.magasins.filter(m => m.animateur === ar) : d.magasins;
+  const actifs = perim.filter(magasinActif).length;
+  const lancAttendus = perim.filter(m => m.lancement.statut !== 'non_attendu').length;
+  const lancFaits = perim.filter(m => m.lancement.statut === 'fait').length;
+  const lancManquants = perim.filter(m => m.lancement.statut === 'manquant').length;
+  const nb = key => perim.filter(m => key === 'pedlv' || key === 'kaizen' ? (m[key] && m[key].fait) : !!m[key]).length;
+  document.getElementById('today-kpis').innerHTML = `
+    <div class="kpi-card"><p class="lbl">Magasins actifs</p><p class="val">${actifs}<span class="kpi-sub"> / ${perim.length}</span></p></div>
+    <div class="kpi-card"><p class="lbl">Lancements</p><p class="val" style="color:${lancManquants ? 'var(--red)' : 'var(--green)'}">${lancFaits}<span class="kpi-sub"> / ${lancAttendus}</span></p></div>
+    <div class="kpi-card"><p class="lbl">Bilans</p><p class="val">${nb('bilan')}</p></div>
+    <div class="kpi-card"><p class="lbl">PEDLV</p><p class="val">${nb('pedlv')}</p></div>
+    <div class="kpi-card"><p class="lbl">Kaizen</p><p class="val">${nb('kaizen')}</p></div>
+    <div class="kpi-card"><p class="lbl">Entretiens</p><p class="val">${nb('entretien')}</p></div>
+    <div class="kpi-card"><p class="lbl">Observations</p><p class="val">${nb('observation')}</p></div>
+    <div class="kpi-card"><p class="lbl">Éval. équipe</p><p class="val">${nb('equipe')}</p></div>
+  `;
+
+  document.getElementById('today-body').innerHTML = rows.length ? rows.map(m => `
+    <tr class="row-clickable${magasinActif(m) ? '' : ' t-inactif'}" onclick="showDetailView('${escDash(m.code)}')">
+      <td><span class="t-mag">${escDash(m.libelle)}</span>${!ar && m.animateur ? '<span class="t-ar">' + escDash(m.animateur) + '</span>' : ''}</td>
+      ${TODAY_OUTILS.map(o => todayCell(o.key, m, jourEnCours)).join('')}
+    </tr>`).join('') : '<tr><td colspan="' + (TODAY_OUTILS.length + 1) + '" style="color:var(--gray)">Aucun magasin.</td></tr>';
+
+  const codes = new Set(rows.map(m => m.code));
+  const events = (d.events || []).filter(e => codes.has(e.code));
+  document.getElementById('today-feed').innerHTML = events.length ? events.slice(0, 150).map(e => `
+    <div class="feed-row">
+      <span class="feed-h">${e.heure ? escDash(e.heure) : '—'}</span>
+      <span class="feed-txt"><b>${escDash(e.libelle)}</b> · ${escDash(e.outil === 'entretien' ? 'Entretien ' + (SV_TYPES[e.detail] || e.detail || '') : e.detail || TODAY_OUTIL_LABELS[e.outil])}${e.par ? ' <span class="feed-par">— ' + escDash(e.par) + '</span>' : ''}</span>
+    </div>`).join('') : '<p style="color:var(--gray);font-size:13px;margin:0">Rien de saisi pour le moment.</p>';
 }
 
 // ---------------------------------------------------------------- Boot
