@@ -1168,14 +1168,12 @@ function goBack() {
 
 function parisTodayIsoDash() { return new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Paris' }); }
 function addDaysIsoDash(iso, n) { const d = new Date(iso + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); }
-// Jours consultables : du lundi de la semaine en cours à aujourd'hui (au-delà,
-// les observations et les envois PEDLV bruts ont été purgés le dimanche soir).
+// Jours consultables : les 31 derniers jours (03/10 : plus de purge
+// hebdomadaire, observations et envois PEDLV conservés 24 mois).
 function todayJoursDisponibles() {
   const today = parisTodayIsoDash();
-  const dow = new Date(today + 'T00:00:00Z').getUTCDay();
-  const nb = (dow + 6) % 7;
   const jours = [];
-  for (let i = 0; i <= nb; i++) jours.push(addDaysIsoDash(today, -i));
+  for (let i = 0; i <= 30; i++) jours.push(addDaysIsoDash(today, -i));
   return jours;
 }
 function jourLabel(iso, today) {
