@@ -206,6 +206,9 @@
   .t-ko { color: var(--red); font-weight: 800; font-size: 15px; display: block; line-height: 1.1; }
   .t-h { display: block; font-size: 11px; color: var(--gray); margin-top: 1px; }
   .t-ko-txt { color: var(--red); }
+  .t-retard { color: var(--orange); font-weight: 800; font-size: 16px; display: block; line-height: 1.1; }
+  .t-retard-txt { color: var(--orange); }
+  .kpi-note { font-size: 11px; color: var(--orange); font-weight: 600; margin: 2px 0 0; }
   .t-gris { font-size: 12px; color: #a3a3a0; }
   tr.t-inactif .t-mag { color: var(--gray); }
   .feed-row { display: flex; gap: 12px; font-size: 13px; padding: 7px 0; border-bottom: 1px solid #f0efe9; }
@@ -1288,6 +1291,7 @@ function todayCell(key, m, jourEnCours) {
   const gris = (txt, title) => '<td class="c" title="' + escDash(title || '') + '"><span class="t-gris">' + escDash(txt) + '</span></td>';
   const vide = '<td class="c"></td>';
   if (key === 'lancement') {
+    if (v.statut === 'fait' && v.enRetard) return '<td class="c" title="' + escDash('Lancement en retard — ' + v.heure + (v.par ? ', ' + v.par : '') + ' (attendu avant ' + todayData.butoir + ')') + '"><span class="t-retard">✓</span><span class="t-h t-retard-txt">' + escDash(v.heure) + ' · en retard</span></td>';
     if (v.statut === 'fait') return ok(v.heure, 'Lancement' + (v.heure ? ' — ' + v.heure : '') + (v.par ? ', ' + v.par : ''));
     if (v.statut === 'manquant') return '<td class="c"><span class="t-ko">✕</span><span class="t-h t-ko-txt">manquant</span></td>';
     if (v.statut === 'attendu') return gris(jourEnCours ? 'avant ' + todayData.butoir.replace(':', 'h') : '…', 'Attendu avant ' + todayData.butoir);
@@ -1326,7 +1330,7 @@ function renderTodayBody() {
   const { rows: base, ar } = todayFiltered();
   const sortSel = document.getElementById('today-sort').value;
   let rows = base.slice();
-  if (sortSel === 'moins') rows.sort((a, b) => nbOutilsFaits(a) - nbOutilsFaits(b) || (b.lancement.statut === 'manquant') - (a.lancement.statut === 'manquant') || a.libelle.localeCompare(b.libelle, 'fr'));
+  if (sortSel === 'moins') rows.sort((a, b) => nbOutilsFaits(a) - nbOutilsFaits(b) || (b.lancement.statut === 'manquant') - (a.lancement.statut === 'manquant') || (!!b.lancement.enRetard) - (!!a.lancement.enRetard) || a.libelle.localeCompare(b.libelle, 'fr'));
   else if (sortSel === 'plus') rows.sort((a, b) => nbOutilsFaits(b) - nbOutilsFaits(a) || a.libelle.localeCompare(b.libelle, 'fr'));
   else rows.sort((a, b) => a.libelle.localeCompare(b.libelle, 'fr'));
   const jourEnCours = d.jour === d.today;
@@ -1337,10 +1341,11 @@ function renderTodayBody() {
   const lancAttendus = perim.filter(m => m.lancement.statut !== 'non_attendu').length;
   const lancFaits = perim.filter(m => m.lancement.statut === 'fait').length;
   const lancManquants = perim.filter(m => m.lancement.statut === 'manquant').length;
+  const lancRetard = perim.filter(m => m.lancement.enRetard).length;
   const nb = key => perim.filter(m => key === 'pedlv' || key === 'kaizen' ? (m[key] && m[key].fait) : !!m[key]).length;
   document.getElementById('today-kpis').innerHTML = `
     <div class="kpi-card"><p class="lbl">Magasins actifs</p><p class="val">${actifs}<span class="kpi-sub"> / ${perim.length}</span></p></div>
-    <div class="kpi-card"><p class="lbl">Lancements</p><p class="val" style="color:${lancManquants ? 'var(--red)' : 'var(--green)'}">${lancFaits}<span class="kpi-sub"> / ${lancAttendus}</span></p></div>
+    <div class="kpi-card"><p class="lbl">Lancements</p><p class="val" style="color:${lancManquants ? 'var(--red)' : 'var(--green)'}">${lancFaits}<span class="kpi-sub"> / ${lancAttendus}</span></p>${lancRetard ? '<p class="kpi-note">dont ' + lancRetard + ' en retard</p>' : ''}</div>
     <div class="kpi-card"><p class="lbl">Bilans</p><p class="val">${nb('bilan')}</p></div>
     <div class="kpi-card"><p class="lbl">PEDLV</p><p class="val">${nb('pedlv')}</p></div>
     <div class="kpi-card"><p class="lbl">Kaizen</p><p class="val">${nb('kaizen')}</p></div>
