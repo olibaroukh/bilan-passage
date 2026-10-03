@@ -245,7 +245,7 @@
   .sm-props { margin: 0 0 14px; }
   .sm-prop-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; font-size: 13px; padding: 8px 0; border-bottom: 1px solid #f0efe9; }
   .sm-prop-row:last-child { border-bottom: none; }
-  .sm-prop-btns { display: flex; gap: 6px; flex-shrink: 0; }
+  .sm-prop-btns { display: flex; gap: 6px 14px; flex-shrink: 0; }
   .sm-v { font-weight: 700; font-size: 13px; }
   .sm-ok { color: var(--green); } .sm-moy { color: var(--orange); } .sm-bas { color: var(--red); }
   .sm-n { display: inline-block; background: #e8e6e1; color: var(--gray); font-weight: 700; font-size: 11px; padding: 1px 6px; border-radius: 4px; }
@@ -1528,7 +1528,7 @@ function renderMonthlyView() {
   const props = d.propositions || [];
   const propsHtml = props.length ? `
     <div class="card sm-props">
-      <div class="card-head"><h4>Propositions de neutralisation (${props.length})</h4>${d.estOlivier ? '<button class="link-btn" onclick="smDecider(null, true)">Tout accepter</button>' : ''}</div>
+      <div class="card-head"><h4>Propositions de neutralisation (${props.length})</h4>${d.estOlivier ? '<span class="sm-prop-btns"><button class="link-btn" onclick="smDecider(null, true)">Tout accepter</button><button class="link-btn" onclick="smDecider(null, false)">Tout refuser</button></span>' : ''}</div>
       ${props.map(p => `<div class="sm-prop-row">
         <span><b>${escDash(p.libelle)}</b> · ${escDash(p.dimension === '*' ? 'Magasin entier' : (SUB_LABELS[p.dimension] || p.dimension))}<span class="sv-meta">${escDash(p.motif || '')} — proposé par ${escDash(p.propose_par || '')}</span></span>
         ${d.estOlivier ? '<span class="sm-prop-btns"><button class="sm-btn sm-btn-sm" onclick="smDecider(' + p.id + ', true)">Accepter</button><button class="sm-btn sm-btn-sm" onclick="smDecider(' + p.id + ', false)">Refuser</button></span>' : '<span class="t-gris">en attente d\'Olivier</span>'}
@@ -1659,7 +1659,7 @@ async function smRetirer(id) {
 }
 async function smDecider(id, accepter) {
   const ids = id ? [id] : (smData.propositions || []).map(p => p.id);
-  if (!id && !confirm('Accepter les ' + ids.length + ' proposition(s) ?')) return;
+  if (!id && !confirm((accepter ? 'Accepter' : 'Refuser') + ' les ' + ids.length + ' proposition(s) ?' + (accepter ? '' : ' Les dimensions concernées resteront comptées normalement.'))) return;
   if (await smPost({ action: 'decider', ids, accepter })) loadMonthly();
 }
 async function smCalculer() {
