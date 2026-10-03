@@ -218,6 +218,12 @@
   .today-kpis { grid-template-columns: repeat(auto-fit, minmax(108px, 1fr)); }
   table.today-table th:first-child, table.today-table td:first-child { position: sticky; left: 0; background: #fff; z-index: 1; min-width: 150px; }
   table.today-table tr.row-clickable:hover td:first-child { background: #faf9f5; }
+  /* En-tête figé (03/10) : le tableau défile dans son cadre, la ligne d'en-tête
+     et la colonne Magasin restent visibles. */
+  .sticky-wrap { max-height: calc(100vh - 150px); overflow: auto; border-radius: 10px; }
+  .sticky-wrap table.dash-table { border-radius: 0; overflow: visible; }
+  .sticky-wrap table.dash-table thead th { position: sticky; top: 0; background: #fff; z-index: 2; box-shadow: inset 0 -1px 0 #e5e2d9; }
+  .sticky-wrap table.dash-table thead th:first-child { left: 0; z-index: 3; }
   @media (max-width: 480px) {
     .main-tabs button { padding: 10px 10px; font-size: 13px; }
     .today-kpis { grid-template-columns: repeat(4, 1fr); gap: 6px; }
@@ -575,7 +581,7 @@ function renderNetworkView() {
     </div>
     <div class="kpi-row" id="kpi-row"></div>
     <div class="chart-box"><canvas id="network-chart" height="90"></canvas></div>
-    <div class="table-wrap">
+    <div class="table-wrap sticky-wrap">
     <table class="dash-table">
       <thead><tr>
         ${thSort('network', 'libelle', 'Magasin')}${thSort('network', 'animateur', 'Animateur')}${thSort('network', 'score', 'Santé')}${thSort('network', 'kaizen', 'Kaizen')}${thSort('network', 'actions', 'Actions')}${thSort('network', 'visite', 'Dernière visite')}
@@ -795,7 +801,7 @@ function renderArView(d) {
     </div>
 
     <p class="section-label">Magasins du périmètre</p>
-    <div class="table-wrap">
+    <div class="table-wrap sticky-wrap">
     <table class="dash-table">
       <thead><tr>${thSort('ar', 'libelle', 'Magasin')}${thSort('ar', 'score', 'Santé')}${thSort('ar', 'actions', 'Actions')}${thSort('ar', 'visite', 'Dernière visite')}</tr></thead>
       <tbody id="ar-stores-body"></tbody>
@@ -1308,7 +1314,7 @@ function renderTodayView() {
       : '<span>Journée du ' + escDash(d.jour.split('-').reverse().join('/')) + '</span>'}
       <button class="link-btn" onclick="loadToday()">Actualiser</button></p>
     <div class="kpi-row today-kpis" id="today-kpis"></div>
-    <div class="table-wrap"><table class="dash-table today-table">
+    <div class="table-wrap sticky-wrap"><table class="dash-table today-table">
       <thead><tr><th>Magasin</th>${TODAY_OUTILS.map(o => '<th class="c">' + o.label + '</th>').join('')}</tr></thead>
       <tbody id="today-body"></tbody>
     </table></div>
@@ -1547,7 +1553,7 @@ function renderMonthlyView() {
     ${actions}
     ${propsHtml}
     <div class="kpi-row" id="sm-kpis"></div>
-    <div class="table-wrap"><table class="dash-table today-table sm-table">
+    <div class="table-wrap sticky-wrap"><table class="dash-table today-table sm-table">
       <thead><tr><th>Magasin</th><th class="c">Score</th><th class="c">Évol.</th>${d.dims.map(k => '<th class="c" title="' + escDash(SUB_LABELS[k] + ' — poids ' + d.poids[k]) + '">' + SM_DIM_COURT[k] + '</th>').join('')}<th class="c">Couv.</th></tr></thead>
       <tbody id="sm-body"></tbody>
     </table></div>
@@ -1596,8 +1602,13 @@ function smExplication(dim, e) {
     case 'actions': return e.bilan ? 'Bilan du ' + svDateFr(e.bilan.date) + ' : ' + e.bilan.actionsReportees + ' action(s) reportée(s), dont ' + e.bilan.actionsAFaire + ' « à faire » (−25) et ' + (e.bilan.actionsReportees - e.bilan.actionsAFaire) + ' « en cours » (−15).' : 'Aucun bilan de passage dans le mois.';
     case 'positionnement': return e.bilan ? 'Positionnement annuel saisi dans le bilan du ' + svDateFr(e.bilan.date) + ' : ' + f(e.bilan.positionnementAnnuel) + ' %.' : 'Aucun bilan de passage dans le mois.';
     case 'equipe': return e.equipe ? 'Niveau Évaluation équipe au dernier jour du mois : ' + e.equipe.niveau + '/10 (' + e.equipe.nbTaches + ' tâche(s)).' : 'Aucune évaluation équipe cette année.';
-    case 'effectif': return e.effectif ? 'Effectif disponible (RH) ' + e.effectif.effectifDispo + ' pour ' + f(e.effTheo) + ' théorique (écart ' + e.effectif.delta + ')' + (e.effectif.sousEffectifSoutenu ? ' · sous-effectif soutenu 3 mois (écart moyen ' + e.effectif.ecartMoyen3Mois + ')' : '') + '.' : '';
-    case 'absenteisme': return e.absenteisme ? "Taux d'absentéisme du mois : " + e.absenteisme.tauxPct + ' %.' : '';
+    case 'effectif': {
+      if (!e.effectif) return '';
+      const val = e.effectif.effectif !== undefined ? e.effectif.effectif : e.effectif.effectifDispo;
+      const src = e.effectif.source === 'bilan' ? 'Effectif saisi dans le bilan du ' + svDateFr(e.effectif.bilanDate) : 'Effectif disponible (RH' + (e.effectif.rhMois ? ' ' + smMoisLabel(e.effectif.rhMois) : '') + ', hors longue durée)';
+      return (e.effectif.indicatif ? '[Aperçu, indicatif] ' : '') + src + ' : ' + val + ' pour ' + f(e.effTheo) + ' théorique (écart ' + e.effectif.delta + ')' + (e.effectif.sousEffectifSoutenu ? ' · sous-effectif RH soutenu 3 mois (écart moyen ' + e.effectif.ecartMoyen3Mois + ')' : '') + '.';
+    }
+    case 'absenteisme': return e.absenteisme ? (e.absenteisme.indicatif ? '[Aperçu, indicatif] Dernier import RH (' + smMoisLabel(e.absenteisme.rhMois) + ')' : "Taux d'absentéisme du mois") + ' : ' + e.absenteisme.tauxPct + ' %.' : '';
     case 'pedlv': return e.pedlv ? 'Envoi PEDLV du ' + smDateFr(e.pedlv.envoyeLe) + ' (période ' + e.pedlv.periode + ') : ' + e.pedlv.rouges + ' indicateur(s) rouge(s) sur ' + e.pedlv.total + '.' : 'Aucun envoi PEDLV pour ce mois.';
     case 'avis': return e.avis && e.avis.rating ? 'Note Google ' + e.avis.rating + '/5 (' + f(e.avis.reviews) + ' avis), mise à jour le ' + smDateFr(e.avis.majLe) + '.' : '';
     case 'kaizen': return e.kaizen ? 'Audit Kaizen du mois : ' + e.kaizen.score + '/' + e.kaizen.scoreMax + (e.kaizen.cloture ? ' (clôturé).' : ' (non clôturé).') : 'Aucun audit Kaizen ce mois-ci.';
