@@ -180,11 +180,11 @@ textarea{min-height:64px;resize:vertical;line-height:1.45}
 
     <div class="card">
       <label>Page d'accueil — accès nominatifs</label>
-      <div class="hint">Vous voyez toujours toutes les sections, et les animateurs de magasins.csv voient automatiquement « Animateurs réseau ». Ajoutez ici les autres personnes (ex. Formation).</div>
+      <div class="hint">Vous voyez toujours toutes les sections, et les animateurs de magasins.csv voient automatiquement « Animateurs réseau ». Ajoutez ici les autres personnes (Formation, Direction réseau). La section « Olivier » vous est réservée et ne peut pas être ouverte à quelqu'un d'autre.</div>
       <div class="ferm-list" id="acc-acces"></div>
       <div class="ferm-grid" style="grid-template-columns:1fr 130px">
         <div><label>Adresse Zimbra</label><input type="text" id="acc-email" placeholder="prenom.nom@optical-center.com"></div>
-        <div><label>Section</label><select id="acc-email-section"><option value="formation">Formation</option><option value="animateurs">Animateurs</option><option value="olivier">Direction</option></select></div>
+        <div><label>Section</label><select id="acc-email-section"><option value="formation">Formation</option><option value="animateurs">Animateurs</option><option value="direction">Direction réseau</option></select></div>
       </div>
       <button class="btn-primary" id="acc-acces-btn" onclick="ajouterAcces()">Donner l'accès</button>
     </div>
@@ -206,7 +206,7 @@ textarea{min-height:64px;resize:vertical;line-height:1.45}
     <div><label>Nom</label><input type="text" id="acc-f-nom" maxlength="60"></div>
     <div><label>Lien</label><input type="text" id="acc-f-url" placeholder="https://…"></div>
     <div class="ferm-grid">
-      <div><label>Section</label><select id="acc-f-section"><option value="tous">Pour tous</option><option value="animateurs">Animateurs réseau</option><option value="formation">Formation</option><option value="olivier">Direction réseau</option></select></div>
+      <div><label>Section</label><select id="acc-f-section"><option value="tous">Pour tous</option><option value="animateurs">Animateurs réseau</option><option value="formation">Formation</option><option value="direction">Direction réseau</option><option value="olivier">Olivier (vous seul)</option></select></div>
       <div><label>Ordre</label><input type="number" id="acc-f-ordre" min="0" max="99"></div>
     </div>
     <div><label>À quoi ça sert</label><textarea id="acc-f-description" maxlength="600"></textarea></div>
@@ -678,7 +678,7 @@ async function supprimerFermeture(id) {
 }
 
 // ── Page d'accueil — administration (02/10) ──
-const ACC_SECTIONS = { tous: 'Pour tous', animateurs: 'Animateurs réseau', formation: 'Formation', olivier: 'Direction réseau' };
+const ACC_SECTIONS = { tous: 'Pour tous', animateurs: 'Animateurs réseau', formation: 'Formation', direction: 'Direction réseau', olivier: 'Olivier' };
 let accApps = [], accEdit = null, accIcone = '';
 
 function accMono(nom) {

@@ -139,7 +139,7 @@ input:focus{outline:none;border-color:var(--red)}
 </div>
 
 <script>
-const APP_VERSION = '2026.10.03-1';
+const APP_VERSION = '2026.10.06-1';
 const WORKER = 'https://zimbra-relay.oli-baroukh.workers.dev';
 const STORE_SECRET = 'OC-bilan-store-2026';
 const K_SESSION = 'accueil_session', K_CACHE = 'accueil_apps_cache', K_USER = 'accueil_last_user';
@@ -147,9 +147,10 @@ const SECTIONS = {
   tous:       { titre: 'Pour tous',           sous: 'Magasins, managers et animateurs' },
   animateurs: { titre: 'Animateurs réseau',   sous: 'Visites et suivi du périmètre' },
   formation:  { titre: 'Formation',           sous: 'Accompagnement des managers' },
-  olivier:    { titre: 'Direction réseau',    sous: 'Administration et pilotage' },
+  direction:  { titre: 'Direction réseau',    sous: 'Pilotage du réseau' },
+  olivier:    { titre: 'Olivier',             sous: 'Administration — accès personnel' },
 };
-const ORDRE = ['tous', 'animateurs', 'formation', 'olivier'];
+const ORDRE = ['tous', 'animateurs', 'formation', 'direction', 'olivier'];
 
 function lsGet(k) { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } }
 function lsSet(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
@@ -206,7 +207,7 @@ function render() {
   }
   if (!session) {
     html += `<section><div class="locked">
-      <div><b>Animateurs réseau · Formation</b><span>Ces applis s’affichent après connexion avec votre identifiant Zimbra.</span></div>
+      <div><b>Animateurs réseau · Formation · Direction</b><span>Ces applis s’affichent après connexion avec votre identifiant Zimbra.</span></div>
       <button class="chip primary" data-open-login>Se connecter</button></div></section>`;
   }
   main.innerHTML = html;
