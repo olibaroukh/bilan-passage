@@ -139,7 +139,7 @@ input:focus{outline:none;border-color:var(--red)}
 </div>
 
 <script>
-const APP_VERSION = '2026.10.06-1';
+const APP_VERSION = '2026.10.07-1'; // à bumper avec SW_VERSION (sw.js) ET version.json à chaque déploiement
 const WORKER = 'https://zimbra-relay.oli-baroukh.workers.dev';
 const STORE_SECRET = 'OC-bilan-store-2026';
 const K_SESSION = 'accueil_session', K_CACHE = 'accueil_apps_cache', K_USER = 'accueil_last_user';
@@ -362,7 +362,29 @@ document.getElementById('login-form').addEventListener('submit', login);
     if (!APPS.length) document.getElementById('main').innerHTML = '<div class="empty">Impossible de charger les applis. Vérifiez la connexion puis rechargez la page.</div>';
   });
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+  verifierVersion();
 })();
+
+// 07/10 : mise à jour automatique. Une page restée ouverte (appli installée
+// sur iPad/iPhone) ou servie depuis le cache du navigateur gardait l'ancienne
+// version. On compare à version.json (réseau pur) au lancement et à chaque
+// retour au premier plan ; si une version plus récente est publiée, on
+// recharge une fois en contournant le cache.
+async function verifierVersion() {
+  try {
+    const res = await fetch('version.json?_=' + Date.now(), { cache: 'no-store' });
+    if (!res.ok) return;
+    const { version } = await res.json();
+    if (!version || version === APP_VERSION) return;
+    const k = 'accueil_reload_' + version;
+    if (sessionStorage.getItem(k)) return; // une seule tentative par version
+    sessionStorage.setItem(k, '1');
+    location.replace(location.pathname + '?v=' + encodeURIComponent(version));
+  } catch (e) {}
+}
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') { verifierVersion(); loadApps().catch(() => {}); }
+});
 </script>
 </body>
 </html>
