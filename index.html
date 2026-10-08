@@ -282,9 +282,11 @@ input[type=date]{color-scheme:dark}
       <div class="magasin-field"><label>Effectif audio</label><input type="number" inputmode="decimal" step="0.5" id="fi-eff-audio" placeholder="0"></div>
       <div class="magasin-field"><label>Effectif théorique</label><input type="number" inputmode="decimal" step="0.5" id="fi-eff-theo" placeholder="0"></div>
       <div class="magasin-field"><label>Effectif présent</label><input type="number" inputmode="decimal" step="0.5" id="fi-eff-present" placeholder="0"></div>
+      <div class="magasin-field"><label>Absences longue durée</label><input type="number" inputmode="numeric" step="1" min="0" id="fi-abs-ld" placeholder="0"></div>
     </div>
     <span class="magasin-note">Ces données sont pré-remplies depuis le référentiel. Modifie-les ici si elles ne sont pas à jour — la modification reste locale.</span>
     <div id="card-eff-rh-hint" style="font-size:10px;color:var(--muted);margin-top:2px"></div>
+    <div style="font-size:10px;color:var(--muted);margin-top:2px">Absences longue durée : nombre de collaborateurs (hors manager) absents durablement — enregistré avec le bilan et déduit des entretiens de pilotage attendus du mois.</div>
   </div>
   <div class="select-section" id="sec-passage" style="display:none">
     <span class="select-label">Passage n°</span>
@@ -879,7 +881,7 @@ function loadLogo() {
 }
 
 // ── VERSION APP ── (incrémenter à chaque mise à jour notable, pour déclencher l'invite de rechargement)
-const APP_VERSION = '2026.10.06-1'; // à bumper avec SW_VERSION (sw.js) ET version.json à chaque déploiement
+const APP_VERSION = '2026.10.08-1'; // à bumper avec SW_VERSION (sw.js) ET version.json à chaque déploiement
 
 // Token pour la route /store-bilan du Worker (persistance D1, doit correspondre à STORE_SECRET dans worker.js)
 const STORE_SECRET = 'OC-bilan-store-2026';
@@ -1818,6 +1820,7 @@ function onMagChange() {
   document.getElementById('fi-eff-audio').value = currentMag.eff_audio || '';
   document.getElementById('fi-eff-theo').value = currentMag.eff_theo || '';
   document.getElementById('fi-eff-present').value = '';
+  document.getElementById('fi-abs-ld').value = '';
   updateGoogleRatingDisplay(currentMag);
   document.getElementById('magasin-card').classList.add('visible');
   document.getElementById('sec-passage').style.display = 'flex';
@@ -1853,10 +1856,14 @@ async function applyRhEffectifPrefill(code) {
     let applied = false;
     if (optEl && String(optEl.value) === String(optCsv) && rh.eff_opt !== undefined) { optEl.value = rh.eff_opt; applied = true; }
     if (audEl && String(audEl.value) === String(audCsv) && rh.eff_audio !== undefined) { audEl.value = rh.eff_audio; applied = true; }
+    // 08/10 : absences longue durée (hors manager) depuis le dernier import RH —
+    // seulement si l'AR n'a encore rien saisi dans la case.
+    const absEl = document.getElementById('fi-abs-ld');
+    if (absEl && absEl.value === '' && rh.abs_ld !== undefined && rh.abs_ld !== null) { absEl.value = rh.abs_ld; applied = true; }
     if (applied && hintEl && data.mois) {
       const moisLabels = ['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];
       const [y, m] = data.mois.split('-');
-      hintEl.textContent = `Effectif opt./audio pré-rempli depuis l'import RH de ${moisLabels[parseInt(m, 10) - 1]} ${y} — modifiable ci-dessus.`;
+      hintEl.textContent = `Effectif opt./audio et absences longue durée pré-remplis depuis l'import RH de ${moisLabels[parseInt(m, 10) - 1]} ${y} — modifiables ci-dessus.`;
     }
   } catch (e) {
     // Pré-remplissage optionnel : en cas d'échec réseau, on garde silencieusement
@@ -1899,6 +1906,7 @@ function startBilan() {
     eff_audio: document.getElementById('fi-eff-audio').value,
     eff_theo: document.getElementById('fi-eff-theo').value,
     eff_present: document.getElementById('fi-eff-present').value,
+    abs_ld: document.getElementById('fi-abs-ld').value,
   };
   const passage = document.getElementById('sel-passage').value || '?';
   // Watermark
