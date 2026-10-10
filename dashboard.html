@@ -165,7 +165,15 @@
   .kl-row > span:first-child { flex: 1 1 auto; min-width: 0; }
   .kl-info { font-size: 12px; color: var(--gray); text-align: right; flex: 0 1 55%; }
   .kl-vide { font-size: 13px; color: var(--gray); padding: 6px 4px; }
-  .kl-box details summary { cursor: pointer; font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--gray); margin: 14px 0 4px; }
+  .kl-compte { font-size: 13px; color: var(--gray); margin: -6px 0 8px; }
+  .kl-autres { margin-top: 14px; }
+  .kl-autres summary { cursor: pointer; list-style: none; display: flex; justify-content: center; align-items: center; gap: 6px; background: #f4f3ee; border-radius: 8px; padding: 10px 12px; font-size: 13px; font-weight: 600; color: var(--dark); text-transform: none; letter-spacing: 0; margin: 0; }
+  .kl-autres summary::-webkit-details-marker { display: none; }
+  .kl-autres summary::after { content: '▾'; font-size: 12px; }
+  .kl-autres[open] summary::after { content: '▴'; }
+  .kl-autres[open] summary { margin-bottom: 4px; }
+  .kl-tag-retard { color: var(--red); font-weight: 600; }
+  .kl-tag-ko { color: var(--red); font-weight: 600; }
 
   .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
   @media (max-width: 480px) {
@@ -691,13 +699,6 @@ function klLignes(items, info) {
       <span>${escDash(m.libelle)}${m.animateur ? '<span class="kl-ar">' + escDash(m.animateur) + '</span>' : ''}</span>
       <span class="kl-info">${info ? info(m) : ''}</span></div>`).join('');
 }
-function klSection(titre, items, info) {
-  return '<p class="kl-sec">' + escDash(titre) + ' (' + items.length + ')</p>' + klLignes(items, info);
-}
-function klSectionRepliee(titre, items, info) {
-  if (!items.length) return '';
-  return '<details><summary>' + escDash(titre) + ' (' + items.length + ')</summary>' + klLignes(items, info) + '</details>';
-}
 const klParLibelle = (a, b) => String(a.libelle || '').localeCompare(String(b.libelle || ''), 'fr');
 
 function klSante(cat) {
@@ -714,12 +715,16 @@ function klSante(cat) {
 }
 
 function klToday(cle) {
+  // 10/10 (retour Olivier) : d'abord les magasins CONCERNÉS (ce qui a été
+  // fait), puis un bouton pour déplier les non concernés.
   const d = todayData;
   if (!d) return;
   const { ar } = todayFiltered();
   const perim = (ar ? d.magasins.filter(m => m.animateur === ar) : d.magasins).slice().sort(klParLibelle);
   const suffixe = ar ? ' — ' + ar : '';
   const heurePar = v => v ? [v.heure, v.par].filter(Boolean).map(escDash).join(' · ') : '';
+  const compte = (n, total) => '<p class="kl-compte">' + n + ' magasin' + (n > 1 ? 's' : '') + ' sur ' + total + '</p>';
+  const autres = (libelle, html, n) => n ? '<details class="kl-autres"><summary>' + escDash(libelle) + ' (' + n + ')</summary>' + html + '</details>' : '';
 
   if (cle === 'actifs') {
     const actifs = perim.filter(magasinActif), inactifs = perim.filter(m => !magasinActif(m));
@@ -729,19 +734,22 @@ function klToday(cle) {
       if (o.key === 'pedlv' || o.key === 'kaizen') return v && v.fait;
       return !!v;
     }).map(o => escDash(o.label)).join(', ');
-    klOuvrir('Magasins actifs aujourd\'hui' + suffixe, klSection('Actifs', actifs, outils) + klSection('Aucune saisie', inactifs));
+    klOuvrir('Magasins actifs aujourd\'hui' + suffixe,
+      compte(actifs.length, perim.length) + klLignes(actifs, outils)
+      + autres('Voir les magasins sans saisie', klLignes(inactifs), inactifs.length));
     return;
   }
   if (cle === 'lancement') {
     const st = s => perim.filter(m => m.lancement && m.lancement.statut === s);
     const faits = st('fait');
-    const retard = faits.filter(m => m.lancement.enRetard), aLHeure = faits.filter(m => !m.lancement.enRetard);
-    const html = klSection('Manquants', st('manquant'))
-      + (retard.length ? klSection('Faits en retard', retard, m => heurePar(m.lancement)) : '')
-      + (st('attendu').length ? klSection('Attendus avant ' + d.butoir.replace(':', 'h'), st('attendu')) : '')
-      + klSection('Faits', aLHeure, m => heurePar(m.lancement))
-      + klSectionRepliee('Pas de lancement attendu', st('non_attendu'));
-    klOuvrir('Lancements de journée' + suffixe, html);
+    const infoFait = m => (m.lancement.enRetard ? '<span class="kl-tag-retard">en retard</span> · ' : '') + heurePar(m.lancement);
+    const manquants = st('manquant'), attendus = st('attendu'), nonAttendus = st('non_attendu');
+    const nonFaits = manquants.concat(attendus, nonAttendus);
+    const infoNonFait = m => m.lancement.statut === 'manquant' ? '<span class="kl-tag-ko">manquant</span>'
+      : m.lancement.statut === 'attendu' ? 'attendu avant ' + escDash(d.butoir.replace(':', 'h')) : 'pas attendu';
+    klOuvrir('Lancements de journée' + suffixe,
+      compte(faits.length, perim.length - nonAttendus.length) + klLignes(faits, infoFait)
+      + autres('Voir les magasins sans lancement', klLignes(nonFaits, infoNonFait), nonFaits.length));
     return;
   }
   const fait = m => cle === 'pedlv' || cle === 'kaizen' ? !!(m[cle] && m[cle].fait) : !!m[cle];
@@ -754,7 +762,9 @@ function klToday(cle) {
     if (cle === 'equipe') return (v.nb ? v.nb + ' contrôle(s) · ' : '') + heurePar(v);
     return heurePar(v);
   };
-  klOuvrir(({ bilan: 'Bilans de passage', pedlv: 'PEDLV', kaizen: 'Kaizen', entretien: 'Entretiens', observation: 'Observations', equipe: 'Évaluation équipe' }[cle] || TODAY_OUTIL_LABELS[cle]) + ' — aujourd\'hui' + suffixe, klSection('Fait aujourd\'hui', faits, info) + klSectionRepliee('Rien aujourd\'hui', pasFaits));
+  klOuvrir(({ bilan: 'Bilans de passage', pedlv: 'PEDLV', kaizen: 'Kaizen', entretien: 'Entretiens', observation: 'Observations', equipe: 'Évaluation équipe' }[cle] || TODAY_OUTIL_LABELS[cle]) + ' — aujourd\'hui' + suffixe,
+    compte(faits.length, perim.length) + klLignes(faits, info)
+    + autres('Voir les magasins non concernés', klLignes(pasFaits), pasFaits.length));
 }
 
 function renderNetworkChart() {
