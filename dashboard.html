@@ -151,6 +151,22 @@
   .modal-box h3 { margin: 0 0 12px; font-size: 15px; }
   .modal-close { float: right; background: none; border: none; font-size: 18px; cursor: pointer; color: var(--gray); }
 
+  /* 10/10 : vignettes cliquables → liste des magasins concernés */
+  .kpi-card.kpi-click { cursor: pointer; transition: box-shadow .15s, transform .15s; }
+  .kpi-card.kpi-click:hover { box-shadow: 0 2px 10px rgba(0,0,0,.12); transform: translateY(-1px); }
+  .kpi-card.kpi-click:focus-visible { outline: 2px solid var(--red); outline-offset: 2px; }
+  .kl-box { width: 520px; max-height: 85vh; overflow-y: auto; }
+  .kl-sec { font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--gray); margin: 14px 0 4px; }
+  .kl-sec:first-of-type { margin-top: 4px; }
+  .kl-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 8px 4px; border-bottom: 1px solid #f0efe9; font-size: 13px; cursor: pointer; }
+  .kl-row:hover { background: #faf9f6; }
+  .kl-row:last-child { border-bottom: none; }
+  .kl-ar { display: block; font-size: 11px; color: var(--gray); }
+  .kl-row > span:first-child { flex: 1 1 auto; min-width: 0; }
+  .kl-info { font-size: 12px; color: var(--gray); text-align: right; flex: 0 1 55%; }
+  .kl-vide { font-size: 13px; color: var(--gray); padding: 6px 4px; }
+  .kl-box details summary { cursor: pointer; font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--gray); margin: 14px 0 4px; }
+
   .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
   @media (max-width: 480px) {
     main { padding: 14px 10px 50px; }
@@ -311,6 +327,13 @@ select,input,textarea,button{font-family:inherit}
   </div>
 </div>
 
+<div class="modal-overlay" id="kl-modal" onclick="if (event.target === this) klFermer()">
+  <div class="modal-box kl-box">
+    <button class="modal-close" onclick="klFermer()" aria-label="Fermer">&times;</button>
+    <h3 id="kl-titre"></h3>
+    <div id="kl-contenu"></div>
+  </div>
+</div>
 <div class="modal-overlay" id="modal-overlay">
   <div class="modal-box">
     <button class="modal-close" onclick="closeModal()">&times;</button>
@@ -639,11 +662,99 @@ function renderKpis() {
   const rouge = allResults.filter(r => r.score !== null && r.score < 60).length;
   const sansDonnees = allResults.filter(r => r.score === null).length;
   document.getElementById('kpi-row').innerHTML = `
-    <div class="kpi-card"><p class="lbl">Magasins au vert</p><p class="val" style="color:var(--green)">${vert}</p></div>
-    <div class="kpi-card"><p class="lbl">À surveiller</p><p class="val" style="color:var(--orange)">${orange}</p></div>
-    <div class="kpi-card"><p class="lbl">En alerte</p><p class="val" style="color:var(--red)">${rouge}</p></div>
-    <div class="kpi-card"><p class="lbl">Sans données</p><p class="val">${sansDonnees}</p></div>
+    <div class="kpi-card kpi-click" ${klAttr("klSante('vert')")}><p class="lbl">Magasins au vert</p><p class="val" style="color:var(--green)">${vert}</p></div>
+    <div class="kpi-card kpi-click" ${klAttr("klSante('orange')")}><p class="lbl">À surveiller</p><p class="val" style="color:var(--orange)">${orange}</p></div>
+    <div class="kpi-card kpi-click" ${klAttr("klSante('rouge')")}><p class="lbl">En alerte</p><p class="val" style="color:var(--red)">${rouge}</p></div>
+    <div class="kpi-card kpi-click" ${klAttr("klSante('sans')")}><p class="lbl">Sans données</p><p class="val">${sansDonnees}</p></div>
   `;
+}
+
+// ---------------------------------------------------------------- Vignettes cliquables (10/10)
+// Un clic sur une vignette ouvre la liste des magasins qu'elle compte ; un clic
+// sur un magasin ouvre sa fiche. Les listes reprennent exactement le même
+// périmètre que le compteur (Santé réseau : tout le réseau ; Aujourd'hui :
+// filtre animateur appliqué).
+function klAttr(action) {
+  return 'role="button" tabindex="0" onclick="' + action + '" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();' + action + '}"';
+}
+function klOuvrir(titre, html) {
+  document.getElementById('kl-titre').textContent = titre;
+  document.getElementById('kl-contenu').innerHTML = html;
+  document.getElementById('kl-modal').style.display = 'flex';
+}
+function klFermer() { document.getElementById('kl-modal').style.display = 'none'; }
+document.addEventListener('keydown', e => { if (e.key === 'Escape') { const m = document.getElementById('kl-modal'); if (m && m.style.display === 'flex') klFermer(); } });
+function klOuvrirFiche(code) { klFermer(); showDetailView(code); }
+function klLignes(items, info) {
+  if (!items.length) return '<p class="kl-vide">Aucun magasin.</p>';
+  return items.map(m => `<div class="kl-row" role="button" tabindex="0" onclick="klOuvrirFiche('${escDash(m.code)}')" onkeydown="if(event.key==='Enter'){klOuvrirFiche('${escDash(m.code)}')}">
+      <span>${escDash(m.libelle)}${m.animateur ? '<span class="kl-ar">' + escDash(m.animateur) + '</span>' : ''}</span>
+      <span class="kl-info">${info ? info(m) : ''}</span></div>`).join('');
+}
+function klSection(titre, items, info) {
+  return '<p class="kl-sec">' + escDash(titre) + ' (' + items.length + ')</p>' + klLignes(items, info);
+}
+function klSectionRepliee(titre, items, info) {
+  if (!items.length) return '';
+  return '<details><summary>' + escDash(titre) + ' (' + items.length + ')</summary>' + klLignes(items, info) + '</details>';
+}
+const klParLibelle = (a, b) => String(a.libelle || '').localeCompare(String(b.libelle || ''), 'fr');
+
+function klSante(cat) {
+  const defs = {
+    vert: ['Magasins au vert (≥ 80)', r => r.score !== null && r.score >= 80],
+    orange: ['À surveiller (60 à 79)', r => r.score !== null && r.score >= 60 && r.score < 80],
+    rouge: ['En alerte (< 60)', r => r.score !== null && r.score < 60],
+    sans: ['Sans données', r => r.score === null],
+  };
+  const [titre, filtre] = defs[cat];
+  const items = allResults.filter(filtre).sort(cat === 'sans' ? klParLibelle : (a, b) => a.score - b.score || klParLibelle(a, b));
+  const visite = r => r.daysSinceVisit !== null && r.daysSinceVisit !== undefined ? 'visite il y a ' + r.daysSinceVisit + ' j.' : 'jamais visité';
+  klOuvrir(titre, klLignes(items, r => (r.score !== null ? '<span class="badge ' + scoreClass(r.score) + '">' + r.score + '</span> · ' : '') + visite(r)));
+}
+
+function klToday(cle) {
+  const d = todayData;
+  if (!d) return;
+  const { ar } = todayFiltered();
+  const perim = (ar ? d.magasins.filter(m => m.animateur === ar) : d.magasins).slice().sort(klParLibelle);
+  const suffixe = ar ? ' — ' + ar : '';
+  const heurePar = v => v ? [v.heure, v.par].filter(Boolean).map(escDash).join(' · ') : '';
+
+  if (cle === 'actifs') {
+    const actifs = perim.filter(magasinActif), inactifs = perim.filter(m => !magasinActif(m));
+    const outils = m => TODAY_OUTILS.filter(o => {
+      const v = m[o.key];
+      if (o.key === 'lancement') return v && v.statut === 'fait';
+      if (o.key === 'pedlv' || o.key === 'kaizen') return v && v.fait;
+      return !!v;
+    }).map(o => escDash(o.label)).join(', ');
+    klOuvrir('Magasins actifs aujourd\'hui' + suffixe, klSection('Actifs', actifs, outils) + klSection('Aucune saisie', inactifs));
+    return;
+  }
+  if (cle === 'lancement') {
+    const st = s => perim.filter(m => m.lancement && m.lancement.statut === s);
+    const faits = st('fait');
+    const retard = faits.filter(m => m.lancement.enRetard), aLHeure = faits.filter(m => !m.lancement.enRetard);
+    const html = klSection('Manquants', st('manquant'))
+      + (retard.length ? klSection('Faits en retard', retard, m => heurePar(m.lancement)) : '')
+      + (st('attendu').length ? klSection('Attendus avant ' + d.butoir.replace(':', 'h'), st('attendu')) : '')
+      + klSection('Faits', aLHeure, m => heurePar(m.lancement))
+      + klSectionRepliee('Pas de lancement attendu', st('non_attendu'));
+    klOuvrir('Lancements de journée' + suffixe, html);
+    return;
+  }
+  const fait = m => cle === 'pedlv' || cle === 'kaizen' ? !!(m[cle] && m[cle].fait) : !!m[cle];
+  const faits = perim.filter(fait), pasFaits = perim.filter(m => !fait(m));
+  const info = m => {
+    const v = m[cle];
+    if (cle === 'entretien') return (v.nb > 1 ? v.nb + ' · ' : '') + escDash((v.types || []).map(t => SV_TYPES[t] || t).join(', ')) + (v.heure ? ' · ' + escDash(v.heure) : '');
+    if (cle === 'observation') return v.nb + ' obs.' + (v.heure ? ' · ' + escDash(v.heure) : '');
+    if (cle === 'kaizen') return (v.nbItems ? v.nbItems + ' item(s) · ' : '') + heurePar(v);
+    if (cle === 'equipe') return (v.nb ? v.nb + ' contrôle(s) · ' : '') + heurePar(v);
+    return heurePar(v);
+  };
+  klOuvrir(({ bilan: 'Bilans de passage', pedlv: 'PEDLV', kaizen: 'Kaizen', entretien: 'Entretiens', observation: 'Observations', equipe: 'Évaluation équipe' }[cle] || TODAY_OUTIL_LABELS[cle]) + ' — aujourd\'hui' + suffixe, klSection('Fait aujourd\'hui', faits, info) + klSectionRepliee('Rien aujourd\'hui', pasFaits));
 }
 
 function renderNetworkChart() {
@@ -1443,14 +1554,14 @@ function renderTodayBody() {
   const lancRetard = perim.filter(m => m.lancement.enRetard).length;
   const nb = key => perim.filter(m => key === 'pedlv' || key === 'kaizen' ? (m[key] && m[key].fait) : !!m[key]).length;
   document.getElementById('today-kpis').innerHTML = `
-    <div class="kpi-card"><p class="lbl">Magasins actifs</p><p class="val">${actifs}<span class="kpi-sub"> / ${perim.length}</span></p></div>
-    <div class="kpi-card"><p class="lbl">Lancements</p><p class="val" style="color:${lancManquants ? 'var(--red)' : 'var(--green)'}">${lancFaits}<span class="kpi-sub"> / ${lancAttendus}</span></p>${lancRetard ? '<p class="kpi-note">dont ' + lancRetard + ' en retard</p>' : ''}</div>
-    <div class="kpi-card"><p class="lbl">Bilans</p><p class="val">${nb('bilan')}</p></div>
-    <div class="kpi-card"><p class="lbl">PEDLV</p><p class="val">${nb('pedlv')}</p></div>
-    <div class="kpi-card"><p class="lbl">Kaizen</p><p class="val">${nb('kaizen')}</p></div>
-    <div class="kpi-card"><p class="lbl">Entretiens</p><p class="val">${nb('entretien')}</p></div>
-    <div class="kpi-card"><p class="lbl">Observations</p><p class="val">${nb('observation')}</p></div>
-    <div class="kpi-card"><p class="lbl">Éval. équipe</p><p class="val">${nb('equipe')}</p></div>
+    <div class="kpi-card kpi-click" ${klAttr("klToday('actifs')")}><p class="lbl">Magasins actifs</p><p class="val">${actifs}<span class="kpi-sub"> / ${perim.length}</span></p></div>
+    <div class="kpi-card kpi-click" ${klAttr("klToday('lancement')")}><p class="lbl">Lancements</p><p class="val" style="color:${lancManquants ? 'var(--red)' : 'var(--green)'}">${lancFaits}<span class="kpi-sub"> / ${lancAttendus}</span></p>${lancRetard ? '<p class="kpi-note">dont ' + lancRetard + ' en retard</p>' : ''}</div>
+    <div class="kpi-card kpi-click" ${klAttr("klToday('bilan')")}><p class="lbl">Bilans</p><p class="val">${nb('bilan')}</p></div>
+    <div class="kpi-card kpi-click" ${klAttr("klToday('pedlv')")}><p class="lbl">PEDLV</p><p class="val">${nb('pedlv')}</p></div>
+    <div class="kpi-card kpi-click" ${klAttr("klToday('kaizen')")}><p class="lbl">Kaizen</p><p class="val">${nb('kaizen')}</p></div>
+    <div class="kpi-card kpi-click" ${klAttr("klToday('entretien')")}><p class="lbl">Entretiens</p><p class="val">${nb('entretien')}</p></div>
+    <div class="kpi-card kpi-click" ${klAttr("klToday('observation')")}><p class="lbl">Observations</p><p class="val">${nb('observation')}</p></div>
+    <div class="kpi-card kpi-click" ${klAttr("klToday('equipe')")}><p class="lbl">Éval. équipe</p><p class="val">${nb('equipe')}</p></div>
   `;
 
   document.getElementById('today-body').innerHTML = rows.length ? rows.map(m => `
