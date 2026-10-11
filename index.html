@@ -138,6 +138,11 @@ select,input,textarea,button{font-family:inherit}
 .history-item-title{font-size:13px;font-weight:500;color:var(--text)}
 .history-item-meta{font-size:11px;color:var(--muted);margin-top:2px}
 .history-item-actions{display:flex;gap:6px}
+.hist-badge{display:inline-block;font-size:10px;font-weight:600;padding:2px 7px;border-radius:10px;margin-left:6px;vertical-align:middle;background:rgba(212,130,10,0.15);border:1px solid rgba(212,130,10,0.35);color:var(--orange)}
+.hist-status{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px;color:var(--muted);background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:10px;line-height:1.4}
+.hist-status .hist-status-txt{flex:1;min-width:160px}
+.hist-status button{font-size:12px;padding:6px 12px}
+.hist-import{width:100%;margin-bottom:12px;font-size:12px;padding:10px 12px;background:var(--red);border-color:var(--red);color:#fff}
 .icon-btn{background:var(--bg4);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:16px;cursor:pointer;padding:8px;line-height:1}
 /* ── ÉCRAN 4 : PARAMÈTRES ── */
 #screen-params{padding:20px 16px 90px;gap:16px;overflow-y:auto}
@@ -631,7 +636,7 @@ input[type=date]{color-scheme:dark}
     </label>
   </div>
   <div style="font-size:11px;color:var(--text-dim,#999);margin-bottom:12px;line-height:1.4;">
-    Inclut l'historique ET les brouillons en cours par magasin. À utiliser avant de supprimer le raccourci de l'app (ex: changement d'icône) et à réimporter juste après réinstallation, pour ne rien perdre.
+    Tous les bilans envoyés sont conservés en base centrale et s'affichent ici dès que tu es connecté, sur n'importe quel appareil. La sauvegarde ci-dessus inclut l'historique ET les brouillons en cours par magasin. À utiliser avant de supprimer le raccourci de l'app (ex: changement d'icône) et à réimporter juste après réinstallation, pour ne rien perdre.
   </div>
   <div id="history-list"></div>
 </div>
@@ -881,7 +886,7 @@ function loadLogo() {
 }
 
 // ── VERSION APP ── (incrémenter à chaque mise à jour notable, pour déclencher l'invite de rechargement)
-const APP_VERSION = '2026.10.08-1'; // à bumper avec SW_VERSION (sw.js) ET version.json à chaque déploiement
+const APP_VERSION = '2026.10.11-1'; // à bumper avec SW_VERSION (sw.js) ET version.json à chaque déploiement
 
 // Token pour la route /store-bilan du Worker (persistance D1, doit correspondre à STORE_SECRET dans worker.js)
 const STORE_SECRET = 'OC-bilan-store-2026';
@@ -3185,7 +3190,8 @@ async function sendBilan() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-Store-Token': STORE_SECRET },
         body: JSON.stringify(data)
-      }).catch(e => console.warn('store-bilan (persistance centrale) échouée :', e));
+      }).then(() => { histRemoteCache.key = null; })
+        .catch(e => console.warn('store-bilan (persistance centrale) échouée :', e));
       checklistClearEtat();
     }
 
@@ -4384,61 +4390,258 @@ function populateHistoryFilter() {
   if ([...sel.options].some(o => o.value === prev)) sel.value = prev;
 }
 
-function renderHistory() {
-  const filter = document.getElementById('hist-mag-filter').value;
-  const list = document.getElementById('history-list');
-  list.innerHTML = '';
-  const codes = filter ? [filter] : getHomeARStores().map(m => m.code);
-  let total = 0;
+// ── HISTORIQUE CENTRAL (11/10) ──
+// L'historique fusionne deux sources :
+//  - la base centrale D1 (route /bilans du Worker, filtrée par session AR),
+//    qui contient tous les bilans envoyés, quel que soit l'appareil ;
+//  - le localStorage de l'appareil (24 derniers bilans par magasin), qui reste
+//    la seule source hors connexion et pour les bilans jamais remontés.
+// Doublon = même magasin + même date + même n° de passage.
+let histRemoteCache = { key: null, rows: null, at: 0 };
+let histRenderSeq = 0;
 
-  // Bouton "Tout supprimer"
-  const clearBtn = document.createElement('button');
-  clearBtn.textContent = '🗑️ Tout supprimer';
-  clearBtn.className = 'btn-secondary';
-  clearBtn.style.cssText = 'margin-bottom:12px;font-size:12px;padding:6px 12px;';
-  clearBtn.onclick = () => {
-    if (!confirm('Supprimer tout l\'historique' + (filter ? ' de ce magasin' : '') + ' ?')) return;
-    codes.forEach(code => localStorage.removeItem(`bilan_history_${code}`));
-    renderHistory();
-  };
+function histKey(code, d) {
+  return code + '|' + String(d?.date || '').slice(0, 10) + '|' + String(d?.passage ?? '');
+}
 
+function readLocalHistory(codes) {
+  const out = [];
   codes.forEach(code => {
     let history = [];
     try { history = JSON.parse(localStorage.getItem(`bilan_history_${code}`) || '[]'); } catch(e) {}
-    history.forEach((d, idx) => {
-      total++;
-      const item = document.createElement('div');
-      item.className = 'history-item';
-      item.innerHTML = `
-        <div class="history-item-info">
-          <div class="history-item-title">${escapeHtmlLocal(d.magasin?.libelle || code)} — Passage n°${escapeHtmlLocal(d.passage || '?')}</div>
-          <div class="history-item-meta">${formatDate(d.date)} · ${escapeHtmlLocal(d.ar || '')}${d.duree ? ' · ' + formatDuree(d.duree) : ''}</div>
-        </div>
-        <div class="history-item-actions">
-          <button class="icon-btn" title="Télécharger PDF" data-action="download" data-code="${code}" data-idx="${idx}">📥</button>
-          <button class="icon-btn" title="Renvoyer par mail" data-action="resend" data-code="${code}" data-idx="${idx}">📧</button>
-          <button class="icon-btn" title="Supprimer" data-action="delete" data-code="${code}" data-idx="${idx}">🗑️</button>
-        </div>`;
-      // Attacher les événements via JS (évite les problèmes de guillemets dans onclick inline)
-      item.querySelectorAll('[data-action]').forEach(btn => {
-        btn.addEventListener('click', e => {
-          e.stopPropagation();
-          const c = btn.dataset.code;
-          const i = parseInt(btn.dataset.idx);
-          if (btn.dataset.action === 'download') downloadHistoryPDF(e, c, i);
-          else if (btn.dataset.action === 'resend') resendBilan(e, c, i);
-          else if (btn.dataset.action === 'delete') deleteHistoryItem(e, c, i);
-        });
-      });
-      list.appendChild(item);
-    });
+    history.forEach((d, idx) => out.push({ code, d, localIdx: idx }));
   });
+  return out;
+}
 
-  if (total === 0) {
-    list.innerHTML = '<div class="history-empty">Aucun bilan enregistré pour ce filtre.</div>';
-  } else {
-    list.prepend(clearBtn);
+async function fetchRemoteHistory(codes, force) {
+  loadArSession();
+  if (!arSession) return { rows: null, reason: 'nosession' };
+  if (!codes.length) return { rows: [] };
+  const cacheKey = (arSession.ar || '') + '§' + codes.slice().sort().join(',');
+  if (!force && histRemoteCache.key === cacheKey && histRemoteCache.rows && Date.now() - histRemoteCache.at < 5 * 60 * 1000) {
+    return { rows: histRemoteCache.rows };
   }
+  const relay = params.relay || 'https://zimbra-relay.oli-baroukh.workers.dev';
+  const qs = codes.length === 1
+    ? 'magasin_code=' + encodeURIComponent(codes[0])
+    : 'magasin_codes=' + encodeURIComponent(codes.join(','));
+  try {
+    const resp = await fetch(relay + '/bilans?' + qs + '&light=1&limit=1000', {
+      headers: { 'X-Store-Token': STORE_SECRET, 'X-AR-Session': arSession.token || '' }
+    });
+    if (resp.status === 401) {
+      arSession = null;
+      localStorage.removeItem('bilan_ar_session');
+      return { rows: null, reason: 'expired' };
+    }
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok || data.error) return { rows: null, reason: 'error', error: data.error || ('Erreur ' + resp.status) };
+    const rows = (data.results || []).map(r => {
+      let d; try { d = JSON.parse(r.data_json); } catch(e) { d = null; }
+      if (!d || typeof d !== 'object') d = { magasin: { code: r.magasin_code, libelle: r.magasin_libelle }, ar: r.ar, date: r.date, passage: r.passage };
+      return { id: r.id, code: r.magasin_code, d };
+    });
+    histRemoteCache = { key: cacheKey, rows, at: Date.now() };
+    return { rows };
+  } catch(e) {
+    return { rows: null, reason: 'error', error: e.message };
+  }
+}
+
+function renderHistory(force) {
+  const seq = ++histRenderSeq;
+  const filter = document.getElementById('hist-mag-filter').value;
+  const codes = filter ? [filter] : getHomeARStores().map(m => m.code);
+  const locals = readLocalHistory(codes);
+  drawHistory(codes, filter, locals, null, { loading: true });
+  fetchRemoteHistory(codes, force === true).then(res => {
+    if (seq !== histRenderSeq) return; // un rendu plus récent a pris la main
+    drawHistory(codes, filter, locals, res.rows, res);
+  });
+}
+
+function drawHistory(codes, filter, locals, remoteRows, state) {
+  const list = document.getElementById('history-list');
+  list.innerHTML = '';
+  const remoteOk = Array.isArray(remoteRows);
+
+  // Fusion base + appareil
+  const map = new Map();
+  (remoteRows || []).forEach(r => {
+    const k = histKey(r.code, r.d);
+    if (!map.has(k)) map.set(k, { key: k, code: r.code, d: r.d, remoteId: r.id, localIdx: null });
+  });
+  locals.forEach(l => {
+    const k = histKey(l.code, l.d);
+    const ex = map.get(k);
+    if (ex) { if (ex.localIdx === null) ex.localIdx = l.localIdx; }
+    else map.set(k, { key: k, code: l.code, d: l.d, remoteId: null, localIdx: l.localIdx });
+  });
+  const entries = [...map.values()].sort((a, b) =>
+    String(b.d?.date || '').localeCompare(String(a.d?.date || '')) ||
+    (parseInt(b.d?.passage) || 0) - (parseInt(a.d?.passage) || 0));
+  const localOnly = entries.filter(e => e.remoteId === null);
+
+  // Bandeau d'état
+  const status = document.createElement('div');
+  status.className = 'hist-status';
+  const txt = document.createElement('div');
+  txt.className = 'hist-status-txt';
+  status.appendChild(txt);
+  if (state.loading) {
+    txt.textContent = '⏳ Chargement des bilans enregistrés en base…';
+  } else if (state.reason === 'nosession' || state.reason === 'expired') {
+    txt.textContent = (state.reason === 'expired' ? '🔒 Session expirée. ' : '🔒 ') +
+      'Seuls les bilans de cet appareil sont affichés. Connecte-toi pour retrouver tous tes bilans passés.';
+    const b = document.createElement('button');
+    b.className = 'btn-secondary'; b.textContent = 'Se connecter';
+    b.onclick = () => goScreen('analyse');
+    status.appendChild(b);
+  } else if (state.reason === 'error') {
+    txt.textContent = '⚠️ Base injoignable (' + (state.error || 'erreur') + '). Affichage des bilans de cet appareil uniquement.';
+    const b = document.createElement('button');
+    b.className = 'btn-secondary'; b.textContent = '↻ Réessayer';
+    b.onclick = () => renderHistory(true);
+    status.appendChild(b);
+  } else if (remoteOk) {
+    const nBase = entries.length - localOnly.length;
+    txt.textContent = '☁️ ' + nBase + ' bilan(s) en base' +
+      (localOnly.length ? ' · ' + localOnly.length + ' uniquement sur cet appareil' : '');
+    const b = document.createElement('button');
+    b.className = 'btn-secondary'; b.textContent = '↻'; b.title = 'Actualiser';
+    b.onclick = () => renderHistory(true);
+    status.appendChild(b);
+  }
+  list.appendChild(status);
+
+  // Bouton de remontée des bilans restés sur l'appareil
+  if (remoteOk && localOnly.length) {
+    const imp = document.createElement('button');
+    imp.className = 'btn-secondary hist-import';
+    imp.textContent = '⬆️ Remonter ' + localOnly.length + ' bilan(s) de cet appareil vers la base';
+    imp.onclick = () => importLocalHistoryToBase(localOnly);
+    list.appendChild(imp);
+  }
+
+  // Vider la copie locale (n'efface jamais la base)
+  if (locals.length) {
+    const clearBtn = document.createElement('button');
+    clearBtn.textContent = '🗑️ Vider l\'historique de cet appareil';
+    clearBtn.className = 'btn-secondary';
+    clearBtn.style.cssText = 'margin-bottom:12px;font-size:12px;padding:6px 12px;';
+    clearBtn.onclick = () => {
+      if (!confirm('Supprimer l\'historique enregistré sur cet appareil' + (filter ? ' pour ce magasin' : '') + ' ?\n\nLes bilans déjà en base restent consultables.')) return;
+      codes.forEach(code => localStorage.removeItem(`bilan_history_${code}`));
+      renderHistory();
+    };
+    list.appendChild(clearBtn);
+  }
+
+  if (!entries.length) {
+    const empty = document.createElement('div');
+    empty.className = 'history-empty';
+    empty.textContent = state.loading ? '' : 'Aucun bilan enregistré pour ce filtre.';
+    list.appendChild(empty);
+    return;
+  }
+
+  entries.forEach(entry => {
+    const d = entry.d || {};
+    const code = entry.code;
+    const showLocalBadge = remoteOk && entry.remoteId === null;
+    const canDelete = entry.remoteId === null && entry.localIdx !== null;
+    const item = document.createElement('div');
+    item.className = 'history-item';
+    item.innerHTML = `
+      <div class="history-item-info">
+        <div class="history-item-title">${escapeHtmlLocal(d.magasin?.libelle || code)} — Passage n°${escapeHtmlLocal(d.passage || '?')}${showLocalBadge ? '<span class="hist-badge">📱 appareil uniquement</span>' : ''}</div>
+        <div class="history-item-meta">${formatDate(d.date)} · ${escapeHtmlLocal(d.ar || '')}${d.duree ? ' · ' + formatDuree(d.duree) : ''}</div>
+      </div>
+      <div class="history-item-actions">
+        <button class="icon-btn" title="Télécharger PDF" data-action="download">📥</button>
+        <button class="icon-btn" title="Renvoyer par mail" data-action="resend">📧</button>
+        ${canDelete ? '<button class="icon-btn" title="Supprimer de cet appareil" data-action="delete">🗑️</button>' : ''}
+      </div>`;
+    item.querySelectorAll('[data-action]').forEach(btn => {
+      btn.addEventListener('click', e => {
+        e.stopPropagation();
+        if (btn.dataset.action === 'download') downloadHistoryPDF(e, entry);
+        else if (btn.dataset.action === 'resend') resendBilan(e, entry);
+        else if (btn.dataset.action === 'delete') deleteHistoryItem(e, code, entry.localIdx);
+      });
+    });
+    list.appendChild(item);
+  });
+}
+
+// Données complètes d'un bilan de l'historique : la version en base contient
+// les photos (pas la copie locale), on la privilégie quand elle existe.
+async function getHistoryBilanData(entry) {
+  if (entry.remoteId) {
+    loadArSession();
+    if (arSession) {
+      try {
+        const relay = params.relay || 'https://zimbra-relay.oli-baroukh.workers.dev';
+        const resp = await fetch(relay + '/bilan-get?id=' + encodeURIComponent(entry.remoteId), {
+          headers: { 'X-Store-Token': STORE_SECRET, 'X-AR-Session': arSession.token || '' }
+        });
+        const data = await resp.json().catch(() => ({}));
+        if (resp.ok && data.data) return data.data;
+      } catch(e) { console.warn('bilan-get échoué, repli sur la liste :', e); }
+    }
+  }
+  if (entry.localIdx !== null) {
+    try {
+      const h = JSON.parse(localStorage.getItem(`bilan_history_${entry.code}`) || '[]');
+      if (h[entry.localIdx]) return h[entry.localIdx];
+    } catch(e) {}
+  }
+  return entry.d || null;
+}
+
+// generatePDF() lit les variables globales photos / photoCaptions (formulaire en
+// cours) : on les remplace le temps de la génération par celles du bilan
+// historique, pour ne jamais glisser les photos de la saisie en cours dans un
+// ancien PDF, puis on les restaure.
+async function withBilanPhotos(d, fn) {
+  const savedPhotos = photos, savedCaptions = photoCaptions;
+  photos = Array.isArray(d.photos) ? d.photos.slice(0, 3) : [null, null, null];
+  while (photos.length < 3) photos.push(null);
+  photoCaptions = Array.isArray(d.photoCaptions) ? d.photoCaptions.slice(0, 3) : ['', '', ''];
+  while (photoCaptions.length < 3) photoCaptions.push('');
+  try { return await fn(); }
+  finally { photos = savedPhotos; photoCaptions = savedCaptions; }
+}
+
+async function importLocalHistoryToBase(localOnly) {
+  loadArSession();
+  if (!arSession) { showToast('Connecte-toi d\'abord (onglet Analyse)'); return; }
+  if (!confirm('Remonter ' + localOnly.length + ' bilan(s) de cet appareil vers la base centrale ?\n\nLes bilans déjà présents en base sont ignorés automatiquement (pas de doublon). Les photos ne sont pas conservées sur l\'appareil, elles ne seront donc pas remontées.')) return;
+  const relay = params.relay || 'https://zimbra-relay.oli-baroukh.workers.dev';
+  const payload = localOnly.map(e => ({ ...e.d, magasin: e.d?.magasin?.code ? e.d.magasin : { ...(e.d?.magasin || {}), code: e.code }, photos: null }));
+  let inserted = 0, skipped = 0, refused = 0;
+  try {
+    for (let i = 0; i < payload.length; i += 20) {
+      showToast('Remontée… ' + Math.min(i + 20, payload.length) + '/' + payload.length);
+      const resp = await fetch(relay + '/import-bilans-local', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Store-Token': STORE_SECRET, 'X-AR-Session': arSession.token || '' },
+        body: JSON.stringify({ bilans: payload.slice(i, i + 20) })
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (resp.status === 401) { arSession = null; localStorage.removeItem('bilan_ar_session'); throw new Error('Session expirée, reconnecte-toi.'); }
+      if (!resp.ok || data.error) throw new Error(data.error || ('Erreur ' + resp.status));
+      inserted += data.inserted || 0; skipped += data.skipped || 0; refused += data.refused || 0;
+    }
+    showToastLong('✓ ' + inserted + ' bilan(s) remonté(s)' +
+      (skipped ? ' · ' + skipped + ' déjà en base' : '') +
+      (refused ? ' · ' + refused + ' hors de ton périmètre ou incomplet(s)' : ''));
+  } catch(e) {
+    showToastLong('⚠️ Remontée interrompue : ' + e.message + ' (' + inserted + ' bilan(s) déjà remonté(s))');
+  }
+  histRemoteCache.key = null;
+  renderHistory(true);
 }
 
 function exportHistory() {
@@ -4539,17 +4742,18 @@ function deleteHistoryItem(e, code, idx) {
   renderHistory();
 }
 
-async function downloadHistoryPDF(e, code, idx) {
+async function downloadHistoryPDF(e, entry) {
   e.stopPropagation();
   try {
-    const history = JSON.parse(localStorage.getItem(`bilan_history_${code}`) || '[]');
-    const d = history[idx];
+    showToast('Récupération du bilan...');
+    const d = await getHistoryBilanData(entry);
     if (!d) { showToast('Bilan non disponible'); return; }
+    const code = entry.code;
     showToast('Génération du PDF...');
     const hv = d.humeur !== undefined ? d.humeur : null;
-    const humeurSliderImg = (hv !== null && !isNaN(hv)) ? await generateHumeurSliderImage(hv) : null;
+    const humeurSliderImg = (hv !== null && hv !== '' && !isNaN(hv)) ? await generateHumeurSliderImage(hv) : null;
     const dataForPDF = {...d, actions: (d.actions||[]).map(a => {const {_fromPrevious, _repriseCount, ...rest} = a; return rest;})};
-    const pdfBytes = await generatePDF(dataForPDF, humeurSliderImg);
+    const pdfBytes = await withBilanPhotos(d, () => generatePDF(dataForPDF, humeurSliderImg));
     const blob = new Blob([pdfBytes], {type:'application/pdf'});
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
@@ -4559,11 +4763,12 @@ async function downloadHistoryPDF(e, code, idx) {
   } catch(ex) { showToast('Erreur PDF : ' + ex.message); }
 }
 
-async function resendBilan(e, code, idx) {
+async function resendBilan(e, entry) {
   e.stopPropagation();
   try {
-    const history = JSON.parse(localStorage.getItem('bilan_history_' + code) || '[]');
-    const d = history[idx];
+    const code = entry.code;
+    showToast('Récupération du bilan...');
+    const d = await getHistoryBilanData(entry);
     if (!d) { showToast('Bilan non disponible'); return; }
     const pwd = prompt('Mot de passe Zimbra pour renvoyer le bilan :');
     if (!pwd) return;
@@ -4574,9 +4779,9 @@ async function resendBilan(e, code, idx) {
     // Régénérer le PDF depuis les données
     showToast('Génération du PDF...');
     const hv = d.humeur !== undefined ? d.humeur : null;
-    const humeurSliderImg = (hv !== null && !isNaN(hv)) ? await generateHumeurSliderImage(hv) : null;
+    const humeurSliderImg = (hv !== null && hv !== '' && !isNaN(hv)) ? await generateHumeurSliderImage(hv) : null;
     const dataForPDF = {...d, actions: (d.actions||[]).map(a => {const {_fromPrevious, _repriseCount, ...rest} = a; return rest;})};
-    const pdfBytes = await generatePDF(dataForPDF, humeurSliderImg);
+    const pdfBytes = await withBilanPhotos(d, () => generatePDF(dataForPDF, humeurSliderImg));
 
     function soapEnv(body, authToken) {
       const context = { _jsns: 'urn:zimbra', format: { _content: 'js', type: 'js' } };
