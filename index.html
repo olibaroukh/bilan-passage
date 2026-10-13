@@ -932,7 +932,7 @@ function loadLogo() {
 }
 
 // ── VERSION APP ── (incrémenter à chaque mise à jour notable, pour déclencher l'invite de rechargement)
-const APP_VERSION = '2026.10.13-1'; // à bumper avec SW_VERSION (sw.js) ET version.json à chaque déploiement
+const APP_VERSION = '2026.10.13-3'; // à bumper avec SW_VERSION (sw.js) ET version.json à chaque déploiement
 
 // Token pour la route /store-bilan du Worker (persistance D1, doit correspondre à STORE_SECRET dans worker.js)
 const STORE_SECRET = 'OC-bilan-store-2026';
@@ -1954,6 +1954,8 @@ const KPI_PREFILL_MAP = {
   'ndv': 'ndv', 'mdc/intemporelle': 'mdc', 'lukkas': 'lukkas', 'pm paire 1': 'pmPaire1',
   'audio depistage': 'audioDepistage', 'vente add': 'venteAdd', 'nb de prothese': 'nbProtheses',
   "nb d'avis google": 'googleReviews', 'note google': 'googleRating', 'seuil de perf': 'seuilPerf',
+  'seuil pc': 'seuilPc',
+  'pm prothese': 'pmProthese', 'pm vente audio': 'pmVenteAudio', 'sap': 'sap',
 };
 function kpiNormName(n) {
   return String(n || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
