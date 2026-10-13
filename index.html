@@ -41,6 +41,29 @@ select,input,textarea,button{font-family:inherit}
 .select-box{background:rgba(26,26,26,0.8);border:1px solid var(--border);border-radius:10px;padding:12px 14px;font-size:14px;color:var(--text);width:100%;appearance:none;-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23888' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 14px center}
 .magasin-card{background:rgba(20,16,16,0.85);border:1px solid var(--border);border-radius:12px;padding:14px;display:none;flex-direction:column;gap:10px}
 .magasin-card.visible{display:flex}
+/* Récap magasin + choix des indicateurs sur l'écran de sélection (13/10) */
+.recap-section-title{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-top:4px}
+.recap-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.recap-tile{background:var(--bg3);border-radius:8px;padding:8px 10px;min-width:0}
+.recap-tile .rt-l{font-size:10px;color:var(--muted)}
+.recap-tile .rt-v{font-size:14px;font-weight:700;color:var(--text);margin-top:1px}
+.recap-tile .rt-s{font-size:10px;color:var(--muted);margin-top:2px;overflow-wrap:anywhere;line-height:1.35}
+.recap-list{display:flex;flex-direction:column}
+.recap-row{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:12px;padding:6px 0;border-bottom:1px solid var(--border)}
+.recap-row:last-child{border-bottom:none}
+.recap-row .rr-l{color:var(--text);min-width:0}
+.recap-row .rr-d{font-size:10px;color:var(--muted);display:block;margin-top:1px;overflow-wrap:anywhere}
+.recap-row .rr-v{font-weight:700;white-space:nowrap;text-align:right}
+.recap-action{background:var(--bg3);border-radius:8px;padding:7px 10px;font-size:12px;color:var(--text)}
+.kpisel-list{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.kpisel-item{display:flex;align-items:center;gap:6px;background:var(--bg4);border:1px solid var(--border);border-radius:8px;padding:8px;font-size:12px;color:var(--text);cursor:pointer;min-width:0;user-select:none}
+.kpisel-item.on{border-color:var(--red);background:var(--red2)}
+.kpisel-item .ks-n{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.kpisel-item .ks-v{margin-left:auto;font-weight:700;font-size:11px;white-space:nowrap}
+.kpisel-item .ks-v.none{color:var(--muted);font-weight:400}
+.kpisel-item input{accent-color:var(--red);margin:0;flex-shrink:0}
+.kpi-chip.empty{background:transparent;border-style:dashed;border-color:var(--muted);color:var(--muted);cursor:pointer}
+.kpi-chip .kpi-chip-val{cursor:pointer}
 .magasin-card-title{font-size:13px;font-weight:600;color:var(--text)}
 .magasin-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .magasin-field{display:flex;flex-direction:column;gap:3px}
@@ -297,6 +320,29 @@ input[type=date]{color-scheme:dark}
     <span class="select-label">Passage n°</span>
     <input type="number" inputmode="numeric" class="select-box" id="sel-passage" placeholder="Ex: 6" min="1" max="24">
     <span style="font-size:10px;color:var(--muted);margin-top:2px">Numéro de passage dans l'année (sera automatique l'an prochain)</span>
+  </div>
+  <div class="magasin-card" id="recap-card">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+      <span class="magasin-card-title">Récap magasin</span>
+      <span id="recap-maj" style="font-size:10px;color:var(--muted);text-align:right"></span>
+    </div>
+    <div id="recap-login" style="display:none;flex-direction:column;gap:6px">
+      <div style="font-size:12px;color:var(--muted)">Connecte-toi avec ton mot de passe Zimbra pour voir le récap du magasin (score santé, PEDLV, Kaizen, équipe, suivis…). Le bilan reste utilisable sans connexion.</div>
+      <div style="display:flex;gap:6px">
+        <input type="password" id="recap-login-pass" placeholder="Mot de passe Zimbra" style="flex:1;min-width:0;background:var(--bg4);border:1px solid var(--border);border-radius:8px;padding:10px;font-size:13px;color:var(--text)" onkeydown="if(event.key==='Enter')recapLogin()">
+        <button class="btn-add" onclick="recapLogin()">Se connecter</button>
+      </div>
+      <div id="recap-login-error" style="display:none;color:var(--red);font-size:12px"></div>
+    </div>
+    <div id="recap-body" style="display:flex;flex-direction:column;gap:8px"></div>
+  </div>
+  <div class="magasin-card" id="kpisel-card">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+      <span class="magasin-card-title">Indicateurs à suivre pendant le passage</span>
+      <span id="kpisel-count" style="font-size:11px;font-weight:700;color:var(--muted)">0/6</span>
+    </div>
+    <div style="font-size:10px;color:var(--muted)">Coche jusqu'à 6 indicateurs. Ceux qui ont une valeur en base seront pré-remplis dans la saisie (modifiables) ; les autres seront à compléter.</div>
+    <div id="kpisel-list" class="kpisel-list"></div>
   </div>
   <button class="btn-primary" id="btn-start" onclick="startBilan()" style="display:none">Commencer le bilan →</button>
   <div id="home-checklist-link" onclick="goScreen('params')">📋 Ma checklist de passage →</div>
@@ -886,7 +932,7 @@ function loadLogo() {
 }
 
 // ── VERSION APP ── (incrémenter à chaque mise à jour notable, pour déclencher l'invite de rechargement)
-const APP_VERSION = '2026.10.11-1'; // à bumper avec SW_VERSION (sw.js) ET version.json à chaque déploiement
+const APP_VERSION = '2026.10.13-1'; // à bumper avec SW_VERSION (sw.js) ET version.json à chaque déploiement
 
 // Token pour la route /store-bilan du Worker (persistance D1, doit correspondre à STORE_SECRET dans worker.js)
 const STORE_SECRET = 'OC-bilan-store-2026';
@@ -1809,13 +1855,14 @@ function onARChange() {
   document.getElementById('magasin-card').classList.remove('visible');
   document.getElementById('sec-passage').style.display = 'none';
   document.getElementById('btn-start').style.display = 'none';
+  hideStoreRecap();
 }
 
 function onMagChange() {
   const code = document.getElementById('sel-mag').value;
   const hintEl = document.getElementById('card-eff-rh-hint');
   if (hintEl) hintEl.textContent = '';
-  if (!code) { document.getElementById('magasin-card').classList.remove('visible'); return; }
+  if (!code) { document.getElementById('magasin-card').classList.remove('visible'); hideStoreRecap(); return; }
   currentMag = magasins.find(m => m.code === code);
   if (!currentMag) return;
   document.getElementById('card-title').textContent = currentMag.libelle;
@@ -1832,6 +1879,7 @@ function onMagChange() {
   document.getElementById('btn-start').style.display = 'block';
   document.getElementById('f-renta-obj').value = (params.rentaTarget || '28') + '%';
   applyRhEffectifPrefill(code);
+  loadStoreRecap(code);
 }
 
 // Effectif optique/audio : magasins.csv reste la source de repli (et la seule
@@ -1874,6 +1922,316 @@ async function applyRhEffectifPrefill(code) {
     // Pré-remplissage optionnel : en cas d'échec réseau, on garde silencieusement
     // les valeurs déjà remplies depuis magasins.csv, sans bloquer ni alerter l'AR.
   }
+}
+
+// ── RÉCAP MAGASIN + INDICATEURS À SUIVRE (13/10) ──
+// Sur l'écran de sélection, dès qu'un magasin est choisi : récap issu des
+// autres applis (/store-health-detail, déjà utilisé par le dashboard), date de
+// la dernière saisie dans chaque appli et valeurs des indicateurs connues en
+// base (/bilan-prefill). Les indicateurs cochés ici arrivent pré-remplis dans
+// le bloc « Indicateurs clés » de la saisie. Nécessite la session AR (Zimbra) ;
+// sans elle, le bilan reste utilisable normalement.
+let bilanPrefill = null;   // { code, data }
+let recapDetail = null;    // réponse /store-health-detail du magasin affiché
+let recapLoadSeq = 0;
+
+// Seuil (en jours) au-delà duquel la dernière saisie ressort en orange.
+const RECAP_APPS = [
+  { key: 'bilan',          label: 'Bilan de passage',        seuil: 35 },
+  { key: 'pedlv',          label: 'Pour être dans le vert',  seuil: 10 },
+  { key: 'kaizen',         label: 'Kaizen',                  seuil: 35 },
+  { key: 'evaluation',     label: 'Évaluation équipe',       seuil: 45 },
+  { key: 'observations',   label: 'Observations terrain',    seuil: 30 },
+  { key: 'suiviManagers',  label: 'Suivi managers',          seuil: 30 },
+  { key: 'lancement',      label: 'Lancement de journée',    seuil: 3 },
+  { key: 'accompagnement', label: 'Accompagnement manager',  seuil: 90 },
+];
+
+// Nom d'indicateur (kpis.csv) → valeur renvoyée par /bilan-prefill.
+// Les deux indicateurs Google viennent du référentiel magasins déjà chargé.
+const KPI_PREFILL_MAP = {
+  'sop': 'sop', 'tc': 'tc', 'pc%': 'pcPct', 'pc€': 'pcEur', 'panier moyen': 'panierMoyen',
+  'ndv': 'ndv', 'mdc/intemporelle': 'mdc', 'lukkas': 'lukkas', 'pm paire 1': 'pmPaire1',
+  'audio depistage': 'audioDepistage', 'vente add': 'venteAdd', 'nb de prothese': 'nbProtheses',
+  "nb d'avis google": 'googleReviews', 'note google': 'googleRating', 'seuil de perf': 'seuilPerf',
+};
+function kpiNormName(n) {
+  return String(n || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
+    .replace(/\s+/g, ' ').replace(/\s*([%€])/g, '$1').trim();
+}
+function kpiPrefillValue(name) {
+  const key = KPI_PREFILL_MAP[kpiNormName(name)];
+  if (!key || !currentMag) return null;
+  let v = null;
+  if (key === 'googleReviews') v = currentMag.google_rating ? currentMag.google_reviews : null;
+  else if (key === 'googleRating') v = currentMag.google_rating;
+  else if (bilanPrefill && bilanPrefill.code === currentMag.code && bilanPrefill.data && bilanPrefill.data.kpis) v = bilanPrefill.data.kpis[key];
+  if (v === null || v === undefined || v === '' || !isFinite(Number(v))) return null;
+  return String(Number(v)).replace('.', ',');
+}
+
+function kpiSelectionLoad() {
+  try { const s = JSON.parse(localStorage.getItem('bdp_kpi_selection') || '[]'); return Array.isArray(s) ? s : []; } catch (e) { return []; }
+}
+function kpiSelectionSave(list) {
+  try { localStorage.setItem('bdp_kpi_selection', JSON.stringify(list)); } catch (e) {}
+}
+let kpiSelection = kpiSelectionLoad();
+
+function renderKpiSelection() {
+  const box = document.getElementById('kpisel-list');
+  if (!box) return;
+  const noms = KPI_DEFAULTS.map(k => k.name);
+  // Indicateur retiré du référentiel depuis : on ne le garde pas coché.
+  kpiSelection = kpiSelection.filter(n => noms.includes(n));
+  box.innerHTML = KPI_DEFAULTS.map((k, i) => {
+    const on = kpiSelection.includes(k.name);
+    const v = kpiPrefillValue(k.name);
+    const vHtml = v !== null
+      ? `<span class="ks-v">${escapeHtmlLocal(v)}${escapeHtmlLocal(k.unit || '')}</span>`
+      : `<span class="ks-v none">—</span>`;
+    return `<label class="kpisel-item${on ? ' on' : ''}"><input type="checkbox" ${on ? 'checked' : ''} onchange="toggleKpiSelection(${i}, this)"><span class="ks-n">${escapeHtmlLocal(k.name)}</span>${vHtml}</label>`;
+  }).join('') || '<div style="font-size:12px;color:var(--muted)">Référentiel d\'indicateurs indisponible.</div>';
+  const cnt = document.getElementById('kpisel-count');
+  if (cnt) { cnt.textContent = kpiSelection.length + '/6'; cnt.style.color = kpiSelection.length >= 6 ? 'var(--red)' : 'var(--muted)'; }
+}
+function toggleKpiSelection(i, el) {
+  const k = KPI_DEFAULTS[i];
+  if (!k) return;
+  if (el.checked) {
+    if (kpiSelection.length >= 6) { el.checked = false; showToast('Maximum 6 indicateurs (2 lignes de 3 sur le PDF)'); return; }
+    if (!kpiSelection.includes(k.name)) kpiSelection.push(k.name);
+  } else {
+    kpiSelection = kpiSelection.filter(n => n !== k.name);
+  }
+  kpiSelectionSave(kpiSelection);
+  renderKpiSelection();
+}
+
+// Appelé par startBilan après le brouillon : uniquement si la saisie n'a encore
+// aucun indicateur (on ne touche jamais à un brouillon déjà commencé).
+function applyKpiSelectionToSaisie() {
+  if (kpisAdded.length === 0 && kpiSelection.length) {
+    kpiSelection.slice(0, 6).forEach(name => {
+      const def = KPI_DEFAULTS.find(k => k.name === name);
+      if (!def) return;
+      kpisAdded.push({ name, val: kpiPrefillValue(name) || '', def });
+    });
+    renderKpiChips();
+  }
+  applyPrefillToSaisie();
+}
+
+// Complète ce qui est encore vide dans la saisie en cours (indicateurs choisis
+// sans valeur, positionnement CA mensuel) — utile quand les données arrivent
+// après le clic sur « Commencer le bilan ». Ne remplace jamais une valeur saisie.
+function applyPrefillToSaisie() {
+  if (!currentMag || !draftKey || draftKey !== `bilan_draft_${currentMag.code}`) return;
+  let change = false;
+  kpisAdded.forEach(k => {
+    if (String(k.val == null ? '' : k.val).trim() !== '') return;
+    const v = kpiPrefillValue(k.name);
+    if (v !== null) { k.val = v; change = true; }
+  });
+  if (change) renderKpiChips();
+  const pos = bilanPrefill && bilanPrefill.code === currentMag.code && bilanPrefill.data && bilanPrefill.data.kpis
+    ? bilanPrefill.data.kpis.positionnement : null;
+  const posEl = document.getElementById('f-ca-mensuel');
+  if (posEl && posEl.value.trim() === '' && pos !== null && pos !== undefined && isFinite(Number(pos))) {
+    posEl.value = String(Number(pos)).replace('.', ',');
+  }
+}
+
+function hideStoreRecap() {
+  recapLoadSeq++;
+  ['recap-card', 'kpisel-card'].forEach(id => { const el = document.getElementById(id); if (el) el.classList.remove('visible'); });
+}
+
+function recapJours(iso) {
+  if (!iso) return null;
+  const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Paris' });
+  const t1 = Date.UTC(+today.slice(0, 4), +today.slice(5, 7) - 1, +today.slice(8, 10));
+  const t2 = Date.UTC(+iso.slice(0, 4), +iso.slice(5, 7) - 1, +iso.slice(8, 10));
+  return Math.round((t1 - t2) / 86400000);
+}
+function recapDateFr(iso) { return iso ? iso.slice(0, 10).split('-').reverse().join('/') : ''; }
+
+async function loadStoreRecap(code) {
+  const seq = ++recapLoadSeq;
+  bilanPrefill = null; recapDetail = null;
+  document.getElementById('recap-card').classList.add('visible');
+  document.getElementById('kpisel-card').classList.add('visible');
+  renderKpiSelection();
+  const loginEl = document.getElementById('recap-login');
+  const body = document.getElementById('recap-body');
+  document.getElementById('recap-maj').textContent = '';
+  if (!loadArSession()) {
+    loginEl.style.display = 'flex';
+    body.innerHTML = '';
+    return;
+  }
+  loginEl.style.display = 'none';
+  body.innerHTML = '<div style="font-size:12px;color:var(--muted)">Chargement du récap…</div>';
+  const relay = params.relay || 'https://zimbra-relay.oli-baroukh.workers.dev';
+  const headers = { 'X-Store-Token': STORE_SECRET, 'X-AR-Session': arSession.token || '' };
+  const q = '?magasin_code=' + encodeURIComponent(code);
+  const lire = async (path) => {
+    try {
+      const r = await fetch(relay + path + q, { headers });
+      let d = null; try { d = await r.json(); } catch (e) {}
+      return { status: r.status, ok: r.ok && d && d.ok, data: d };
+    } catch (e) { return { status: 0, ok: false, data: null }; }
+  };
+  const [pre, det] = await Promise.all([lire('/bilan-prefill'), lire('/store-health-detail')]);
+  if (seq !== recapLoadSeq || !currentMag || currentMag.code !== code) return; // magasin changé entre-temps
+  if (pre.status === 401 || det.status === 401) {
+    arSession = null; localStorage.removeItem('bilan_ar_session');
+    loginEl.style.display = 'flex';
+    body.innerHTML = '<div style="font-size:12px;color:var(--orange)">Session expirée — reconnecte-toi pour voir le récap.</div>';
+    return;
+  }
+  if (pre.status === 403 || det.status === 403) {
+    body.innerHTML = '<div style="font-size:12px;color:var(--muted)">Ce magasin n\'est pas dans ton périmètre : pas de récap disponible.</div>';
+    return;
+  }
+  if (pre.ok) bilanPrefill = { code, data: pre.data };
+  if (det.ok) recapDetail = det.data;
+  if (!pre.ok && !det.ok) {
+    body.innerHTML = '<div style="font-size:12px;color:var(--muted)">Récap indisponible pour le moment (réseau ou serveur). Le bilan reste utilisable.</div>';
+    return;
+  }
+  renderStoreRecap();
+  renderKpiSelection();
+  applyPrefillToSaisie();
+}
+
+async function recapLogin() {
+  const errEl = document.getElementById('recap-login-error');
+  errEl.style.display = 'none';
+  const zimbraUser = (params.zimbraUser || '').trim();
+  const passEl = document.getElementById('recap-login-pass');
+  const zimbraPass = passEl.value;
+  if (!zimbraUser) { errEl.textContent = 'Configure d\'abord ton identifiant Zimbra dans Paramètres.'; errEl.style.display = 'block'; return; }
+  if (!zimbraPass) { errEl.textContent = 'Mot de passe requis'; errEl.style.display = 'block'; return; }
+  const relay = params.relay || 'https://zimbra-relay.oli-baroukh.workers.dev';
+  try {
+    const resp = await fetch(relay + '/ar-login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Store-Token': STORE_SECRET },
+      body: JSON.stringify({ zimbraUser, zimbraPass })
+    });
+    const rawText = await resp.text();
+    let data; try { data = JSON.parse(rawText); } catch (e) { data = { error: rawText }; }
+    if (!resp.ok || data.error) throw new Error(data.error || ('Erreur ' + resp.status));
+    arSession = { token: data.sessionToken, ar: data.ar, exp: Date.now() + data.expiresInMs };
+    localStorage.setItem('bilan_ar_session', JSON.stringify(arSession));
+    passEl.value = '';
+    if (currentMag) loadStoreRecap(currentMag.code);
+  } catch (e) {
+    errEl.textContent = e.message; errEl.style.display = 'block';
+  }
+}
+
+function renderStoreRecap() {
+  const body = document.getElementById('recap-body');
+  if (!body) return;
+  const d = recapDetail;
+  const p = bilanPrefill && bilanPrefill.data;
+  const parts = [];
+  const tile = (label, valeur, sous, couleur) =>
+    `<div class="recap-tile"><div class="rt-l">${escapeHtmlLocal(label)}</div><div class="rt-v"${couleur ? ` style="color:${couleur}"` : ''}>${escapeHtmlLocal(valeur)}</div>${sous ? `<div class="rt-s">${escapeHtmlLocal(sous)}</div>` : ''}</div>`;
+
+  if (p && p.stats && p.stats.date) {
+    document.getElementById('recap-maj').textContent = 'Stats PEDLV du ' + recapDateFr(p.stats.date);
+  }
+
+  if (d) {
+    const tiles = [];
+    try {
+      const score = computeHealthScore(d);
+      const c = score === null ? null : (score >= 75 ? 'var(--green)' : (score >= 50 ? 'var(--orange)' : 'var(--red)'));
+      tiles.push(tile('Score santé', score === null ? '—' : score + '/100', d.lastVisitDate ? 'Dernier passage le ' + recapDateFr(d.lastVisitDate) : 'Aucun bilan enregistré', c));
+    } catch (e) {}
+    {
+      const m = d.positionnementMensuel, a = d.positionnementAnnuel;
+      const c = (m === null || m === undefined) ? null : (m >= 100 ? 'var(--green)' : (m >= 90 ? 'var(--orange)' : 'var(--red)'));
+      tiles.push(tile('Positionnement mensuel', (m === null || m === undefined) ? '—' : String(m).replace('.', ',') + ' %',
+        (a !== null && a !== undefined) ? 'Annuel : ' + String(a).replace('.', ',') + ' % (dernier bilan)' : '', c));
+    }
+    if (d.pedlv && d.pedlv.total) {
+      const rouges = (d.pedlvIndicateurs || []).filter(x => x.statut === 'rouge')
+        .map(x => (PEDLV_LABELS[x.cle] || x.cle) + (x.semainesRouge > 1 ? ` (${x.semainesRouge} sem.)` : ''));
+      tiles.push(tile('PEDLV', `${d.pedlv.rouge}/${d.pedlv.total} dans le rouge`, rouges.join(', '), d.pedlv.rouge > 0 ? 'var(--red)' : 'var(--green)'));
+    } else {
+      tiles.push(tile('PEDLV', '—', 'Pas de données cette semaine', null));
+    }
+    {
+      const enCours = (d.kaizenScoreMois !== null && d.kaizenScoreMois !== undefined);
+      const val = enCours ? `${d.kaizenScoreMois}/50` : '—';
+      const sous = [enCours ? (d.kaizenClosedMois ? 'mois clôturé' : 'mois en cours') : 'mois pas commencé',
+        d.kaizenDernierMoisCloture ? `dernier clôturé : ${d.kaizenDernierScoreCloture}/${d.kaizenDernierScoreMax} (${kzMoisLabelCourt(d.kaizenDernierMoisCloture)})` : ''].filter(Boolean).join(' · ');
+      const nbBloques = (d.kaizenPointsNonResolus || []).length;
+      tiles.push(tile('Kaizen', val, sous + (nbBloques ? ` · ${nbBloques} point(s) non résolu(s)` : ''), enCours ? (d.kaizenScoreMois >= 40 ? 'var(--green)' : (d.kaizenScoreMois >= 36 ? 'var(--orange)' : 'var(--red)')) : null));
+    }
+    {
+      const obj = d.objectifNiveauEquipe || 8;
+      const n = d.niveauEquipe;
+      const taches = d.equipeTaches || [];
+      const sansResp = taches.filter(t => !t.responsable).length;
+      const c = (n === null || n === undefined) ? null : (n >= obj ? 'var(--green)' : (n >= obj - 1 ? 'var(--orange)' : 'var(--red)'));
+      tiles.push(tile('Niveau équipe', (n === null || n === undefined) ? '—' : `${String(n).replace('.', ',')}/10`,
+        taches.length ? `${taches.length} tâche(s) suivie(s)${sansResp ? ` · ${sansResp} sans responsable` : ''}` : 'Aucune évaluation', c));
+    }
+    {
+      const eff = d.effectif || {};
+      const abs = (d.absenteisme && d.absenteisme.score !== null && d.absenteisme.score !== undefined)
+        ? 'Absentéisme ' + String(Math.round((100 - d.absenteisme.score) * 10) / 10).replace('.', ',') + ' %' : '';
+      const c = eff.delta > 0 ? 'var(--orange)' : (eff.delta < 0 ? 'var(--red)' : null);
+      tiles.push(tile('Effectif', eff.label || '—', [abs, (d.effectifRH && d.effectifRH.soutenu) ? 'sous-effectif soutenu (3 mois)' : ''].filter(Boolean).join(' · '), c));
+    }
+    {
+      const sm = d.suivisManager || { ouverts: [] };
+      const today = sm.today || new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Paris' });
+      const retard = (sm.ouverts || []).filter(s => s.echeance && s.echeance < today).length;
+      tiles.push(tile('Suivi managers', `${(sm.ouverts || []).length} suivi(s) ouvert(s)`, retard ? `dont ${retard} en retard` : 'aucun en retard', retard ? 'var(--red)' : null));
+    }
+    {
+      const acc = d.accompagnement;
+      if (acc) {
+        const aFaire = (acc.actions || []).filter(a => !/fait|termin|sold/i.test(a.statut || '')).length;
+        tiles.push(tile('Accompagnement manager', recapDateFr(acc.dateVisite), `${aFaire} action(s) du plan encore ouverte(s)`, null));
+      } else {
+        tiles.push(tile('Accompagnement manager', '—', 'Aucune visite enregistrée', null));
+      }
+    }
+    if (d.googleRating && d.googleRating.rating) {
+      tiles.push(tile('Avis Google', '★ ' + Number(d.googleRating.rating).toFixed(1).replace('.', ','), d.googleRating.reviewsCount ? `${d.googleRating.reviewsCount} avis` : '', null));
+    }
+    parts.push(`<div class="recap-grid">${tiles.join('')}</div>`);
+
+    const ans = d.actionsNonSoldees;
+    if (ans && ans.items && ans.items.length) {
+      const items = ans.items.slice(0, 4).map(a => `<div class="recap-action">${escapeHtmlLocal(a.text)}${a.repriseCount > 0 ? ` <span style="font-size:10px;background:var(--red2);color:var(--red);padding:1px 6px;border-radius:20px">reprise ${a.repriseCount}x</span>` : ''}</div>`).join('');
+      const plus = ans.items.length > 4 ? `<div style="font-size:11px;color:var(--muted)">+ ${ans.items.length - 4} autre(s) — reprises automatiquement dans la saisie</div>` : '';
+      parts.push(`<div class="recap-section-title">Actions non soldées (${ans.count})</div><div style="display:flex;flex-direction:column;gap:4px">${items}${plus}</div>`);
+    }
+  }
+
+  if (p && p.derniereActivite) {
+    const rows = RECAP_APPS.map(app => {
+      const a = p.derniereActivite[app.key];
+      if (!a || !a.date) {
+        return `<div class="recap-row"><span class="rr-l">${escapeHtmlLocal(app.label)}</span><span class="rr-v" style="color:var(--muted);font-weight:400">aucune saisie</span></div>`;
+      }
+      const j = recapJours(a.date);
+      const c = (j !== null && j > app.seuil) ? 'var(--orange)' : 'var(--text)';
+      const quand = j === null ? '' : (j <= 0 ? "aujourd'hui" : (j === 1 ? 'hier' : `il y a ${j} j`));
+      return `<div class="recap-row"><span class="rr-l">${escapeHtmlLocal(app.label)}${a.detail ? `<span class="rr-d">${escapeHtmlLocal(a.detail)}</span>` : ''}</span><span class="rr-v" style="color:${c}">${recapDateFr(a.date)}<span class="rr-d">${quand}</span></span></div>`;
+    }).join('');
+    parts.push(`<div class="recap-section-title">Dernière saisie par appli</div><div class="recap-list">${rows}</div>`);
+  }
+
+  body.innerHTML = parts.join('') || '<div style="font-size:12px;color:var(--muted)">Aucune donnée disponible pour ce magasin.</div>';
 }
 
 function resetSaisie() {
@@ -1939,6 +2297,7 @@ function startBilan() {
   renderActions(); renderKpiChips();
   draftKey = `bilan_draft_${currentMag.code}`;
   loadDraft();
+  applyKpiSelectionToSaisie();
   checklistLoadEtat();
   goScreen('saisie');
   document.getElementById('bottom-bar').style.display = 'flex';
@@ -2058,16 +2417,43 @@ function renderKpiChips() {
   const c = document.getElementById('kpi-chips');
   c.innerHTML = '';
   kpisAdded.forEach((k, i) => {
-    const cls = kpiClass(k.val, k.def);
+    const vide = String(k.val == null ? '' : k.val).trim() === '';
+    const cls = vide ? 'empty' : kpiClass(String(k.val), k.def);
     const unit = k.def?.unit || '';
     const chip = document.createElement('div');
     chip.className = `kpi-chip ${cls}`;
-    chip.innerHTML = `${k.name}: <strong>${k.val}${unit}</strong> <span class="kpi-chip-del" onclick="removeKpi(${i})">✕</span>`;
+    // 13/10 : clic sur la valeur = la modifier (indicateurs pré-remplis depuis
+    // l'écran de sélection) ; valeur vide = indicateur choisi, encore à saisir.
+    const valHtml = vide ? 'à saisir' : `${escapeHtmlLocal(k.val)}${escapeHtmlLocal(unit)}`;
+    chip.innerHTML = `${escapeHtmlLocal(k.name)}: <strong class="kpi-chip-val" onclick="editKpi(${i})" title="Modifier la valeur">${valHtml}</strong> <span class="kpi-chip-del" onclick="removeKpi(${i})">✕</span>`;
     c.appendChild(chip);
   });
 }
 
 function removeKpi(i) { kpisAdded.splice(i,1); renderKpiChips(); }
+
+// Remet l'indicateur dans la ligne d'ajout pour corriger / compléter sa valeur.
+function editKpi(i) {
+  const k = kpisAdded[i];
+  if (!k) return;
+  const sel = document.getElementById('kpi-select');
+  if (sel && ![...sel.options].some(o => o.value === k.name)) initKpiSelect();
+  if (sel && [...sel.options].some(o => o.value === k.name)) {
+    sel.value = k.name;
+    document.getElementById('kpi-val').value = k.val || '';
+    kpisAdded.splice(i, 1);
+    renderKpiChips();
+    const v = document.getElementById('kpi-val');
+    v.focus(); v.select();
+  } else {
+    // Indicateur créé à la volée (absent du référentiel) : ligne « Nouvel indicateur ».
+    document.getElementById('kpi-custom-name').value = k.name;
+    document.getElementById('kpi-custom-val').value = k.val || '';
+    kpisAdded.splice(i, 1);
+    renderKpiChips();
+    document.getElementById('kpi-custom-val').focus();
+  }
+}
 
 // ── RENTA ──
 function updateRentaBadge() {
@@ -2556,6 +2942,13 @@ function finalizeBilan() {
   if (!rh) { showToast('⚠ Situation RH obligatoire'); toggleBloc('b2'); document.getElementById('f-rh').focus(); return; }
   if (!caAnnuel) { showToast('⚠ Positionnement CA annuel N/N-1 obligatoire'); toggleBloc('b2'); document.getElementById('f-ca-annuel').focus(); return; }
   if (!caAnnuel) { showToast('⚠ Positionnement CA annuel obligatoire'); toggleBloc('b2'); document.getElementById('f-ca-annuel').focus(); return; }
+  const kpisVides = kpisAdded.filter(k => String(k.val == null ? '' : k.val).trim() === '');
+  if (kpisVides.length) {
+    showToast(`⚠ Indicateur${kpisVides.length > 1 ? 's' : ''} sans valeur : ${kpisVides.map(k => k.name).join(', ')} — saisis la valeur ou retire-le`);
+    const b4 = document.getElementById('b4'); if (b4 && !b4.classList.contains('open')) toggleBloc('b4');
+    document.getElementById('kpi-chips').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    return;
+  }
   if (!humeurTouched) { showToast('⚠ Humeur du passage obligatoire'); document.getElementById('f-humeur').scrollIntoView({behavior:'smooth',block:'center'}); return; }
   if (data.actions.length < 3) {
     showToast('⚠ 3 actions attendues obligatoires (actuellement ' + data.actions.length + ')');

@@ -20,7 +20,7 @@ Nb d'avis Google;;500;gte
 Note Google;;4,5;gte
 Transition;%;20;gte
 SAP;%;70;gte
-Seuil de Perf;;42750;gte
+Seuil de Perf;%;100;gte
 Fréquentation;%;5;gte
 Evol CA Audio;%;10;gte
 Evol CA Contacto;%;10;gte
