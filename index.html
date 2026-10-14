@@ -932,7 +932,7 @@ function loadLogo() {
 }
 
 // ── VERSION APP ── (incrémenter à chaque mise à jour notable, pour déclencher l'invite de rechargement)
-const APP_VERSION = '2026.10.13-3'; // à bumper avec SW_VERSION (sw.js) ET version.json à chaque déploiement
+const APP_VERSION = '2026.10.14-1'; // à bumper avec SW_VERSION (sw.js) ET version.json à chaque déploiement
 
 // Token pour la route /store-bilan du Worker (persistance D1, doit correspondre à STORE_SECRET dans worker.js)
 const STORE_SECRET = 'OC-bilan-store-2026';
@@ -1517,6 +1517,8 @@ document.addEventListener('visibilitychange', () => {
 // ── INIT ──
 window.addEventListener('load', async () => {
   registerServiceWorker();
+  setTimeout(() => { renvoyerBilansEnAttente().catch(() => {}); }, 3000);
+  window.addEventListener('online', () => { renvoyerBilansEnAttente().catch(() => {}); });
   checkForUpdate();
   checkLatestVersionOnServer();
   setInterval(checkLatestVersionOnServer, VERSION_CHECK_INTERVAL_MS);
@@ -3569,28 +3571,33 @@ async function sendBilan() {
       if (sendData?.Body?.Fault) sendOk = false;
     } catch(e) {}
 
-    // Sauvegarder seulement si pas déjà en tête (prévisualisation l'a peut-être déjà fait)
-    const _existingH = JSON.parse(localStorage.getItem(`bilan_history_${data.magasin.code}`) || '[]');
-    if (!_existingH.length || _existingH[0].date !== data.date || _existingH[0].passage !== data.passage) {
-      saveToHistory(data);
-    }
-    if (draftKey) localStorage.removeItem(draftKey);
-
-    // Persistance centrale D1 (fire-and-forget) : alimente le dashboard d'analyse
-    // transverse d'Olivier, indépendamment du localStorage de chaque animateur.
-    // Ne doit jamais bloquer ni faire échouer l'envoi du bilan lui-même.
+    // 14/10 (cas Annecy) : la base centrale passe AVANT la copie locale. Avant,
+    // une mémoire locale pleine faisait planter saveToHistory et l'enregistrement
+    // en base n'était jamais lancé ; et la réponse de la base n'était pas lue.
+    // Désormais : enregistrement en base vérifié (3 essais, identifiant unique
+    // anti-doublon), file d'attente renvoyée automatiquement en cas d'échec, puis
+    // copie locale qui ne peut plus rien bloquer.
+    let enBase = true;
     if (sendOk) {
-      data.checklistReseau = checklistReseauPourBilan();
-      fetch(relay + '/store-bilan', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Store-Token': STORE_SECRET },
-        body: JSON.stringify(data)
-      }).then(() => { histRemoteCache.key = null; })
-        .catch(e => console.warn('store-bilan (persistance centrale) échouée :', e));
-      checklistClearEtat();
+      try { data.checklistReseau = checklistReseauPourBilan(); } catch (e) {}
+      if (!data.uid) data.uid = nouvelIdBilan();
+      enBase = await enregistrerBilanEnBase(data, relay);
+      if (!enBase) mettreBilanEnAttente(data);
+      try { checklistClearEtat(); } catch (e) {}
     }
+    try {
+      // Sauvegarder seulement si pas déjà en tête (prévisualisation l'a peut-être déjà fait)
+      const _existingH = JSON.parse(localStorage.getItem(`bilan_history_${data.magasin.code}`) || '[]');
+      if (!_existingH.length || _existingH[0].date !== data.date || _existingH[0].passage !== data.passage) {
+        saveToHistory(data);
+      }
+    } catch (e) { console.warn('Copie locale du bilan impossible (mémoire pleine ?) :', e); }
+    try { if (draftKey) localStorage.removeItem(draftKey); } catch (e) {}
 
-    if (sendOk) {
+    if (sendOk && !enBase) {
+      showToastLong('✅ Mail envoyé à ' + emails.length + ' destinataire(s) — ⚠️ mais le bilan n\'a pas pu être enregistré dans la base (connexion ?). Il sera renvoyé automatiquement à la prochaine ouverture de l\'appli : ne le ressaisis pas.');
+      setTimeout(() => goScreen('history'), 2000);
+    } else if (sendOk) {
       const t = document.getElementById('toast');
       t.textContent = '✅ Bilan envoyé à ' + emails.length + ' destinataire(s) !';
       t.style.cssText = 'background:#1a7a45;color:#fff;border-color:#1a7a45;font-size:15px;font-weight:600;padding:14px 24px;';
@@ -4768,8 +4775,71 @@ function saveToHistory(data) {
   delete entry.pdfB64;
   history.unshift(entry);
   if (history.length > 24) history = history.slice(0, 24);
-  localStorage.setItem(key, JSON.stringify(history));
-  renderHistory();
+  // 14/10 : mémoire pleine → on réessaie avec un historique local plus court
+  // pour ce magasin (le bilan est déjà en base ou en file d'attente) ; jamais
+  // d'exception qui interromprait l'envoi.
+  try { localStorage.setItem(key, JSON.stringify(history)); }
+  catch (e) {
+    try { localStorage.setItem(key, JSON.stringify(history.slice(0, 6))); }
+    catch (e2) { console.warn('Historique local plein, copie locale non faite :', e2); }
+  }
+  try { renderHistory(); } catch (e) {}
+}
+
+// ── ENREGISTREMENT EN BASE FIABLE (14/10) ──
+const FILE_BILANS_KEY = 'bilan_sync_queue';
+function nouvelIdBilan() {
+  try { if (crypto.randomUUID) return crypto.randomUUID(); } catch (e) {}
+  return Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
+}
+async function enregistrerBilanEnBase(data, relay) {
+  const url = (relay || params.relay || 'https://zimbra-relay.oli-baroukh.workers.dev') + '/store-bilan';
+  for (let essai = 0; essai < 3; essai++) {
+    try {
+      const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Store-Token': STORE_SECRET }, body: JSON.stringify(data) });
+      if (r.ok) { histRemoteCache.key = null; return true; }
+      if (r.status >= 400 && r.status < 500 && r.status !== 429) { console.warn('store-bilan refusé :', r.status, await r.text().catch(() => '')); return false; }
+    } catch (e) { console.warn('store-bilan, essai ' + (essai + 1) + ' échoué :', e); }
+    await new Promise(res => setTimeout(res, 1500 * (essai + 1)));
+  }
+  return false;
+}
+function lireFileBilans() {
+  try { return JSON.parse(localStorage.getItem(FILE_BILANS_KEY) || '[]'); } catch (e) { return []; }
+}
+function ecrireFileBilans(file) {
+  try { localStorage.setItem(FILE_BILANS_KEY, JSON.stringify(file)); return true; }
+  catch (e) {
+    // Mémoire pleine : on garde au moins le contenu, sans les photos.
+    try { localStorage.setItem(FILE_BILANS_KEY, JSON.stringify(file.map(b => ({ ...b, photos: null })))); return true; }
+    catch (e2) { return false; }
+  }
+}
+function mettreBilanEnAttente(data) {
+  const copie = { ...data }; delete copie.pdfB64;
+  const file = lireFileBilans().filter(b => b.uid !== copie.uid);
+  file.push(copie);
+  if (!ecrireFileBilans(file)) {
+    showToastLong('⚠️ Bilan envoyé par mail mais NON enregistré en base, et la mémoire de cet appareil est pleine. Préviens Olivier avant de fermer l\'appli.');
+  }
+}
+let envoiFileEnCours = false;
+async function renvoyerBilansEnAttente() {
+  if (envoiFileEnCours) return;
+  const file = lireFileBilans();
+  if (!file.length) return;
+  envoiFileEnCours = true;
+  let ok = 0;
+  try {
+    for (const b of file) {
+      if (await enregistrerBilanEnBase(b)) {
+        ok++;
+        ecrireFileBilans(lireFileBilans().filter(x => x.uid !== b.uid));
+      }
+    }
+  } finally { envoiFileEnCours = false; }
+  const reste = lireFileBilans().length;
+  if (ok) showToastLong('✅ ' + ok + ' bilan(s) en attente enregistré(s) dans la base' + (reste ? ' — ' + reste + ' encore en attente' : ''));
 }
 
 function populateHistoryFilter() {
