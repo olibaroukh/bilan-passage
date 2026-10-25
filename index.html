@@ -283,6 +283,15 @@ input[type=date]{color-scheme:dark}
   <span class="badge-passage" id="header-passage" style="display:none"></span>
 </div>
 
+<!-- 25/10 : bandeau permanent tant qu'un bilan envoyé n'est pas enregistré en base -->
+<div id="sync-banner" style="display:none;position:sticky;top:52px;z-index:99;align-items:center;gap:10px;margin:8px 12px 0;padding:10px 12px;background:#2a0f0d;border:1px solid var(--red);border-radius:10px;font-family:'Montserrat',sans-serif">
+  <div style="flex:1;min-width:0">
+    <div id="sync-banner-text" style="color:var(--text);font-size:12px;font-weight:600;line-height:1.4"></div>
+    <div id="sync-banner-detail" style="color:var(--muted);font-size:11px;line-height:1.4;margin-top:2px;overflow-wrap:anywhere"></div>
+  </div>
+  <button id="sync-banner-btn" type="button" onclick="renvoyerBilansEnAttente(true)" style="background:var(--red);color:#fff;border:none;border-radius:8px;padding:8px 12px;font-size:12px;font-weight:600;font-family:'Montserrat',sans-serif;cursor:pointer;white-space:nowrap">Réessayer</button>
+</div>
+
 <!-- SCREEN 1 : SÉLECTION -->
 <div id="screen-select" class="screen active"><img id="wm-select" class="wm-logo" alt="" aria-hidden="true">
   <div class="select-section">
@@ -932,7 +941,7 @@ function loadLogo() {
 }
 
 // ── VERSION APP ── (incrémenter à chaque mise à jour notable, pour déclencher l'invite de rechargement)
-const APP_VERSION = '2026.10.14-1'; // à bumper avec SW_VERSION (sw.js) ET version.json à chaque déploiement
+const APP_VERSION = '2026.10.25-1'; // à bumper avec SW_VERSION (sw.js) ET version.json à chaque déploiement
 
 // Token pour la route /store-bilan du Worker (persistance D1, doit correspondre à STORE_SECRET dans worker.js)
 const STORE_SECRET = 'OC-bilan-store-2026';
@@ -1517,6 +1526,7 @@ document.addEventListener('visibilitychange', () => {
 // ── INIT ──
 window.addEventListener('load', async () => {
   registerServiceWorker();
+  try { majBandeauSync(); } catch (e) {}
   setTimeout(() => { renvoyerBilansEnAttente().catch(() => {}); }, 3000);
   window.addEventListener('online', () => { renvoyerBilansEnAttente().catch(() => {}); });
   checkForUpdate();
@@ -3399,13 +3409,27 @@ function evalPdfFilenameFor(libelle) {
   return `evaluation-equipe-${(libelle || 'magasin').replace(/[^a-z0-9]+/gi, '-')}.pdf`;
 }
 
+let envoiBilanEnCours = false;
 async function sendBilan() {
+  // 25/10 (cas Victor Hugo, 2 envois à 50 s d'écart) : un seul envoi à la fois.
+  if (envoiBilanEnCours) { showToast('⏳ Envoi déjà en cours, patiente…'); return; }
   const pwd = document.getElementById('modal-pwd').value;
   if (!pwd) { showToast('Mot de passe requis'); return; }
   const data = collectData();
   const relay = params.relay || 'https://zimbra-relay.oli-baroukh.workers.dev';
   const user = params.zimbraUser || '';
   if (!user) { showToast('⚠ Identifiant Zimbra non configuré dans Paramètres'); return; }
+  // 25/10 : bilan déjà envoyé pour ce magasin à cette date → confirmation. En
+  // cas de renvoi, on réutilise le même identifiant : la base ne crée pas de
+  // doublon (anti-doublon du Worker sur magasin + date + uid).
+  const dejaEnvoye = envoiRecentBilan(data);
+  if (dejaEnvoye) {
+    const heure = dejaEnvoye.at ? new Date(dejaEnvoye.at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : '';
+    const ok = confirm('Un bilan a déjà été envoyé pour ' + (data.magasin.libelle || 'ce magasin') + ' à la date du ' + formatDate(data.date) + (heure ? ' (envoi à ' + heure + ')' : '') + '.\n\nL\'envoyer une seconde fois ?');
+    if (!ok) { showToast('Envoi annulé'); return; }
+    if (dejaEnvoye.uid) data.uid = dejaEnvoye.uid;
+  }
+  envoiBilanEnCours = true;
   // IMPORTANT : capturer la PJ supplémentaire avant closeModal(), car celui-ci
   // appelle clearExtraPdf() qui réinitialise selectedExtraPdfFile à null.
   const extraPdfFileForSend = selectedExtraPdfFile;
@@ -3559,6 +3583,14 @@ async function sendBilan() {
     const sendBody = soapEnv({
       SendMsgRequest: { _jsns: 'urn:zimbraMail', m: msgNode }
     }, token);
+    // 25/10 (cas Maison de la Radio) : le bilan est mis à l'abri dans la file
+    // d'attente AVANT l'envoi du mail, et n'en sort qu'une fois l'enregistrement
+    // en base confirmé. Avant, il n'y entrait qu'après 3 essais ratés : une appli
+    // fermée pendant ces essais perdait le bilan sans aucun message.
+    try { data.checklistReseau = checklistReseauPourBilan(); } catch (e) {}
+    const enFile = lireFileBilans().find(b => b.magasin?.code === data.magasin?.code && b.date === data.date);
+    if (!data.uid) data.uid = (enFile && enFile.uid) || nouvelIdBilan();
+    mettreBilanEnAttente(data);
     const sendResp = await fetch(relay + '/soap', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-Zimbra-Auth-Token': token },
@@ -3579,12 +3611,17 @@ async function sendBilan() {
     // copie locale qui ne peut plus rien bloquer.
     let enBase = true;
     if (sendOk) {
-      try { data.checklistReseau = checklistReseauPourBilan(); } catch (e) {}
-      if (!data.uid) data.uid = nouvelIdBilan();
-      enBase = await enregistrerBilanEnBase(data, relay);
-      if (!enBase) mettreBilanEnAttente(data);
+      uidsEnCoursEnvoi.add(data.uid);
+      try { enBase = await enregistrerBilanEnBase(data, relay); }
+      finally { uidsEnCoursEnvoi.delete(data.uid); }
+      if (enBase) retirerBilanDeFile(data.uid);
+      memoriserEnvoiBilan(data);
       try { checklistClearEtat(); } catch (e) {}
+    } else {
+      // Mail refusé : rien n'est parti, l'AR va renvoyer → on sort de la file.
+      retirerBilanDeFile(data.uid);
     }
+    majBandeauSync();
     try {
       // Sauvegarder seulement si pas déjà en tête (prévisualisation l'a peut-être déjà fait)
       const _existingH = JSON.parse(localStorage.getItem(`bilan_history_${data.magasin.code}`) || '[]');
@@ -3613,6 +3650,9 @@ async function sendBilan() {
   } catch(e) {
     console.error('sendBilan:', e);
     showToast('✗ ' + e.message);
+  } finally {
+    envoiBilanEnCours = false;
+    majBandeauSync();
   }
 }
 
@@ -4820,26 +4860,77 @@ function mettreBilanEnAttente(data) {
   const file = lireFileBilans().filter(b => b.uid !== copie.uid);
   file.push(copie);
   if (!ecrireFileBilans(file)) {
-    showToastLong('⚠️ Bilan envoyé par mail mais NON enregistré en base, et la mémoire de cet appareil est pleine. Préviens Olivier avant de fermer l\'appli.');
+    showToastLong('⚠️ Mémoire de cet appareil pleine : le bilan ne peut pas être mis à l\'abri en attendant son enregistrement en base. Préviens Olivier avant de fermer l\'appli.');
+    return false;
   }
+  return true;
+}
+function retirerBilanDeFile(uid) {
+  if (!uid) return;
+  ecrireFileBilans(lireFileBilans().filter(b => b.uid !== uid));
+}
+// Bilans en cours d'envoi par sendBilan : la relance automatique les ignore
+// pour ne jamais envoyer deux fois le même bilan en parallèle.
+const uidsEnCoursEnvoi = new Set();
+function majBandeauSync() {
+  const banner = document.getElementById('sync-banner');
+  if (!banner) return;
+  const file = lireFileBilans().filter(b => !uidsEnCoursEnvoi.has(b.uid));
+  if (!file.length || envoiBilanEnCours) { banner.style.display = 'none'; return; }
+  const n = file.length;
+  document.getElementById('sync-banner-text').textContent = n === 1
+    ? '⚠️ 1 bilan envoyé n\'est pas encore enregistré dans la base'
+    : '⚠️ ' + n + ' bilans envoyés ne sont pas encore enregistrés dans la base';
+  document.getElementById('sync-banner-detail').textContent =
+    file.map(b => (b.magasin?.libelle || '?') + ' (' + formatDate(b.date) + ')').join(' · ') +
+    ' — garde l\'appli ouverte avec du réseau. Si ce message reste, préviens Olivier.';
+  banner.style.display = 'flex';
 }
 let envoiFileEnCours = false;
-async function renvoyerBilansEnAttente() {
+async function renvoyerBilansEnAttente(manuel) {
   if (envoiFileEnCours) return;
-  const file = lireFileBilans();
-  if (!file.length) return;
+  const file = lireFileBilans().filter(b => !uidsEnCoursEnvoi.has(b.uid));
+  if (!file.length) { majBandeauSync(); return; }
   envoiFileEnCours = true;
+  const btn = document.getElementById('sync-banner-btn');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳'; }
   let ok = 0;
   try {
     for (const b of file) {
       if (await enregistrerBilanEnBase(b)) {
         ok++;
-        ecrireFileBilans(lireFileBilans().filter(x => x.uid !== b.uid));
+        retirerBilanDeFile(b.uid);
       }
     }
-  } finally { envoiFileEnCours = false; }
+  } finally {
+    envoiFileEnCours = false;
+    if (btn) { btn.disabled = false; btn.textContent = 'Réessayer'; }
+    majBandeauSync();
+  }
   const reste = lireFileBilans().length;
   if (ok) showToastLong('✅ ' + ok + ' bilan(s) en attente enregistré(s) dans la base' + (reste ? ' — ' + reste + ' encore en attente' : ''));
+  else if (manuel) showToastLong('⚠️ Enregistrement en base toujours impossible. Vérifie ta connexion et réessaie ; si ça persiste, préviens Olivier.');
+}
+// Mémoire des envois réussis (14 derniers jours) : détecte un renvoi du même
+// bilan et permet de réutiliser son identifiant.
+const ENVOIS_RECENTS_KEY = 'bilan_envois_recents';
+function lireEnvoisRecents() {
+  try {
+    const limite = Date.now() - 14 * 24 * 3600 * 1000;
+    return JSON.parse(localStorage.getItem(ENVOIS_RECENTS_KEY) || '[]').filter(e => e.at >= limite);
+  } catch (e) { return []; }
+}
+function envoiRecentBilan(data) {
+  const code = data?.magasin?.code;
+  if (!code || !data.date) return null;
+  return lireEnvoisRecents().filter(e => e.code === code && e.date === data.date).slice(-1)[0] || null;
+}
+function memoriserEnvoiBilan(data) {
+  try {
+    const liste = lireEnvoisRecents().filter(e => !(e.code === data.magasin?.code && e.date === data.date));
+    liste.push({ code: data.magasin?.code, date: data.date, uid: data.uid, at: Date.now() });
+    localStorage.setItem(ENVOIS_RECENTS_KEY, JSON.stringify(liste.slice(-50)));
+  } catch (e) {}
 }
 
 function populateHistoryFilter() {
