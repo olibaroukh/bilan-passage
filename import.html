@@ -124,7 +124,7 @@ textarea{min-height:64px;resize:vertical;line-height:1.45}
 
     <div class="card">
       <div class="label-row">
-        <label>2. Export effectif / poste / genre (.xls)</label>
+        <label>2. Export effectif / poste / genre (.xls) — 8 colonnes, voir ⓘ</label>
         <button type="button" class="info-btn" onclick="openColsModal('effectif')" aria-label="Colonnes attendues">i</button>
       </div>
       <div class="dropzone" id="dz-effectif" onclick="document.getElementById('file-effectif').click()">
@@ -412,6 +412,9 @@ async function lancerImport() {
     let html = '<div class="result">';
     html += '<div class="ok">✓ ' + libelleMois(mois) + ' importé</div>';
     html += '<div class="ok">✓ Effectif — ' + dataEffectif.nbImportes + ' salariés du réseau enregistrés</div>';
+    if (dataEffectif.suiviStats) html += dataEffectif.suiviStats.ok
+      ? '<div class="ok">✓ Transmis à Suivi Stats — ' + dataEffectif.suiviStats.nb + ' lignes (mois ' + dataEffectif.suiviStats.mois + ')</div>'
+      : '<div class="warn">⚠ Non transmis à Suivi Stats : ' + (dataEffectif.suiviStats.erreur || 'erreur') + ' (le déposer dans l\'import de Suivi Stats)</div>';
     html += '<div class="ok">✓ Agenda validés — ' + dataAgenda.nbImportes + ' salariés, ' + dataAgenda.nbLongueDuree + ' en absence longue durée</div>';
     html += '<div class="hint" style="margin-top:6px">Ignorés (hors réseau) : ' + dataEffectif.nbHorsReseau + ' salariés rattachés à d\'autres sites' + (dataEffectif.nbSansSite ? ', ' + dataEffectif.nbSansSite + ' sans site renseigné' : '') + ' — sur ' + dataEffectif.nbSalaries + ' lignes dans l\'export.</div>';
     if (dataEffectif.sitesNonReconnus && dataEffectif.sitesNonReconnus.length) {
@@ -578,7 +581,8 @@ const COLS_INFO = {
     title: 'Export effectif / poste / genre',
     sub: 'Fichier distinct de l\'agenda validés, colonnes attendues telles quelles :',
     sections: [
-      { h: 'Colonnes', items: ['Matricule (clé de jointure avec l\'agenda validés)', 'Codes sites', 'Noms sites', 'Date d\'entrée', 'Date de départ (souvent vide — voir note)', 'Genre', 'Nom', 'Prénom', 'Poste'] },
+      { h: 'Colonnes (8)', items: ['Matricule (clé de jointure avec l\'agenda validés)', 'Codes sites (plusieurs codes séparés par une virgule si multi-sites)', 'Date d\'entrée', 'Genre (équilibre hommes / femmes – Magasin d\'excellence)', 'Nom', 'Prénom', 'Poste', 'Date de naissance (âge moyen par magasin, jamais affiché par personne)'] },
+      { h: 'Facultatives', items: ['Noms sites et Date de départ ne sont plus nécessaires.', 'Ce fichier est aussi transmis automatiquement à Suivi Stats : inutile de le redéposer dans son import.'] },
       { h: 'Notes', items: ['Codes sites : une seule ligne par salarié — si multi-site, les codes sont dans la même cellule séparés par une virgule (ex. "001020, 001030"), pareil pour "Noms sites". Confirmé dans le code du Worker (rh-import/effectif, split(\',\'))', 'Poste : mappé en 2 catégories, "audio" (Audioprothésiste, Technicien audio) et "opticien" (Manager, Monteur, Opticien/vendeur, Optométriste/contactologue) — les postes siège (Formateur, Logistique, etc.) sont ignorés', 'Date de départ non exportée pour l\'instant côté RH — les départs sont déduits par comparaison d\'un mois à l\'autre'] },
     ]
   },
