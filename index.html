@@ -944,7 +944,7 @@ function loadLogo() {
 }
 
 // ── VERSION APP ── (incrémenter à chaque mise à jour notable, pour déclencher l'invite de rechargement)
-const APP_VERSION = '2026.11.05-2'; // à bumper avec SW_VERSION (sw.js) ET version.json à chaque déploiement
+const APP_VERSION = '2026.11.05-3'; // à bumper avec SW_VERSION (sw.js) ET version.json à chaque déploiement
 
 // Token pour la route /store-bilan du Worker (persistance D1, doit correspondre à STORE_SECRET dans worker.js)
 const STORE_SECRET = 'OC-bilan-store-2026';
@@ -3430,6 +3430,24 @@ function evalPdfFilenameFor(libelle) {
 }
 
 let envoiBilanEnCours = false;
+async function envoyerEcransIddigital(relay, code, blobBilan, nomBilan, evalRes) {
+  if (!code) return;
+  let ses = null; try { ses = JSON.parse(localStorage.getItem('bilan_ar_session') || 'null'); } catch (e) {}
+  if (!ses || !ses.token) return;
+  const b64 = b => new Promise((ok, ko) => { const fr = new FileReader(); fr.onload = () => ok(String(fr.result).split(',')[1]); fr.onerror = ko; fr.readAsDataURL(b); });
+  const envoi = async (type, blob, nom) => {
+    const r = await fetch(relay + '/iddigital/envoyer', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-AR-Session': ses.token }, body: JSON.stringify({ code, type, pdf: await b64(blob), nom }) });
+    return r.json().catch(() => ({ ok: false }));
+  };
+  try {
+    const r1 = await envoi('bilan-ar', blobBilan, nomBilan);
+    if (r1 && r1.erreur === 'magasin sans écran IDdigital') return;
+    const r2 = evalRes && evalRes.blob ? await envoi('task-sheet', evalRes.blob, evalRes.filename) : null;
+    const msg = ['Écran magasin : bilan ' + (r1 && r1.ok ? '✓' : '✗ ' + ((r1 && (r1.erreur || r1.error || r1.statut)) || '')), r2 ? 'évaluation équipe ' + (r2.ok ? '✓' : '✗ ' + (r2.erreur || r2.error || r2.statut || '')) : ''].filter(Boolean).join(' · ');
+    showToast(msg);
+  } catch (e) { console.warn('IDdigital', e); }
+}
+
 async function sendBilan() {
   // 25/10 (cas Victor Hugo, 2 envois à 50 s d'écart) : un seul envoi à la fois.
   if (envoiBilanEnCours) { showToast('⏳ Envoi déjà en cours, patiente…'); return; }
@@ -3637,6 +3655,9 @@ async function sendBilan() {
       if (enBase) retirerBilanDeFile(data.uid);
       memoriserEnvoiBilan(data);
       try { checklistClearEtat(); } catch (e) {}
+      // 05/11/2026 : bilan (section « Animateur Réseau ») et évaluation équipe (fiche de tâches, fichier 1) envoyés
+      // sur l'écran IDdigital du magasin s'il est équipé — jamais bloquant, résultat affiché en toast.
+      envoyerEcransIddigital(relay, data.magasin && data.magasin.code, blob, filename, evalPdfResult);
     } else {
       // Mail refusé : rien n'est parti, l'AR va renvoyer → on sort de la file.
       retirerBilanDeFile(data.uid);
