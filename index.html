@@ -442,9 +442,11 @@ input[type=date]{color-scheme:dark}
       <div class="field-row">
         <div class="field-group"><label>Positionnement CA mensuel (%) *</label>
           <input type="text" inputmode="decimal" id="f-ca-mensuel" placeholder="ex: 105" required>
+          <div id="ca-mensuel-source" style="font-size:11px;color:var(--muted)"></div>
         </div>
         <div class="field-group"><label>Positionnement CA annuel (%) *</label>
           <input type="text" inputmode="decimal" id="f-ca-annuel" placeholder="ex: 98">
+          <div id="ca-annuel-source" style="font-size:11px;color:var(--muted)"></div>
         </div>
       </div>
       <div class="field-group"><label>Détail positionnement (facultatif)</label>
@@ -504,6 +506,7 @@ input[type=date]{color-scheme:dark}
         <button class="btn-add" style="font-size:12px;padding:8px 10px" onclick="addKpiCustomInline()">+ Créer</button>
       </div>
       <div class="kpi-chips" id="kpi-chips"></div>
+      <div id="kpi-source" style="font-size:11px;color:var(--muted);margin-top:4px"></div>
       <div class="field-group" style="margin-top:4px"><div class="field-label-row"><label>Commentaire sur les indicateurs</label><button type="button" class="mic-btn" onclick="startMicFor('f-kpi-comment')" title="Dicter">🎤</button></div>
         <textarea id="f-kpi-comment" rows="2" placeholder="Tendances, points d'attention..."></textarea></div>
     </div>
@@ -941,7 +944,7 @@ function loadLogo() {
 }
 
 // ── VERSION APP ── (incrémenter à chaque mise à jour notable, pour déclencher l'invite de rechargement)
-const APP_VERSION = '2026.11.05-1'; // à bumper avec SW_VERSION (sw.js) ET version.json à chaque déploiement
+const APP_VERSION = '2026.11.05-2'; // à bumper avec SW_VERSION (sw.js) ET version.json à chaque déploiement
 
 // Token pour la route /store-bilan du Worker (persistance D1, doit correspondre à STORE_SECRET dans worker.js)
 const STORE_SECRET = 'OC-bilan-store-2026';
@@ -2032,7 +2035,8 @@ function applyKpiSelectionToSaisie() {
     kpiSelection.slice(0, 6).forEach(name => {
       const def = KPI_DEFAULTS.find(k => k.name === name);
       if (!def) return;
-      kpisAdded.push({ name, val: kpiPrefillValue(name) || '', def });
+      const pv = kpiPrefillValue(name); const dpf = prefillDonnees();
+      kpisAdded.push({ name, val: pv || '', def, verrou: !!(pv !== null && dpf && dpf.sourceKpis) });
     });
     renderKpiChips();
   }
@@ -2042,21 +2046,32 @@ function applyKpiSelectionToSaisie() {
 // Complète ce qui est encore vide dans la saisie en cours (indicateurs choisis
 // sans valeur, positionnement CA mensuel) — utile quand les données arrivent
 // après le clic sur « Commencer le bilan ». Ne remplace jamais une valeur saisie.
+// 05/11/2026 (consigne d'Olivier) : priorité 1) Suivi Stats, 2) Pour être dans le vert, 3) saisie AR.
+// Une valeur venant d'une source (1 ou 2) remplace la saisie et devient non modifiable (🔒), avec sa source affichée.
+function prefillDonnees() { return (bilanPrefill && currentMag && bilanPrefill.code === currentMag.code && bilanPrefill.data) ? bilanPrefill.data : null; }
+function poserChampSource(id, idSource, val, libelle) {
+  const el = document.getElementById(id), src = document.getElementById(idSource);
+  if (!el) return;
+  if (val !== null && val !== undefined && isFinite(Number(val))) {
+    el.value = String(Number(val)).replace('.', ','); el.readOnly = true; el.style.background = 'var(--bg, #f4f2f1)';
+    if (src) src.textContent = '🔒 ' + (libelle || 'donnée mesurée');
+  } else { el.readOnly = false; el.style.background = ''; if (src) src.textContent = ''; }
+}
 function applyPrefillToSaisie() {
   if (!currentMag || !draftKey || draftKey !== `bilan_draft_${currentMag.code}`) return;
+  const d = prefillDonnees();
   let change = false;
   kpisAdded.forEach(k => {
-    if (String(k.val == null ? '' : k.val).trim() !== '') return;
     const v = kpiPrefillValue(k.name);
-    if (v !== null) { k.val = v; change = true; }
+    if (v !== null && d && d.sourceKpis) { if (k.val !== v || !k.verrou) { k.val = v; k.verrou = true; change = true; } }
+    else if (v !== null && String(k.val == null ? '' : k.val).trim() === '') { k.val = v; change = true; }
   });
   if (change) renderKpiChips();
-  const pos = bilanPrefill && bilanPrefill.code === currentMag.code && bilanPrefill.data && bilanPrefill.data.kpis
-    ? bilanPrefill.data.kpis.positionnement : null;
-  const posEl = document.getElementById('f-ca-mensuel');
-  if (posEl && posEl.value.trim() === '' && pos !== null && pos !== undefined && isFinite(Number(pos))) {
-    posEl.value = String(Number(pos)).replace('.', ',');
-  }
+  const ks = document.getElementById('kpi-source');
+  if (ks) ks.textContent = d && d.sourceLibelle ? '🔒 Indicateurs : ' + d.sourceLibelle : '';
+  const k = d && d.kpis ? d.kpis : {};
+  poserChampSource('f-ca-annuel', 'ca-annuel-source', k.positionnementAnnuel, d && d.sourceKpis === 'suivi-stats' ? d.sourceLibelle : null);
+  poserChampSource('f-ca-mensuel', 'ca-mensuel-source', k.positionnement, 'Pour être dans le vert – extraction à date');
 }
 
 function hideStoreRecap() {
@@ -2442,7 +2457,9 @@ function renderKpiChips() {
     // 13/10 : clic sur la valeur = la modifier (indicateurs pré-remplis depuis
     // l'écran de sélection) ; valeur vide = indicateur choisi, encore à saisir.
     const valHtml = vide ? 'à saisir' : `${escapeHtmlLocal(k.val)}${escapeHtmlLocal(unit)}`;
-    chip.innerHTML = `${escapeHtmlLocal(k.name)}: <strong class="kpi-chip-val" onclick="editKpi(${i})" title="Modifier la valeur">${valHtml}</strong> <span class="kpi-chip-del" onclick="removeKpi(${i})">✕</span>`;
+    chip.innerHTML = k.verrou
+      ? `${escapeHtmlLocal(k.name)}: <strong class="kpi-chip-val" title="Valeur mesurée, non modifiable">🔒 ${valHtml}</strong> <span class="kpi-chip-del" onclick="removeKpi(${i})">✕</span>`
+      : `${escapeHtmlLocal(k.name)}: <strong class="kpi-chip-val" onclick="editKpi(${i})" title="Modifier la valeur">${valHtml}</strong> <span class="kpi-chip-del" onclick="removeKpi(${i})">✕</span>`;
     c.appendChild(chip);
   });
 }
