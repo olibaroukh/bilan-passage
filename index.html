@@ -750,7 +750,7 @@ input[type=date]{color-scheme:dark}
     <div class="field-group"><label>Renta salariale cible (%)</label>
       <input type="number" id="p-renta-target" placeholder="28" oninput="saveParams()"></div>
     <div class="field-group"><label>URL référentiel magasins (CSV ou JSON GitHub)</label>
-      <input type="text" id="p-json-url" placeholder="https://raw.githubusercontent.com/olibaroukh/bilan-passage/main/magasins.csv" oninput="saveParams()"></div>
+      <input type="text" id="p-json-url" placeholder="https://zimbra-relay.oli-baroukh.workers.dev/referentiel/magasins.csv (par défaut)" oninput="saveParams()"></div>
     <button class="btn-primary" onclick="reloadMagasins()">🔄 Recharger le référentiel magasins</button>
     <div class="field-group" style="margin-top:10px"><label>URL référentiel KPI (CSV ou JSON GitHub)</label>
       <input type="text" id="p-kpi-url" placeholder="https://raw.githubusercontent.com/olibaroukh/bilan-passage/main/kpis.csv" oninput="saveParams()"></div>
@@ -941,7 +941,7 @@ function loadLogo() {
 }
 
 // ── VERSION APP ── (incrémenter à chaque mise à jour notable, pour déclencher l'invite de rechargement)
-const APP_VERSION = '2026.10.25-1'; // à bumper avec SW_VERSION (sw.js) ET version.json à chaque déploiement
+const APP_VERSION = '2026.11.05-1'; // à bumper avec SW_VERSION (sw.js) ET version.json à chaque déploiement
 
 // Token pour la route /store-bilan du Worker (persistance D1, doit correspondre à STORE_SECRET dans worker.js)
 const STORE_SECRET = 'OC-bilan-store-2026';
@@ -1733,7 +1733,10 @@ function parseCSV(text) {
 }
 
 async function loadMagasins() {
-  const url = params.jsonUrl || 'https://raw.githubusercontent.com/olibaroukh/bilan-passage/main/magasins.csv';
+  // Référentiel unique (05/11/2026) : servi par zimbra-relay à partir de Suivi Stats. L'ancienne adresse
+  // GitHub, si elle est encore enregistrée dans les paramètres, est remplacée automatiquement.
+  const REF_UNIQUE = 'https://zimbra-relay.oli-baroukh.workers.dev/referentiel/magasins.csv';
+  const url = (!params.jsonUrl || params.jsonUrl === 'https://raw.githubusercontent.com/olibaroukh/bilan-passage/main/magasins.csv') ? REF_UNIQUE : params.jsonUrl;
   try {
     const r = await fetch(url);
     if (r.ok) {
