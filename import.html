@@ -416,6 +416,9 @@ async function lancerImport() {
       ? '<div class="ok">✓ Transmis à Suivi Stats — ' + dataEffectif.suiviStats.nb + ' lignes (mois ' + dataEffectif.suiviStats.mois + ')</div>'
       : '<div class="warn">⚠ Non transmis à Suivi Stats : ' + (dataEffectif.suiviStats.erreur || 'erreur') + ' (le déposer dans l\'import de Suivi Stats)</div>';
     html += '<div class="ok">✓ Agenda validés — ' + dataAgenda.nbImportes + ' salariés, ' + dataAgenda.nbLongueDuree + ' en absence longue durée</div>';
+    if (dataAgenda.suiviStats) html += dataAgenda.suiviStats.ok
+      ? '<div class="ok">✓ Temps plein (ETP) transmis à Suivi Stats — ' + dataAgenda.suiviStats.nb + ' salariés, dont ' + dataAgenda.suiviStats.nbPartiels + ' à moins d\'un temps plein (journées école, temps partiels)</div>'
+      : '<div class="warn">⚠ ETP non transmis à Suivi Stats : ' + (dataAgenda.suiviStats.erreur || 'erreur') + '</div>';
     html += '<div class="hint" style="margin-top:6px">Ignorés (hors réseau) : ' + dataEffectif.nbHorsReseau + ' salariés rattachés à d\'autres sites' + (dataEffectif.nbSansSite ? ', ' + dataEffectif.nbSansSite + ' sans site renseigné' : '') + ' — sur ' + dataEffectif.nbSalaries + ' lignes dans l\'export.</div>';
     if (dataEffectif.sitesNonReconnus && dataEffectif.sitesNonReconnus.length) {
       html += '<div class="warn" style="margin-top:8px">⚠ Salariés du réseau également rattachés à des sites hors magasins.csv (' + dataEffectif.sitesNonReconnus.length + ' sites) :</div>';
@@ -573,6 +576,7 @@ const COLS_INFO = {
       { h: 'Dénominateur (jours ouvrés théoriques)', items: ['Jours calendaires du mois : calculé automatiquement par le Worker à partir du mois sélectionné — pas une colonne à chercher dans le fichier', 'Repos hebdomadaire (nom de colonne confirmé dans le Worker)', 'Férié (nom de colonne confirmé dans le Worker)', 'Jour de fermeture (nom de colonne confirmé dans le Worker)'] },
       { h: 'Groupe A — vraie absence (compte dans le taux)', items: ['Absence maladie (+ variante Alsace-Moselle)', 'Absence Accident Travail (+ variante Alsace-Moselle)', 'Absence non payée', 'Congés non payé', 'Congé maternité / paternité / parental', 'Naissance', 'Mariage / PACS'] },
       { h: 'Groupe B — congés prévus (exclus du taux, gardés visibles)', items: ['Congés payés', 'Ancienneté', 'Performance', 'Repos anniversaire', 'Récupération', 'Jours fériés', 'Jours de fermeture magasin', 'Repos hebdomadaire', 'Repos temps partiel', 'Déduction entrée / sortie', 'Autres (décès, événement religieux, garde d\'enfants, journée école, temps partiel thérapeutique, congé supplémentaire naissance)'] },
+      { h: 'Effectif en temps plein (ETP) — transmis à Suivi Stats', items: ['Journée école', 'Repos temps partiel', 'Temps partiel Thérapeutique', 'Coefficient par salarié = 1 − ces jours ÷ (jours du mois × 5/7) ; seul le coefficient est transmis, jamais le motif'] },
       { h: 'Autre colonne exploitée', items: ['Type contrat (CDI / CDD / alternance / intérim, nom de colonne confirmé dans le Worker)'] },
       { h: 'Note', items: ['Les intitulés exacts des colonnes du groupe A/B ci-dessus reprennent la logique métier validée avec Olivier — le nom précis de chaque colonne dans le fichier n\'a pas été revérifié caractère pour caractère dans le code depuis'] },
     ]
