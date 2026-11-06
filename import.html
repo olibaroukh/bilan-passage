@@ -108,6 +108,10 @@ textarea{min-height:64px;resize:vertical;line-height:1.45}
       <input type="month" id="mois-input">
       <div class="hint">Import RH mensuel — le mois des 2 exports (agenda validés + effectif). Un import remplace uniquement les données de ce mois — les mois précédents ne sont jamais écrasés. Seuls les salariés rattachés à un magasin de magasins.csv sont enregistrés.</div>
       <div class="hint" id="mois-existants" style="margin-top:6px"></div>
+      <label style="display:flex;gap:8px;align-items:flex-start;margin-top:10px;font-weight:normal;cursor:pointer">
+        <input type="checkbox" id="agenda-seul" style="width:auto;margin-top:3px">
+        <span>Mois passé : agenda validés seul<br><span class="hint">Ne met à jour que le temps plein (ETP) dans Suivi Stats. L'effectif et les absences déjà enregistrés pour ce mois ne sont pas touchés.</span></span>
+      </label>
     </div>
 
     <div class="card">
@@ -122,7 +126,7 @@ textarea{min-height:64px;resize:vertical;line-height:1.45}
       <input type="file" id="file-agenda" accept=".xls,.xlsx" style="display:none">
     </div>
 
-    <div class="card">
+    <div class="card" id="card-effectif">
       <div class="label-row">
         <label>2. Export effectif / poste / genre (.xls) — 8 colonnes, voir ⓘ</label>
         <button type="button" class="info-btn" onclick="openColsModal('effectif')" aria-label="Colonnes attendues">i</button>
@@ -345,7 +349,9 @@ function setupDropzone(zoneId, inputId, onFile) {
 }
 
 function checkReady() {
-  document.getElementById('submit-btn').disabled = !(fileAgenda && fileEffectif && document.getElementById('mois-input').value);
+  const seul = document.getElementById('agenda-seul').checked;
+  document.getElementById('card-effectif').style.display = seul ? 'none' : '';
+  document.getElementById('submit-btn').disabled = !(fileAgenda && (seul || fileEffectif) && document.getElementById('mois-input').value);
 }
 
 function parseXlsFile(file) {
@@ -372,7 +378,9 @@ function renderResult(html) {
 
 async function lancerImport() {
   const mois = document.getElementById('mois-input').value;
-  if (!mois || !fileAgenda || !fileEffectif) return;
+  if (!mois || !fileAgenda) return;
+  if (document.getElementById('agenda-seul').checked) return importerAgendaSeul(mois);
+  if (!fileEffectif) return;
   if (moisExistants && moisExistants.has(mois)) {
     if (!confirm(libelleMois(mois) + ' est déjà importé (' + moisExistants.get(mois) + ' salariés).\n\nLes données de ' + libelleMois(mois) + ' vont être remplacées par ces fichiers. Continuer ?')) return;
   } else if (!confirm('Importer ces fichiers comme ' + libelleMois(mois).toUpperCase() + ' ?')) {
@@ -437,6 +445,36 @@ async function lancerImport() {
 
 document.getElementById('mois-input').value = defaultMois();
 document.getElementById('mois-input').addEventListener('change', checkReady);
+document.getElementById('agenda-seul').addEventListener('change', checkReady);
+
+// 06/11/2026 : mois passés — agenda seul → coefficients ETP transmis à Suivi Stats, rien d'autre n'est écrit.
+async function importerAgendaSeul(mois) {
+  // Garde-fou : le nom du fichier contient la période (Rapport-agenda-valides_AAAA-MM-JJ_AAAA-MM-JJ)
+  const per = (fileAgenda.name || '').match(/(\d{4}-\d{2})-\d{2}_(\d{4}-\d{2})-\d{2}/);
+  if (per && (per[1] !== mois || per[2] !== mois)) {
+    if (!confirm('Le nom du fichier indique une autre période (' + per[0].replace('_', ' → ') + ') que ' + libelleMois(mois) + '.\n\nContinuer quand même ?')) return;
+  } else if (!confirm('Transmettre le temps plein (ETP) de ' + libelleMois(mois).toUpperCase() + ' à Suivi Stats ?\n\nL\'effectif et les absences déjà enregistrés ne sont pas modifiés.')) return;
+  const btn = document.getElementById('submit-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>Envoi en cours...';
+  renderResult('<div class="result">Lecture du fichier…</div>');
+  try {
+    const rows = await parseXlsFile(fileAgenda);
+    const resp = await fetch(RELAY + '/rh-import/etp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Store-Token': STORE_SECRET, 'X-AR-Session': arSession.token },
+      body: JSON.stringify({ mois, rows })
+    });
+    const data = await resp.json();
+    if (!resp.ok || !data.ok) throw new Error(data.error || resp.status);
+    renderResult('<div class="result"><div class="ok">✓ ' + libelleMois(mois) + ' — temps plein (ETP) transmis à Suivi Stats : ' + data.suiviStats.nb + ' salariés, dont ' + data.suiviStats.nbPartiels + ' à moins d\'un temps plein</div><div class="hint" style="margin-top:6px">Effectif et absences de ce mois inchangés.</div></div>');
+  } catch(e) {
+    renderResult('<div class="result warn">✗ ' + (e.message || String(e)) + '</div>');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Importer';
+    checkReady();
+  }
+}
 
 setupDropzone('dz-agenda', 'file-agenda', file => {
   fileAgenda = file;
