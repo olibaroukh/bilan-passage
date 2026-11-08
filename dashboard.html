@@ -563,7 +563,7 @@ const SORT_GETTERS = {
   // « jamais visité » = le plus ancien : tout en haut en tri décroissant, tout en bas en croissant.
   visite: r => (r.daysSinceVisit === null || r.daysSinceVisit === undefined) ? Infinity : r.daysSinceVisit,
 };
-const tableSorts = { network: { key: 'score', dir: 1 }, ar: { key: 'score', dir: 1 }, today: { key: 'libelle', dir: 1 }, mensuel: { key: 'score', dir: -1 } };
+const tableSorts = { network: { key: 'score', dir: 1 }, ar: { key: 'score', dir: 1 }, today: { key: 'libelle', dir: 1 }, mensuel: { key: 'score', dir: -1 }, annuel: { key: 'score', dir: -1 } };
 
 // 03/10 : tri par colonne aussi sur « Aujourd'hui » et « Score mensuel ».
 // Valeur null = case vide/non applicable, toujours en bas quel que soit le sens.
@@ -592,7 +592,16 @@ const SM_GETTERS = {
   couv: m => m.couverture ?? null,
 };
 ['actions', 'effectif', 'absenteisme', 'positionnement', 'pedlv', 'avis', 'equipe', 'kaizen', 'entretiens', 'lancements'].forEach(k => { SM_GETTERS[k] = m => smValeurDim(m, k); });
-const GETTERS_PAR_TABLE = { today: TODAY_GETTERS, mensuel: SM_GETTERS };
+// 08/11/2026 : tri du tableau Score annuel.
+const SA_GETTERS = {
+  libelle: m => m.libelle || null,
+  score: m => m.score ?? null,
+  nbmois: m => m.nbMoisRetenus ?? null,
+  couv: m => m.couverture ?? null,
+  rang: m => m.rangReseau ?? null,
+};
+['actions', 'effectif', 'absenteisme', 'positionnement', 'pedlv', 'avis', 'equipe', 'kaizen', 'entretiens', 'lancements'].forEach(k => { SA_GETTERS[k] = m => saValeurDim(m, k); });
+const GETTERS_PAR_TABLE = { today: TODAY_GETTERS, mensuel: SM_GETTERS, annuel: SA_GETTERS };
 
 function sortRows(rows, sort, getters) {
   const get = (getters || SORT_GETTERS)[sort.key];
@@ -632,6 +641,7 @@ function setTableSort(table, key) {
   else if (table === 'ar') renderArStoresRows();
   else if (table === 'today') { syncTodaySortSelect(); renderTodayBody(); }
   else if (table === 'mensuel') renderMonthlyBody();
+  else if (table === 'annuel') renderAnnualBody();
 }
 
 function renderNetworkView() {
@@ -1618,12 +1628,15 @@ async function showMonthlyView() {
 async function loadMonthly(withJournal) {
   const el = document.getElementById('view-mensuel');
   try {
-    const resp = await fetch(RELAY + '/sante-mensuel' + (smMois ? '?mois=' + encodeURIComponent(smMois) : '') + (withJournal ? (smMois ? '&' : '?') + 'journal=1' : ''), { headers: authHeaders() });
+    const qs = smAnnee ? '?annee=' + encodeURIComponent(smAnnee) : (smMois ? '?mois=' + encodeURIComponent(smMois) : '') + (withJournal ? (smMois ? '&' : '?') + 'journal=1' : '');
+    const resp = await fetch(RELAY + '/sante-mensuel' + qs, { headers: authHeaders() });
     const data = await resp.json();
     if (resp.status === 401) { logout(); return null; }
     if (!resp.ok || !data.ok) throw new Error(data.error || 'Erreur de chargement');
     if (withJournal) return data;
-    smData = data; smMois = data.mois;
+    smData = data;
+    if (data.annuel) { renderAnnualView(); return data; }
+    smMois = data.mois;
     renderMonthlyView();
     return data;
   } catch (e) {
@@ -1655,7 +1668,7 @@ async function smPost(body) {
   return data;
 }
 
-function changeSmMois(v) { smMois = v; smData = null; showMonthlyView(); }
+function changeSmMois(v) { if (/^A\d{4}$/.test(v)) smAnnee = v.slice(1); else { smAnnee = null; smMois = v; } smData = null; showMonthlyView(); }
 
 function smCellule(m, dim) {
   const n = (m.neutralisations || {})[dim] || (m.neutralisations || {})['*'];
@@ -1712,7 +1725,7 @@ function renderMonthlyView() {
   el.innerHTML = `
     <div class="filters">
       <select id="sm-mois" onchange="changeSmMois(this.value)">
-        ${moisOptions.map(m => '<option value="' + m + '"' + (m === d.mois ? ' selected' : '') + '>' + escDash(smMoisLabel(m)) + (etatMois[m] === 'valide' ? ' · validé' : etatMois[m] ? ' · provisoire' : (m === d.moisCourant ? ' · en cours' : '')) + '</option>').join('')}
+        ${smOptionsPeriode(d)}
       </select>
       ${ars.length > 1 ? '<select id="sm-ar" onchange="renderMonthlyBody()"><option value="">Tous les animateurs</option>' + ars.map(a => '<option value="' + escDash(a) + '"' + (a === prevAr ? ' selected' : '') + '>' + escDash(a) + '</option>').join('') + '</select>' : ''}
       <input type="text" id="sm-search" placeholder="Rechercher un magasin" value="${escDash(prevSearch)}" oninput="renderMonthlyBody()">
@@ -1932,6 +1945,167 @@ async function smExporter() {
   ajouter(journal, 'Journal', 'Aucune action enregistrée');
   ajouter(params, 'Paramètres', '');
   XLSX.writeFile(wb, 'score-sante-mensuel-' + d.mois + (d.version ? '-v' + d.version : '-apercu') + (d.statut === 'valide' ? '-valide' : '') + '.xlsx');
+}
+
+// ---------------------------------------------------------------- Score ANNUEL (08/11/2026)
+// Route /sante-mensuel?annee=AAAA, calculé à la volée sur les mois VALIDÉS de l'année civile.
+// Critères mensuels : moyenne des mois où la dimension est comptée. Équipe : niveau du dernier
+// mois validé (cumul de l'année). Poids du dernier mois validé. Seuil de 50 % inchangé.
+let smAnnee = null;
+function smOptionsPeriode(d) {
+  const anCourant = Number(String(d.moisCourant).slice(0, 4));
+  const annees = new Set([anCourant]);
+  (d.moisCalcules || []).forEach(m => annees.add(Number(String(m.mois).slice(0, 4))));
+  const anneesTri = [...annees].sort((a, b) => b - a);
+  const moisOptions = [];
+  for (let i = 0; i <= 12; i++) moisOptions.push(smMoisDecale(d.moisCourant, -i));
+  (d.moisCalcules || []).forEach(m => { if (!moisOptions.includes(m.mois)) moisOptions.push(m.mois); });
+  moisOptions.sort().reverse();
+  const etatMois = {}; (d.moisCalcules || []).forEach(m => { etatMois[m.mois] = m.statut; });
+  const selAn = d.annuel ? d.annee : null;
+  return '<optgroup label="Score annuel">'
+    + anneesTri.map(a => '<option value="A' + a + '"' + (selAn === a ? ' selected' : '') + '>Année ' + a + (a === anCourant ? ' · en cours' : '') + '</option>').join('')
+    + '</optgroup><optgroup label="Score mensuel">'
+    + moisOptions.map(m => '<option value="' + m + '"' + (!d.annuel && m === d.mois ? ' selected' : '') + '>' + escDash(smMoisLabel(m)) + (etatMois[m] === 'valide' ? ' · validé' : etatMois[m] ? ' · provisoire' : (m === d.moisCourant ? ' · en cours' : '')) + '</option>').join('')
+    + '</optgroup>';
+}
+function saValeurDim(m, k) { if (m.exclusions && m.exclusions[k]) return null; const v = m.sous ? m.sous[k] : null; return v === null || v === undefined ? null : v; }
+function saExplication(m, k) {
+  const det = (m.detail || {})[k] || {};
+  if (m.exclusions && m.exclusions[k]) return 'Exclu : ' + m.exclusions[k] + '.';
+  if (det.mode === 'dernier') return 'Niveau à fin ' + smMoisLabel(det.mois[0]).toLowerCase() + ' (cumul des contrôles depuis le 1er janvier).';
+  return 'Moyenne de ' + det.nbMois + ' mois (' + (det.mois || []).map(smMoisLabel).join(', ') + ').';
+}
+function saCellule(m, k) {
+  if (m.exclusions && m.exclusions[k]) return '<td class="c" title="' + escDash('Exclu : ' + m.exclusions[k]) + '"><span class="t-gris">—</span></td>';
+  const v = m.sous ? m.sous[k] : null;
+  if (v === null || v === undefined) return '<td class="c"><span class="t-gris">—</span></td>';
+  return '<td class="c" title="' + escDash(saExplication(m, k)) + '"><span class="sm-v ' + (v >= 80 ? 'sm-ok' : v >= 60 ? 'sm-moy' : 'sm-bas') + '">' + Math.round(v) + '</span></td>';
+}
+
+function renderAnnualView() {
+  const el = document.getElementById('view-mensuel');
+  const d = smData;
+  const prevAr = document.getElementById('sm-ar') ? document.getElementById('sm-ar').value : '';
+  const prevSearch = document.getElementById('sm-search') ? document.getElementById('sm-search').value : '';
+  const ars = [...new Set(d.magasins.map(m => m.animateur).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'fr'));
+  const mv = d.moisValides || [];
+  let bandeau;
+  if (!mv.length) {
+    bandeau = '<div class="sm-banner sm-b-apercu"><b>Score annuel ' + d.annee + '</b><span>Aucun mois validé pour cette année : le score annuel apparaîtra dès la validation du premier mois.</span></div>';
+  } else {
+    const complet = mv.length === 12;
+    bandeau = '<div class="sm-banner ' + (complet ? 'sm-b-valide' : 'sm-b-prov') + '"><b>Score annuel ' + d.annee + (complet ? ' — année complète' : ' — cumul à fin ' + escDash(smMoisLabel(mv[mv.length - 1].mois).toLowerCase())) + '</b><span>'
+      + mv.length + ' mois validé(s) : ' + escDash(mv.map(m => smMoisLabel(m.mois)).join(', ')) + ' · poids appliqués : ceux d\'' + escDash(smMoisLabel(d.poidsMois).toLowerCase()) + ' · seuls les mois validés comptent</span></div>';
+  }
+  const actions = d.estOlivier && mv.length ? '<div class="sm-actions"><button class="sm-btn" onclick="saExporter()">Exporter Excel</button></div>' : '';
+  el.innerHTML = `
+    <div class="filters">
+      <select id="sm-mois" onchange="changeSmMois(this.value)">${smOptionsPeriode(d)}</select>
+      ${ars.length > 1 ? '<select id="sm-ar" onchange="renderAnnualBody()"><option value="">Tous les animateurs</option>' + ars.map(a => '<option value="' + escDash(a) + '"' + (a === prevAr ? ' selected' : '') + '>' + escDash(a) + '</option>').join('') + '</select>' : ''}
+      <input type="text" id="sm-search" placeholder="Rechercher un magasin" value="${escDash(prevSearch)}" oninput="renderAnnualBody()">
+    </div>
+    ${bandeau}
+    ${actions}
+    ${mv.length ? `
+    <div class="kpi-row" id="sm-kpis"></div>
+    <div class="table-wrap sticky-wrap"><table class="dash-table today-table sm-table">
+      <thead><tr>${thSort('annuel', 'libelle', 'Magasin')}${thSort('annuel', 'score', 'Score', 'c', 'Score annuel')}${thSort('annuel', 'nbmois', 'Mois', 'c', 'Mois retenus sur mois validés')}${d.dims.map(k => thSort('annuel', k, SM_DIM_COURT[k], 'c', SUB_LABELS[k] + ' — poids ' + d.poids[k] + (k === 'equipe' ? ' — niveau du dernier mois' : ' — moyenne des mois'))).join('')}${thSort('annuel', 'couv', 'Couv.', 'c', 'Couverture')}${thSort('annuel', 'rang', 'Rang', 'c', 'Rang réseau')}</tr></thead>
+      <tbody id="sm-body"></tbody>
+    </table></div>
+    <p class="sm-legende">Critères mensuels : moyenne des mois validés où la dimension est comptée (un mois neutralisé ou exclu est retiré, pas compté 0). Équipe : niveau du dernier mois validé, qui cumule les contrôles de l'année. Un mois « pas de score » ou magasin neutralisé est exclu. <span class="t-gris">—</span> jamais comptée sur l'année. Clic sur un magasin pour le détail mois par mois.</p>` : ''}
+  `;
+  if (mv.length) renderAnnualBody();
+}
+
+function renderAnnualBody() {
+  const d = smData;
+  const arSel = document.getElementById('sm-ar');
+  const ar = arSel ? arSel.value : '';
+  const search = (document.getElementById('sm-search').value || '').trim().toLowerCase();
+  let rows = d.magasins.slice();
+  if (ar) rows = rows.filter(m => m.animateur === ar);
+  if (search) rows = rows.filter(m => String(m.libelle || '').toLowerCase().includes(search));
+  rows = sortRows(rows, tableSorts.annuel, SA_GETTERS);
+  const perim = ar ? d.magasins.filter(m => m.animateur === ar) : d.magasins;
+  const notes = perim.filter(m => m.score !== null && m.score !== undefined);
+  const moy = notes.length ? Math.round(notes.reduce((s, m) => s + m.score, 0) / notes.length) : null;
+  document.getElementById('sm-kpis').innerHTML = `
+    <div class="kpi-card"><p class="lbl">Score annuel moyen</p><p class="val">${moy ?? '—'}</p></div>
+    <div class="kpi-card"><p class="lbl">Magasins notés</p><p class="val">${notes.length}<span class="kpi-sub"> / ${perim.length}</span></p></div>
+    <div class="kpi-card"><p class="lbl">Mois validés</p><p class="val">${(d.moisValides || []).length}<span class="kpi-sub"> / 12</span></p></div>
+  `;
+  const nbVal = (d.moisValides || []).length;
+  document.getElementById('sm-body').innerHTML = rows.length ? rows.map(m => `<tr class="row-clickable" onclick="saDetail('${escDash(m.code)}')">
+      <td><span class="t-mag">${escDash(m.libelle)}</span>${!ar && m.animateur ? '<span class="t-ar">' + escDash(m.animateur) + '</span>' : ''}</td>
+      <td class="c"><span class="badge ${scoreClass(m.score ?? null)}" title="${m.score === null || m.score === undefined ? 'Pas de score : aucun mois retenu ou moins de 50 % du poids couvert' : ''}">${m.score ?? '—'}</span></td>
+      <td class="c"><span class="t-gris">${m.nbMoisRetenus}/${nbVal}</span></td>
+      ${d.dims.map(k => saCellule(m, k)).join('')}
+      <td class="c"><span class="t-gris">${m.couverture != null ? Math.round(m.couverture) + ' %' : '—'}</span></td>
+      <td class="c"><span class="t-gris">${m.rangReseau ?? '—'}</span></td>
+    </tr>`).join('') : '<tr><td colspan="16" style="color:var(--gray)">Aucun magasin.</td></tr>';
+}
+
+function saDetail(code) {
+  const d = smData;
+  const m = d.magasins.find(x => x.code === code);
+  if (!m) return;
+  const lignes = d.dims.map(k => {
+    const v = saValeurDim(m, k);
+    return '<div class="sm-dim-row"><label><b>' + escDash(SUB_LABELS[k]) + '</b> <span class="t-gris">poids ' + d.poids[k] + '</span></label><span class="sm-dim-v">' + (v === null ? '—' : Math.round(v)) + '</span><div class="sm-dim-etat" style="padding-left:0"><span class="sv-meta">' + escDash(saExplication(m, k)) + '</span></div></div>';
+  }).join('');
+  const parMois = (m.moisScores || []).map(x => '<div class="sm-prop-row"><span>' + escDash(smMoisLabel(x.mois)) + '</span><span>' + (x.entier ? '<span class="sm-n">Magasin neutralisé</span>' : x.score === null ? '<span class="t-gris">Pas de score (exclu)</span>' : '<b>' + x.score + '</b> <span class="t-gris">· couv. ' + Math.round(x.couverture) + ' %</span>') + '</span></div>').join('');
+  document.getElementById('sm-modal-content').innerHTML = `
+    <h3>${escDash(m.libelle)}</h3>
+    <p class="sv-meta" style="margin:0 0 10px">${escDash(m.animateur || '')} · score annuel ${d.annee} <b>${m.score ?? '—'}</b> · couverture ${m.couverture != null ? Math.round(m.couverture) + ' %' : '—'} · ${m.nbMoisRetenus} mois retenu(s)${m.rangReseau ? ' · rang réseau ' + m.rangReseau + (m.rangAr ? ', rang AR ' + m.rangAr : '') : ''}</p>
+    ${lignes}
+    <h4 style="margin:16px 0 4px">Scores mensuels validés</h4>
+    ${parMois || '<p class="sv-meta">Aucun mois validé.</p>'}`;
+  document.getElementById('sm-modal').style.display = 'flex';
+}
+
+async function saExporter() {
+  try { await smChargerXlsx(); } catch (e) { alert(e.message); return; }
+  const d = smData;
+  const mv = (d.moisValides || []).map(m => m.mois);
+  const complet = mv.length === 12;
+  const statut = complet ? 'ANNÉE COMPLÈTE' : 'CUMUL À FIN ' + smMoisLabel(mv[mv.length - 1]).toUpperCase();
+  const mags = d.magasins.slice().sort((a, b) => String(a.libelle).localeCompare(String(b.libelle), 'fr'));
+  const synthese = mags.map(m => {
+    const row = { 'Année': d.annee, 'Statut': statut, 'Code': m.code, 'Magasin': m.libelle, 'AR': m.animateur || '',
+      'Score annuel': m.score ?? 'Pas de score', 'Couverture %': m.couverture ?? '', 'Mois retenus': m.nbMoisRetenus, 'Mois validés': mv.length,
+      'Rang réseau': m.rangReseau ?? '', 'Rang AR': m.rangAr ?? '' };
+    const sc = {}; (m.moisScores || []).forEach(x => { sc[x.mois] = x.entier ? 'Neutralisé' : (x.score ?? 'Pas de score'); });
+    mv.forEach(mo => { row[smMoisLabel(mo)] = sc[mo] ?? ''; });
+    return row;
+  });
+  const detail = mags.map(m => {
+    const row = { 'Année': d.annee, 'Code': m.code, 'Magasin': m.libelle, 'AR': m.animateur || '', 'Score annuel': m.score ?? 'Pas de score' };
+    d.dims.forEach(k => {
+      const v = saValeurDim(m, k);
+      row[SUB_LABELS[k] + ' — sous-score'] = v === null ? '' : Math.round(v * 10) / 10;
+      row[SUB_LABELS[k] + ' — poids'] = d.poids[k];
+      row[SUB_LABELS[k] + ' — calcul'] = saExplication(m, k);
+    });
+    return row;
+  });
+  const params = [
+    { 'Paramètre': 'Année', 'Valeur': d.annee }, { 'Paramètre': 'Statut', 'Valeur': statut },
+    { 'Paramètre': 'Mois validés retenus', 'Valeur': (d.moisValides || []).map(m => smMoisLabel(m.mois) + ' (v' + m.version + (m.reviseLe ? ', révisé' : '') + ')').join(', ') },
+    { 'Paramètre': 'Poids appliqués', 'Valeur': 'Poids du dernier mois validé : ' + smMoisLabel(d.poidsMois).toLowerCase() },
+    { 'Paramètre': 'Règle critères mensuels', 'Valeur': 'Moyenne des mois validés où la dimension est comptée (neutralisé ou exclu = mois retiré)' },
+    { 'Paramètre': 'Règle Équipe', 'Valeur': 'Niveau du dernier mois validé (cumul des contrôles depuis le 1er janvier)' },
+    { 'Paramètre': 'Mois exclus', 'Valeur': 'Mois « pas de score » (couverture < 50 %) ou magasin neutralisé en entier' },
+    { 'Paramètre': 'Seuil de couverture', 'Valeur': '50 % du poids total' },
+    { 'Paramètre': 'Calculé le', 'Valeur': new Date().toISOString() },
+    ...d.dims.map(k => ({ 'Paramètre': 'Poids — ' + SUB_LABELS[k], 'Valeur': d.poids[k] })),
+  ];
+  const wb = XLSX.utils.book_new();
+  const ajouter = (rows, nom, vide) => XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows.length ? rows : [{ '': vide }]), nom);
+  ajouter(synthese, 'Synthèse', 'Aucun magasin');
+  ajouter(detail, 'Détail', 'Aucun magasin');
+  ajouter(params, 'Paramètres', '');
+  XLSX.writeFile(wb, 'score-sante-annuel-' + d.annee + (complet ? '-complet' : '-a-fin-' + mv[mv.length - 1]) + '.xlsx');
 }
 
 // ---------------------------------------------------------------- Boot
