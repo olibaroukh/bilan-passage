@@ -296,6 +296,15 @@ select,input,textarea,button{font-family:inherit}
 </head>
 <body>
 
+<div id="dash-version-lock" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(13,13,13,0.97);align-items:center;justify-content:center;font-family:'Montserrat',sans-serif;padding:24px">
+  <div style="max-width:420px;text-align:center;background:#0D0D0D;border:2px solid #E2231A;border-radius:16px;padding:32px 24px;box-shadow:0 12px 40px rgba(0,0,0,0.5)">
+    <div style="font-size:40px;margin-bottom:12px">🔒</div>
+    <div style="color:#F5F5F5;font-size:18px;font-weight:700;margin-bottom:10px">Dashboard obsolète</div>
+    <div style="color:#F5F5F5;font-size:14px;opacity:0.85;line-height:1.5;margin-bottom:22px">Une nouvelle version du dashboard est en ligne.<br>Merci de mettre à jour pour continuer.</div>
+    <button onclick="dashApplyUpdate()" id="dash-version-btn" style="background:#E2231A;color:#fff;border:none;border-radius:8px;padding:12px 28px;font-size:15px;font-weight:700;font-family:'Montserrat',sans-serif;cursor:pointer">Mettre à jour maintenant</button>
+  </div>
+</div>
+
 <div id="login-screen">
   <div class="login-card">
     <h2>Dashboard réseau</h2>
@@ -2107,6 +2116,38 @@ async function saExporter() {
   ajouter(params, 'Paramètres', '');
   XLSX.writeFile(wb, 'score-sante-annuel-' + d.annee + (complet ? '-complet' : '-a-fin-' + mv[mv.length - 1]) + '.xlsx');
 }
+
+// ---------------------------------------------------------------- Versionnage (08/11/2026)
+// Même principe qu'index.html : le dashboard compare sa version à
+// dashboard-version.json (lu sans cache) au chargement, au retour au premier
+// plan et toutes les 3 minutes. Si une version plus récente est en ligne, écran
+// « Dashboard obsolète » + rechargement anti-cache (indispensable sur iPhone,
+// où le dashboard ajouté à l'écran d'accueil ne se recharge jamais seul).
+// Fichier de version distinct de version.json (bilan) pour que chaque appli se
+// mette à jour indépendamment, sans boucle si une seule des deux est déployée.
+// À CHAQUE DÉPLOIEMENT DU DASHBOARD : bumper DASH_VERSION ET dashboard-version.json.
+const DASH_VERSION = '2026.11.08-1';
+async function dashCheckVersion() {
+  try {
+    const res = await fetch('dashboard-version.json?_=' + Date.now(), { cache: 'no-store' });
+    if (!res.ok) return;
+    const data = await res.json();
+    if (data && data.version && data.version !== DASH_VERSION) {
+      const lock = document.getElementById('dash-version-lock');
+      if (lock) lock.style.display = 'flex';
+    }
+  } catch (e) { /* pas de réseau : nouvelle tentative au prochain cycle */ }
+}
+async function dashApplyUpdate() {
+  const btn = document.getElementById('dash-version-btn');
+  if (btn) { btn.textContent = '⏳ Mise à jour...'; btn.disabled = true; }
+  if ('caches' in window) { try { const keys = await caches.keys(); await Promise.all(keys.map(k => caches.delete(k))); } catch (e) {} }
+  const base = window.location.href.split('?')[0].split('#')[0];
+  window.location.href = base + '?_u=' + Date.now();
+}
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') dashCheckVersion(); });
+setInterval(dashCheckVersion, 3 * 60 * 1000);
+dashCheckVersion();
 
 // ---------------------------------------------------------------- Boot
 (function boot() {
