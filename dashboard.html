@@ -328,6 +328,7 @@ select,input,textarea,button{font-family:inherit}
       <button data-tab="network" class="active" onclick="showNetworkView()">Santé réseau</button>
       <button data-tab="today" onclick="showTodayView()">Aujourd'hui</button>
       <button data-tab="mensuel" onclick="showMonthlyView()">Score mensuel</button>
+      <button data-tab="annuel" onclick="showAnnualView()">Score annuel</button>
     </nav>
     <div id="view-network"></div>
     <div id="view-today" style="display:none"></div>
@@ -1394,6 +1395,7 @@ function setTabs(active) {
 function goBack() {
   if (currentListView === 'today') showTodayView();
   else if (currentListView === 'mensuel') showMonthlyView();
+  else if (currentListView === 'annuel') showAnnualView();
   else showNetworkView();
 }
 
@@ -1625,6 +1627,7 @@ function smDateFr(iso) { if (!iso) return '—'; const d = new Date(iso); return
 function smMoisDecale(m, n) { const [y, mm] = m.split('-').map(Number); return new Date(Date.UTC(y, mm - 1 + n, 1)).toISOString().slice(0, 7); }
 
 async function showMonthlyView() {
+  if (smAnnee) { smAnnee = null; smData = null; }
   currentListView = 'mensuel';
   ['view-network', 'view-detail', 'view-ar', 'view-today'].forEach(id => { document.getElementById(id).style.display = 'none'; });
   setTabs('mensuel');
@@ -1677,7 +1680,7 @@ async function smPost(body) {
   return data;
 }
 
-function changeSmMois(v) { if (/^A\d{4}$/.test(v)) smAnnee = v.slice(1); else { smAnnee = null; smMois = v; } smData = null; showMonthlyView(); }
+function changeSmMois(v) { smMois = v; smData = null; showMonthlyView(); }
 
 function smCellule(m, dim) {
   const n = (m.neutralisations || {})[dim] || (m.neutralisations || {})['*'];
@@ -1962,22 +1965,31 @@ async function smExporter() {
 // mois validé (cumul de l'année). Poids du dernier mois validé. Seuil de 50 % inchangé.
 let smAnnee = null;
 function smOptionsPeriode(d) {
-  const anCourant = Number(String(d.moisCourant).slice(0, 4));
-  const annees = new Set([anCourant]);
-  (d.moisCalcules || []).forEach(m => annees.add(Number(String(m.mois).slice(0, 4))));
-  const anneesTri = [...annees].sort((a, b) => b - a);
   const moisOptions = [];
   for (let i = 0; i <= 12; i++) moisOptions.push(smMoisDecale(d.moisCourant, -i));
   (d.moisCalcules || []).forEach(m => { if (!moisOptions.includes(m.mois)) moisOptions.push(m.mois); });
   moisOptions.sort().reverse();
   const etatMois = {}; (d.moisCalcules || []).forEach(m => { etatMois[m.mois] = m.statut; });
-  const selAn = d.annuel ? d.annee : null;
-  return '<optgroup label="Score annuel">'
-    + anneesTri.map(a => '<option value="A' + a + '"' + (selAn === a ? ' selected' : '') + '>Année ' + a + (a === anCourant ? ' · en cours' : '') + '</option>').join('')
-    + '</optgroup><optgroup label="Score mensuel">'
-    + moisOptions.map(m => '<option value="' + m + '"' + (!d.annuel && m === d.mois ? ' selected' : '') + '>' + escDash(smMoisLabel(m)) + (etatMois[m] === 'valide' ? ' · validé' : etatMois[m] ? ' · provisoire' : (m === d.moisCourant ? ' · en cours' : '')) + '</option>').join('')
-    + '</optgroup>';
+  return moisOptions.map(m => '<option value="' + m + '"' + (m === d.mois ? ' selected' : '') + '>' + escDash(smMoisLabel(m)) + (etatMois[m] === 'valide' ? ' · validé' : etatMois[m] ? ' · provisoire' : (m === d.moisCourant ? ' · en cours' : '')) + '</option>').join('');
 }
+function saOptionsAnnee(d) {
+  const anCourant = Number(String(d.moisCourant).slice(0, 4));
+  const annees = new Set([anCourant]);
+  (d.moisCalcules || []).forEach(m => annees.add(Number(String(m.mois).slice(0, 4))));
+  return [...annees].sort((a, b) => b - a).map(a => '<option value="' + a + '"' + (d.annee === a ? ' selected' : '') + '>Année ' + a + (a === anCourant ? ' · en cours' : '') + '</option>').join('');
+}
+// Onglet « Score annuel » (08/11/2026) : même conteneur que le mensuel, données ?annee=.
+async function showAnnualView() {
+  currentListView = 'annuel';
+  ['view-network', 'view-detail', 'view-ar', 'view-today'].forEach(id => { document.getElementById(id).style.display = 'none'; });
+  setTabs('annuel');
+  const el = document.getElementById('view-mensuel');
+  el.style.display = 'block';
+  if (!smAnnee) { smAnnee = String(Number(parisTodayIsoDash().slice(0, 4))); smData = null; }
+  if (!smData || !smData.annuel) el.innerHTML = '<div class="loading">Chargement…</div>';
+  await loadMonthly();
+}
+function changeSaAnnee(v) { smAnnee = String(v); smData = null; showAnnualView(); }
 function saValeurDim(m, k) { if (m.exclusions && m.exclusions[k]) return null; const v = m.sous ? m.sous[k] : null; return v === null || v === undefined ? null : v; }
 function saExplication(m, k) {
   const det = (m.detail || {})[k] || {};
@@ -2010,7 +2022,7 @@ function renderAnnualView() {
   const actions = d.estOlivier && mv.length ? '<div class="sm-actions"><button class="sm-btn" onclick="saExporter()">Exporter Excel</button></div>' : '';
   el.innerHTML = `
     <div class="filters">
-      <select id="sm-mois" onchange="changeSmMois(this.value)">${smOptionsPeriode(d)}</select>
+      <select id="sm-annee" onchange="changeSaAnnee(this.value)">${saOptionsAnnee(d)}</select>
       ${ars.length > 1 ? '<select id="sm-ar" onchange="renderAnnualBody()"><option value="">Tous les animateurs</option>' + ars.map(a => '<option value="' + escDash(a) + '"' + (a === prevAr ? ' selected' : '') + '>' + escDash(a) + '</option>').join('') + '</select>' : ''}
       <input type="text" id="sm-search" placeholder="Rechercher un magasin" value="${escDash(prevSearch)}" oninput="renderAnnualBody()">
     </div>
@@ -2126,7 +2138,7 @@ async function saExporter() {
 // Fichier de version distinct de version.json (bilan) pour que chaque appli se
 // mette à jour indépendamment, sans boucle si une seule des deux est déployée.
 // À CHAQUE DÉPLOIEMENT DU DASHBOARD : bumper DASH_VERSION ET dashboard-version.json.
-const DASH_VERSION = '2026.11.08-1';
+const DASH_VERSION = '2026.11.08-2';
 async function dashCheckVersion() {
   try {
     const res = await fetch('dashboard-version.json?_=' + Date.now(), { cache: 'no-store' });
