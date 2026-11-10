@@ -507,6 +507,9 @@ input[type=date]{color-scheme:dark}
       </div>
       <div class="kpi-chips" id="kpi-chips"></div>
       <div id="kpi-source" style="font-size:11px;color:var(--muted);margin-top:4px"></div>
+      <div id="kpi-source-choix" style="font-size:11px;color:var(--muted);margin-top:6px;display:flex;gap:6px;align-items:center;flex-wrap:wrap">Source des chiffres :
+        <button type="button" data-src="suivi" onclick="choisirSourceBilan('suivi')" style="font-size:11px;padding:3px 10px;border-radius:14px;border:1px solid #E22F2A;background:#E22F2A;color:#fff;font-weight:700;cursor:pointer">Suivi Stats</button>
+        <button type="button" data-src="pedlv" onclick="choisirSourceBilan('pedlv')" style="font-size:11px;padding:3px 10px;border-radius:14px;border:1px solid #999;background:transparent;color:inherit;cursor:pointer">PEDLV</button></div>
       <div class="field-group" style="margin-top:4px"><div class="field-label-row"><label>Commentaire sur les indicateurs</label><button type="button" class="mic-btn" onclick="startMicFor('f-kpi-comment')" title="Dicter">🎤</button></div>
         <textarea id="f-kpi-comment" rows="2" placeholder="Tendances, points d'attention..."></textarea></div>
     </div>
@@ -944,7 +947,7 @@ function loadLogo() {
 }
 
 // ── VERSION APP ── (incrémenter à chaque mise à jour notable, pour déclencher l'invite de rechargement)
-const APP_VERSION = '2026.11.05-3'; // à bumper avec SW_VERSION (sw.js) ET version.json à chaque déploiement
+const APP_VERSION = '2026.11.10-1'; // à bumper avec SW_VERSION (sw.js) ET version.json à chaque déploiement
 
 // Token pour la route /store-bilan du Worker (persistance D1, doit correspondre à STORE_SECRET dans worker.js)
 const STORE_SECRET = 'OC-bilan-store-2026';
@@ -1950,6 +1953,31 @@ async function applyRhEffectifPrefill(code) {
 // le bloc « Indicateurs clés » de la saisie. Nécessite la session AR (Zimbra) ;
 // sans elle, le bilan reste utilisable normalement.
 let bilanPrefill = null;   // { code, data }
+// 10/11/2026 : source des chiffres au choix — Suivi Stats (🔒, par défaut) ou PEDLV (extraction « à date », modifiable ;
+// indicateurs absents de PEDLV laissés vides). Remis sur Suivi Stats à chaque choix de magasin ; enregistré avec le bilan.
+let bilanSourceStats = 'suivi';
+function majBoutonsSourceBilan() {
+  document.querySelectorAll('#kpi-source-choix button').forEach(b => {
+    const on = b.dataset.src === bilanSourceStats;
+    b.style.background = on ? '#E22F2A' : 'transparent'; b.style.color = on ? '#fff' : 'inherit';
+    b.style.borderColor = on ? '#E22F2A' : '#999'; b.style.fontWeight = on ? '700' : '400';
+  });
+}
+async function choisirSourceBilan(src) {
+  if (src === bilanSourceStats || !currentMag) return;
+  bilanSourceStats = src; majBoutonsSourceBilan();
+  const code = currentMag.code;
+  const ks = document.getElementById('kpi-source'); if (ks) ks.textContent = 'Chargement des chiffres…';
+  try {
+    const relay = params.relay || 'https://zimbra-relay.oli-baroukh.workers.dev';
+    const r = await fetch(relay + '/bilan-prefill?magasin_code=' + encodeURIComponent(code) + (src === 'pedlv' ? '&source=pedlv' : ''),
+      { headers: { 'X-Store-Token': STORE_SECRET, 'X-AR-Session': (arSession && arSession.token) || '' } });
+    const d = await r.json().catch(() => null);
+    if (!currentMag || currentMag.code !== code || bilanSourceStats !== src) return;
+    if (r.ok && d && d.ok) bilanPrefill = { code, data: d };
+  } catch (e) {}
+  applyPrefillToSaisie(true);
+}
 let recapDetail = null;    // réponse /store-health-detail du magasin affiché
 let recapLoadSeq = 0;
 
@@ -2036,7 +2064,7 @@ function applyKpiSelectionToSaisie() {
       const def = KPI_DEFAULTS.find(k => k.name === name);
       if (!def) return;
       const pv = kpiPrefillValue(name); const dpf = prefillDonnees();
-      kpisAdded.push({ name, val: pv || '', def, verrou: !!(pv !== null && dpf && dpf.sourceKpis) });
+      kpisAdded.push({ name, val: pv || '', def, verrou: !!(pv !== null && dpf && dpf.sourceKpis === 'suivi-stats') });
     });
     renderKpiChips();
   }
@@ -2055,20 +2083,23 @@ function poserChampSource(id, idSource, val, libelle) {
   if (val !== null && val !== undefined && isFinite(Number(val))) {
     el.value = String(Number(val)).replace('.', ','); el.readOnly = true; el.style.background = 'var(--bg, #f4f2f1)';
     if (src) src.textContent = '🔒 ' + (libelle || 'donnée mesurée');
-  } else { el.readOnly = false; el.style.background = ''; if (src) src.textContent = ''; }
+  } else { if (el.readOnly) el.value = ''; el.readOnly = false; el.style.background = ''; if (src) src.textContent = ''; } // valeur 🔒 d'une autre source retirée
 }
-function applyPrefillToSaisie() {
+function applyPrefillToSaisie(forcer) {
   if (!currentMag || !draftKey || draftKey !== `bilan_draft_${currentMag.code}`) return;
   const d = prefillDonnees();
   let change = false;
   kpisAdded.forEach(k => {
     const v = kpiPrefillValue(k.name);
-    if (v !== null && d && d.sourceKpis) { if (k.val !== v || !k.verrou) { k.val = v; k.verrou = true; change = true; } }
-    else if (v !== null && String(k.val == null ? '' : k.val).trim() === '') { k.val = v; change = true; }
+    const vide = String(k.val == null ? '' : k.val).trim() === '';
+    if (v !== null && d && d.sourceKpis === 'suivi-stats') { if (k.val !== v || !k.verrou) { k.val = v; k.verrou = true; change = true; } }
+    else if (v !== null && d && d.sourceKpis && (forcer || k.verrou || vide)) { k.val = v; k.verrou = false; change = true; } // PEDLV choisi : modifiable
+    else if (v === null && forcer && k.verrou) { k.val = ''; k.verrou = false; change = true; } // absent de la source choisie : à saisir
+    else if (v !== null && vide) { k.val = v; change = true; }
   });
   if (change) renderKpiChips();
   const ks = document.getElementById('kpi-source');
-  if (ks) ks.textContent = d && d.sourceLibelle ? '🔒 Indicateurs : ' + d.sourceLibelle : '';
+  if (ks) ks.textContent = d && d.sourceLibelle ? (d.sourceKpis === 'suivi-stats' ? '🔒 Indicateurs : ' + d.sourceLibelle : 'Indicateurs : ' + d.sourceLibelle + ' — modifiables ; indicateurs absents de PEDLV à saisir') : '';
   const k = d && d.kpis ? d.kpis : {};
   poserChampSource('f-ca-annuel', 'ca-annuel-source', k.positionnementAnnuel, d && d.sourceKpis === 'suivi-stats' ? d.sourceLibelle : null);
   poserChampSource('f-ca-mensuel', 'ca-mensuel-source', k.positionnement, 'Pour être dans le vert – extraction à date');
@@ -2114,6 +2145,7 @@ async function loadStoreRecap(code) {
       return { status: r.status, ok: r.ok && d && d.ok, data: d };
     } catch (e) { return { status: 0, ok: false, data: null }; }
   };
+  bilanSourceStats = 'suivi'; majBoutonsSourceBilan();
   const [pre, det] = await Promise.all([lire('/bilan-prefill'), lire('/store-health-detail')]);
   if (seq !== recapLoadSeq || !currentMag || currentMag.code !== code) return; // magasin changé entre-temps
   if (pre.status === 401 || det.status === 401) {
@@ -2888,6 +2920,7 @@ function collectData() {
     rituels: getAllRituels().filter(r => rituelsChecked[r.id]).map(r => r.label),
     manager_obs: document.getElementById('f-manager-obs').value,
     kpis: kpisAdded,
+    source_stats: bilanSourceStats === 'pedlv' ? 'pedlv' : 'suivi-stats',
     kpi_comment: document.getElementById('f-kpi-comment').value,
     process: document.getElementById('f-process').value,
     forts: fortsList,
