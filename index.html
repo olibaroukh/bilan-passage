@@ -947,7 +947,7 @@ function loadLogo() {
 }
 
 // ── VERSION APP ── (incrémenter à chaque mise à jour notable, pour déclencher l'invite de rechargement)
-const APP_VERSION = '2026.11.10-1'; // à bumper avec SW_VERSION (sw.js) ET version.json à chaque déploiement
+const APP_VERSION = '2026.11.10-2'; // à bumper avec SW_VERSION (sw.js) ET version.json à chaque déploiement
 
 // Token pour la route /store-bilan du Worker (persistance D1, doit correspondre à STORE_SECRET dans worker.js)
 const STORE_SECRET = 'OC-bilan-store-2026';
@@ -1076,6 +1076,27 @@ function toggleMicFab() {
 // ── ÉTAT ──
 let magasins = [];
 let params = {};
+// 10/11/2026 : depuis la fermeture de la clé partagée (CLE_PARTAGEE_FERMEE), un appel au relais qui ne porte que la clé
+// est refusé (POSTE_REQUIS) — ex. enregistrement du bilan en base (/store-bilan), resté « en attente ». Toute requête vers
+// le relais reçoit donc automatiquement la session de l'animateur (connexion Zimbra) ou du poste animateur si elle existe.
+(function () {
+  const fetch0 = window.fetch.bind(window);
+  const lireSession = (k) => { try { const s = JSON.parse(localStorage.getItem(k) || 'null'); return s && s.token && (!s.exp || s.exp > Date.now()) ? s.token : null; } catch (e) { return null; } };
+  window.fetch = function (input, init) {
+    try {
+      const u = typeof input === 'string' ? input : (input && input.url) || '';
+      const relay = (params && params.relay) || 'https://zimbra-relay.oli-baroukh.workers.dev';
+      if (u.indexOf('zimbra-relay.oli-baroukh.workers.dev') >= 0 || (relay && u.indexOf(relay) === 0)) {
+        init = Object.assign({}, init || {});
+        const h = new Headers(init.headers || (typeof input !== 'string' && input.headers) || {});
+        if (!h.get('X-AR-Session')) { const t = lireSession('bilan_ar_session'); if (t) h.set('X-AR-Session', t); else h.delete('X-AR-Session'); }
+        if (!h.get('X-AR-Session') && !h.get('X-Animateur-Session')) { const t = lireSession('oc_animateur_session'); if (t) h.set('X-Animateur-Session', t); }
+        init.headers = h;
+      }
+    } catch (e) {}
+    return fetch0(input, init);
+  };
+})();
 let currentMag = null;
 // Filtre AR de convenance, choisi sur l'écran d'accueil. S'applique en lecture
 // seule à l'affichage (Historique, Analyse, Tournée) pour limiter la liste de
@@ -4912,6 +4933,7 @@ async function enregistrerBilanEnBase(data, relay) {
     try {
       const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Store-Token': STORE_SECRET }, body: JSON.stringify(data) });
       if (r.ok) { histRemoteCache.key = null; return true; }
+      if (r.status === 401) { showToastLong('⚠️ Bilan pas encore enregistré en base : connecte-toi (bouton du récap magasin) puis appuie sur « Réessayer ».'); return false; }
       if (r.status >= 400 && r.status < 500 && r.status !== 429) { console.warn('store-bilan refusé :', r.status, await r.text().catch(() => '')); return false; }
     } catch (e) { console.warn('store-bilan, essai ' + (essai + 1) + ' échoué :', e); }
     await new Promise(res => setTimeout(res, 1500 * (essai + 1)));
