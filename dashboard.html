@@ -1793,7 +1793,10 @@ function smExplication(dim, e) {
   const f = (x) => x === null || x === undefined ? '—' : x;
   switch (dim) {
     case 'actions': return e.bilan ? 'Bilan du ' + svDateFr(e.bilan.date) + ' : ' + e.bilan.actionsReportees + ' action(s) reportée(s), dont ' + e.bilan.actionsAFaire + ' « à faire » (−25) et ' + (e.bilan.actionsReportees - e.bilan.actionsAFaire) + ' « en cours » (−15).' : 'Aucun bilan de passage dans le mois.';
-    case 'positionnement': return e.bilan ? 'Positionnement annuel saisi dans le bilan du ' + svDateFr(e.bilan.date) + ' : ' + f(e.bilan.positionnementAnnuel) + ' %.' : 'Aucun bilan de passage dans le mois.';
+    case 'positionnement':
+      // 13/11/2026 : positionnement annuel de Suivi Stats prioritaire sur la saisie du bilan
+      if (e.positionnement && e.positionnement.source === 'suivi-stats') return 'Positionnement annuel Suivi Stats (cumul à fin ' + e.positionnement.mois.slice(5) + '/' + e.positionnement.mois.slice(0, 4) + ') : ' + f(e.positionnement.valeur) + ' %.';
+      return e.bilan ? 'Positionnement annuel saisi dans le bilan du ' + svDateFr(e.bilan.date) + ' : ' + f(e.bilan.positionnementAnnuel) + ' %.' : 'Aucun bilan de passage dans le mois.';
     case 'equipe': return e.equipe ? 'Niveau Évaluation équipe au dernier jour du mois : ' + e.equipe.niveau + '/10 (' + e.equipe.nbTaches + ' tâche(s)).' : 'Aucune évaluation équipe cette année.';
     case 'effectif': {
       if (!e.effectif) return '';
@@ -2138,7 +2141,7 @@ async function saExporter() {
 // Fichier de version distinct de version.json (bilan) pour que chaque appli se
 // mette à jour indépendamment, sans boucle si une seule des deux est déployée.
 // À CHAQUE DÉPLOIEMENT DU DASHBOARD : bumper DASH_VERSION ET dashboard-version.json.
-const DASH_VERSION = '2026.11.08-2';
+const DASH_VERSION = '2026.11.13-1';
 async function dashCheckVersion() {
   try {
     const res = await fetch('dashboard-version.json?_=' + Date.now(), { cache: 'no-store' });
